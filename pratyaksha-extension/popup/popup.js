@@ -1,6 +1,6 @@
 /**
  * PRATYAKSHA Quick Launcher Popup
- * ISRO Problem Statement 26171
+ * Sovereign Privacy-First Browser Agent
  */
 
 document.addEventListener('DOMContentLoaded', async () => {

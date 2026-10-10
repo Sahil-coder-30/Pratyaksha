@@ -1,11 +1,15 @@
 {
-  "name": "pratyaksha-docs",
-  "private": true,
+  "name": "pratyaksha",
   "version": "1.0.0",
+  "description": "PRATYAKSHA (प्रत्यक्ष) — On-Device Visual Perception & Privacy Shield for Light-Weight Browser Agents",
+  "private": true,
   "scripts": {
     "dev": "python3 -m http.server 8080 --directory Docs",
-    "demo": "python3 -m http.server 8080",
-    "serve": "npx serve Docs"
+    "docs:serve": "python3 -m http.server 8080 --directory Docs",
+    "demo": "python3 -m http.server 8080 --directory demo",
+    "demo:serve": "python3 -m http.server 8080 --directory demo",
+    "serve": "npx serve Docs",
+    "ext:pack": "cd pratyaksha-extension && zip -r ../pratyaksha-extension-v1.0.0.zip . -x '*.DS_Store' -x '.env'"
   },
   "dependencies": {
     "puppeteer-core": "^25.12.0"

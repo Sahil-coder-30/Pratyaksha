@@ -12,6 +12,7 @@
     { "source": "/06", "destination": "/Docs/06_team_presentation.html" },
     { "source": "/07", "destination": "/Docs/07_reality_check_and_innovations.html" },
     { "source": "/08", "destination": "/Docs/08_ml_privacy_module.html" },
+    { "source": "/demo", "destination": "/demo/test-demo.html" },
     { "source": "/Docs/(.*)", "destination": "/Docs/$1" }
   ],
   "headers": [

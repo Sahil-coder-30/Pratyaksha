@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "PRATYAKSHA — Privacy-First Browser Agent (ISRO)",
+  "name": "PRATYAKSHA — Privacy-First Browser Agent",
   "version": "1.0.0",
-  "description": "On-device visual perception & privacy shield for browser automation. All PII stays local under ISRO PS-26171.",
+  "description": "On-device visual perception & privacy shield for browser automation. All sensitive PII stays local.",
   "permissions": [
     "activeTab",
     "scripting",

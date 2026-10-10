@@ -1,22 +1,21 @@
 # PRATYAKSHA — Chrome Web Store Listing & Compliance Metadata
 
-**Problem Statement**: SIH 2026 — PS-26171 (ISRO / Department of Space)  
 **Codename**: PRATYAKSHA (प्रत्यक्ष)  
 **Version**: 1.0.0  
-**Last Updated**: 2026-09-28  
+**Project**: Sovereign Visual Perception & Privacy Shield for Browser Agents  
 
 ---
 
 ## 1. Store Listing Copy
 
 ### Extension Name
-`PRATYAKSHA — Privacy-First Browser Agent (ISRO)`
+`PRATYAKSHA — Privacy-First Browser Agent`
 
 ### Short Description (max 132 chars)
-`On-device visual perception & privacy shield for browser automation. All PII stays local under ISRO PS-26171.`
+`On-device visual perception & privacy shield for browser automation. All sensitive PII stays local in transient memory.`
 
 ### Detailed Description
-PRATYAKSHA (प्रत्यक्ष) is a light-weight, privacy-first browser automation agent built for the Indian Space Research Organisation (ISRO) under Smart India Hackathon Problem Statement 26171.
+PRATYAKSHA (प्रत्यक्ष) is a light-weight, sovereign privacy-first browser automation agent.
 
 PRATYAKSHA solves the fundamental browser agent dilemma: enabling intelligent web automation without compromising user privacy or leaking sensitive Personally Identifiable Information (PII) to remote AI servers.
 

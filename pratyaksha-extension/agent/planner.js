@@ -1,6 +1,6 @@
 /**
  * PRATYAKSHA (प्रत्यक्ष) Hybrid Agent Planner
- * ISRO Problem Statement 26171
+ * Sovereign, Privacy-First Browser Agent Planner
  * 
  * Provides:
  *  1. Zero-Config Deterministic Semantic Action Planner (100% Offline)
@@ -304,7 +304,7 @@ export class AgentPlanner {
       selector: el.selector
     }));
 
-    const systemInstruction = `You are PRATYAKSHA (प्रत्यक्ष), a light-weight browser automation agent for ISRO (PS-26171).
+    const systemInstruction = `You are PRATYAKSHA (प्रत्यक्ष), a sovereign, light-weight privacy-first browser automation agent.
 Given a user prompt and active webpage DOM elements, produce a JSON array of sequential browser actions to accomplish the goal.
 Available actions:
 - "CLICK": clicks an element (requires "selector")

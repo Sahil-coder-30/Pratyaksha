@@ -1,6 +1,6 @@
 /**
  * PRATYAKSHA Content Script Message Router
- * ISRO Problem Statement 26171
+ * Sovereign Privacy-First Browser Agent
  */
 
 (function() {
@@ -31,7 +31,7 @@
       handleAction(payload)
         .then(result  => sendResponse({ success: true, result }))
         .catch(err    => {
-          console.error('[PRATYAKSHA] Action error:', err.message);
+          console.error('[PRATYAKSHA] Action error:', err);
           sendResponse({ success: false, error: err.message });
         });
       return true; // async response
@@ -68,6 +68,9 @@
       case 'PRESS_ENTER':
         if (target === null) throw new Error('PRESS_ENTER requires target_id or semantic_hint');
         return await window.PratyakshaDOM.pressEnter(target);
+
+      case 'PRESS_ESCAPE':
+        return await window.PratyakshaDOM.pressEscape();
 
       case 'SCROLL':
         return await window.PratyakshaDOM.scroll(deltaY || 500);

@@ -1,6 +1,6 @@
 /**
  * PRATYAKSHA Browser Agent Tools Registry
- * ISRO Problem Statement 26171
+ * Sovereign Privacy-First Browser Agent Tools
  *
  * Full autonomous tool suite — 15 browser tools covering:
  * search, navigation, reading, extraction, interaction, inspection, and tab management.

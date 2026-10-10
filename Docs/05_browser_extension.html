@@ -3,12 +3,12 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>PRATYAKSHA — Browser Extension Deep Dive | SIH 2026 PS-26171 (ISRO)</title>
+  <title>PRATYAKSHA — Browser Extension Deep Dive | Sovereign Privacy Shield</title>
   <link rel="preconnect" href="https://fonts.googleapis.com"/>
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet"/>
   <style>
-    :root{--bg-cream:#FAF7F2;--bg-surface:#FFFFFF;--bg-subtle:#F4EFE6;--bg-card:#FFFFFF;--border-warm:#E7E0D6;--border-subtle:#EFEAE1;--text-main:#1C1917;--text-body:#332F2B;--text-muted:#736B63;--text-light:#948B80;--sidebar-bg:#1C1917;--sidebar-border:#332E2A;--sidebar-text:#F5F5F4;--sidebar-muted:#A8A29E;--sidebar-accent:#EA580C;--isro-orange:#EA580C;--isro-orange-light:#FFF7ED;--isro-orange-border:#FDBA74;--color-danger:#DC2626;--color-danger-bg:#FEF2F2;--color-danger-border:#FECACA;--color-success:#059669;--color-success-bg:#ECFDF5;--color-success-border:#A7F3D0;--color-warn:#D97706;--color-warn-bg:#FFFBEB;--color-warn-border:#FDE68A;--color-info:#2563EB;--color-info-bg:#EFF6FF;--color-info-border:#BFDBFE;--color-purple:#7C3AED;--color-purple-bg:#F5F3FF;--color-purple-border:#DDD6FE;--color-teal:#0D9488;--color-teal-bg:#F0FDFA;--color-teal-border:#99F6E4;--shadow-sm:0 1px 3px rgba(44,38,33,.05);--shadow-md:0 4px 14px rgba(44,38,33,.06),0 2px 6px rgba(44,38,33,.03);--shadow-lg:0 10px 30px rgba(44,38,33,.08);--radius-sm:8px;--radius-md:12px;--radius-lg:16px;--radius-xl:20px}
+    :root{--bg-cream:#FAF7F2;--bg-surface:#FFFFFF;--bg-subtle:#F4EFE6;--bg-card:#FFFFFF;--border-warm:#E7E0D6;--border-subtle:#EFEAE1;--text-main:#1C1917;--text-body:#332F2B;--text-muted:#736B63;--text-light:#948B80;--sidebar-bg:#1C1917;--sidebar-border:#332E2A;--sidebar-text:#F5F5F4;--sidebar-muted:#A8A29E;--sidebar-accent:#EA580C;--brand-orange:#EA580C;--brand-orange-light:#FFF7ED;--brand-orange-border:#FDBA74;--color-danger:#DC2626;--color-danger-bg:#FEF2F2;--color-danger-border:#FECACA;--color-success:#059669;--color-success-bg:#ECFDF5;--color-success-border:#A7F3D0;--color-warn:#D97706;--color-warn-bg:#FFFBEB;--color-warn-border:#FDE68A;--color-info:#2563EB;--color-info-bg:#EFF6FF;--color-info-border:#BFDBFE;--color-purple:#7C3AED;--color-purple-bg:#F5F3FF;--color-purple-border:#DDD6FE;--color-teal:#0D9488;--color-teal-bg:#F0FDFA;--color-teal-border:#99F6E4;--shadow-sm:0 1px 3px rgba(44,38,33,.05);--shadow-md:0 4px 14px rgba(44,38,33,.06),0 2px 6px rgba(44,38,33,.03);--shadow-lg:0 10px 30px rgba(44,38,33,.08);--radius-sm:8px;--radius-md:12px;--radius-lg:16px;--radius-xl:20px}
     *{box-sizing:border-box;margin:0;padding:0}html{scroll-behavior:smooth}
     body{font-family:'Inter',-apple-system,sans-serif;background:var(--bg-cream);color:var(--text-body);line-height:1.7;display:flex;min-height:100vh}
     .sidebar{width:300px;background:var(--sidebar-bg);color:var(--sidebar-text);position:sticky;top:0;height:100vh;overflow-y:auto;flex-shrink:0;border-right:1px solid var(--sidebar-border);display:flex;flex-direction:column;z-index:100}
@@ -39,7 +39,7 @@
     .hero{background:linear-gradient(135deg,#fff,#FAF4EB);border:1px solid var(--border-warm);border-radius:var(--radius-xl);padding:44px 40px 38px;margin-bottom:40px;position:relative;box-shadow:var(--shadow-sm)}
     .hero::before{content:'';position:absolute;top:0;left:0;right:0;height:4px;background:linear-gradient(90deg,#EA580C,#D97706 40%,#059669 100%);border-radius:var(--radius-xl) var(--radius-xl) 0 0}
     .hero-top{display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:16px;margin-bottom:18px}
-    .hero-pill{display:inline-flex;align-items:center;gap:8px;background:var(--isro-orange-light);border:1px solid var(--isro-orange-border);color:var(--isro-orange);padding:5px 14px;border-radius:20px;font-size:12px;font-weight:700;letter-spacing:.04em;text-transform:uppercase}
+    .hero-pill{display:inline-flex;align-items:center;gap:8px;background:var(--brand-orange-light);border:1px solid var(--brand-orange-border);color:var(--brand-orange);padding:5px 14px;border-radius:20px;font-size:12px;font-weight:700;letter-spacing:.04em;text-transform:uppercase}
     .hero-meta-badge{display:inline-flex;align-items:center;gap:6px;background:#fff;border:1px solid var(--border-warm);padding:5px 12px;border-radius:8px;font-size:12px;font-weight:600;color:var(--text-muted)}
     .hero h1{font-family:'Outfit',sans-serif;font-size:clamp(30px,3.8vw,44px);font-weight:800;color:var(--text-main);line-height:1.18;letter-spacing:-.02em;margin-bottom:12px}
     .hero-tagline{font-size:17px;color:var(--text-muted);font-weight:400;margin-bottom:24px;line-height:1.6}
@@ -55,7 +55,7 @@
     .callout{border-radius:var(--radius-md);padding:18px 22px;margin:20px 0;font-size:14.5px;line-height:1.65;display:flex;gap:14px;align-items:flex-start;border:1px solid}
     .callout-icon{font-size:20px;line-height:1;margin-top:2px;flex-shrink:0}
     .callout-body{flex:1}.callout-title{font-weight:700;margin-bottom:5px;font-size:14px}
-    .callout.orange{background:var(--isro-orange-light);border-color:var(--isro-orange-border);color:#92400E}
+    .callout.orange{background:var(--brand-orange-light);border-color:var(--brand-orange-border);color:#92400E}
     .callout.blue{background:var(--color-info-bg);border-color:var(--color-info-border);color:#1E40AF}
     .callout.green{background:var(--color-success-bg);border-color:var(--color-success-border);color:#065F46}
     .callout.red{background:var(--color-danger-bg);border-color:var(--color-danger-border);color:#991B1B}
@@ -108,8 +108,8 @@
     .msg-flow{display:flex;flex-direction:column;gap:0;margin:20px 0}
     .msg-row{display:flex;align-items:center;gap:0;margin-bottom:0}
     .msg-actor{width:130px;text-align:center;font-family:'Outfit',sans-serif;font-size:12.5px;font-weight:700;color:var(--text-main);background:#fff;border:1.5px solid var(--border-warm);border-radius:10px;padding:8px 6px;flex-shrink:0}
-    .msg-line{flex:1;position:relative;height:2px;background:linear-gradient(90deg,var(--isro-orange),transparent)}
-    .msg-arrow{font-size:10px;color:var(--isro-orange);margin-left:-8px}
+    .msg-line{flex:1;position:relative;height:2px;background:linear-gradient(90deg,var(--brand-orange),transparent)}
+    .msg-arrow{font-size:10px;color:var(--brand-orange);margin-left:-8px}
     .msg-label{font-size:11.5px;color:var(--text-muted);background:var(--bg-subtle);padding:2px 8px;border-radius:4px;white-space:nowrap;border:1px solid var(--border-subtle)}
     /* SECURITY CHECKLIST */
     .security-checklist{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin:20px 0}
@@ -122,21 +122,21 @@
     .phase-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:20px 0}
     @media(max-width:760px){.phase-grid{grid-template-columns:1fr}}
     .phase-card{background:#fff;border:1px solid var(--border-warm);border-radius:var(--radius-lg);padding:20px;border-top:3px solid}
-    .phase-card.p1{border-top-color:var(--isro-orange)}
+    .phase-card.p1{border-top-color:var(--brand-orange)}
     .phase-card.p2{border-top-color:var(--color-info)}
     .phase-card.p3{border-top-color:var(--color-success)}
     .phase-card.p4{border-top-color:var(--color-purple)}
     .phase-label{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.08em;color:var(--text-muted);margin-bottom:8px}
     .phase-title{font-family:'Outfit',sans-serif;font-size:15px;font-weight:700;color:var(--text-main);margin-bottom:10px}
     .phase-item{font-size:13px;color:var(--text-body);margin-bottom:5px;padding-left:14px;position:relative}
-    .phase-item::before{content:"\2022";position:absolute;left:0;color:var(--isro-orange)}
+    .phase-item::before{content:"\2022";position:absolute;left:0;color:var(--brand-orange)}
     /* MONO */
     .mono{font-family:'JetBrains Mono',monospace;font-size:12px;background:#F4EFE6;padding:2px 6px;border-radius:4px;color:var(--text-main)}
     /* MANIFEST SECTION */
     .manifest-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:16px 0}
     @media(max-width:760px){.manifest-grid{grid-template-columns:1fr}}
     .mf-card{background:#fff;border:1px solid var(--border-warm);border-radius:var(--radius-md);padding:16px}
-    .mf-key{font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:700;color:var(--isro-orange);margin-bottom:6px}
+    .mf-key{font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:700;color:var(--brand-orange);margin-bottom:6px}
     .mf-val{font-size:13px;color:var(--text-body);line-height:1.6}
     /* HIGHLIGHT ROW */
     .highlight-row{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin:20px 0}
@@ -294,7 +294,7 @@
     <button class="sidebar-close-btn" id="sidebarCloseBtn" aria-label="Close Sidebar">&#x2715;</button>
     <div class="brand-badge">&#x1F310; Chrome Extension</div>
     <div class="brand-title">&#x092A;&#x094D;&#x0930;&#x0924;&#x094D;&#x092F;&#x0915;&#x094D;&#x0937;<span class="brand-devanagari">A</span></div>
-    <div class="brand-subtitle">SIH 2026 &middot; PS-26171 (ISRO SAC)<br/>On-Device Visual Perception</div>
+    <div class="brand-subtitle">PRATYAKSHA &middot; Sovereign Shield (Sovereign Architecture)<br/>On-Device Visual Perception</div>
     <div class="org-tag">Extension &middot; Manifest V3 Deep Dive</div>
   </div>
   <div class="doc-tabs">
@@ -327,7 +327,7 @@
       <li class="toc-item"><a href="#s12" class="toc-link"><span class="toc-icon">&#x1F4E6;</span>Build &amp; Distribution</a></li>
     </ul>
   </div>
-  <div class="sidebar-footer">Module 05 &middot; Browser Extension Plan<br/>SIH 2026 &middot; PS-26171 (ISRO SAC)<br/>Chrome Manifest V3 Deep Dive</div>
+  <div class="sidebar-footer">Module 05 &middot; Browser Extension Plan<br/>PRATYAKSHA &middot; Sovereign Shield (Sovereign Architecture)<br/>Chrome Manifest V3 Deep Dive</div>
 </nav>
 
 <main class="main-wrap">
@@ -339,7 +339,7 @@
       <div class="hero-pill">&#x1F310; Module 05 &middot; Extension</div>
       <div class="hero-meta-badge">&#x1F4D1; Chrome Manifest V3 &middot; WebGPU &middot; IndexedDB</div>
     </div>
-    <h1>Browser Extension<br/><span style="color:var(--isro-orange)">Deep Dive &amp; Build Plan</span></h1>
+    <h1>Browser Extension<br/><span style="color:var(--brand-orange)">Deep Dive &amp; Build Plan</span></h1>
     <p class="hero-tagline">Everything you need to build the PRATYAKSHA Chrome Extension from scratch &mdash; architecture, APIs, code patterns, security model, and distribution strategy. This is the single most important deliverable of the entire system.</p>
     <div class="hero-chips">
       <span class="hero-chip">&#x1F4D1; Manifest V3</span>
@@ -753,7 +753,7 @@
             <tr><td><span class="mono">storage</span></td><td>chrome.storage.session for ephemeral task state in Service Worker (NOT vault &mdash; vault uses IndexedDB)</td><td><span class="risk low">Low</span></td></tr>
             <tr><td><span class="mono">offscreen</span></td><td>Required to create the Offscreen Document for WebGPU ONNX inference context</td><td><span class="risk low">Low</span></td></tr>
             <tr><td><span class="mono">sidePanel</span></td><td>Required to register and control the Chrome Side Panel UI (main user interface)</td><td><span class="risk low">Low</span></td></tr>
-            <tr><td><span class="mono">host_permissions: https://api.pratyaksha.isro.gov.in/*</span></td><td>Required for HTTPS + WebSocket connection to the cloud Orchestrator. Narrowly scoped to PRATYAKSHA API only &mdash; NOT broad host permission.</td><td><span class="risk med">Medium</span></td></tr>
+            <tr><td><span class="mono">host_permissions: https://api.pratyaksha.internal/*</span></td><td>Required for HTTPS + WebSocket connection to the cloud Orchestrator. Narrowly scoped to PRATYAKSHA API only &mdash; NOT broad host permission.</td><td><span class="risk med">Medium</span></td></tr>
           </tbody>
         </table>
       </div>
@@ -765,7 +765,7 @@
   <span class="code-key">"version"</span>: <span class="code-str">"1.0.0"</span>,
   <span class="code-key">"description"</span>: <span class="code-str">"On-device visual perception for browser automation. All PII stays local."</span>,
   <span class="code-key">"permissions"</span>: [<span class="code-str">"activeTab"</span>, <span class="code-str">"tabs"</span>, <span class="code-str">"scripting"</span>, <span class="code-str">"storage"</span>, <span class="code-str">"offscreen"</span>, <span class="code-str">"sidePanel"</span>],
-  <span class="code-key">"host_permissions"</span>: [<span class="code-str">"https://api.pratyaksha.isro.gov.in/*"</span>],
+  <span class="code-key">"host_permissions"</span>: [<span class="code-str">"https://api.pratyaksha.internal/*"</span>],
   <span class="code-key">"background"</span>: {
     <span class="code-key">"service_worker"</span>: <span class="code-str">"background/service-worker.js"</span>,
     <span class="code-key">"type"</span>: <span class="code-str">"module"</span>
@@ -779,7 +779,7 @@
   <span class="code-key">"side_panel"</span>: { <span class="code-key">"default_path"</span>: <span class="code-str">"sidepanel/panel.html"</span> },
   <span class="code-key">"action"</span>: { <span class="code-key">"default_popup"</span>: <span class="code-str">"popup/popup.html"</span> },
   <span class="code-key">"content_security_policy"</span>: {
-    <span class="code-key">"extension_pages"</span>: <span class="code-str">"script-src 'self'; object-src 'none'; connect-src https://api.pratyaksha.isro.gov.in wss://api.pratyaksha.isro.gov.in"</span>
+    <span class="code-key">"extension_pages"</span>: <span class="code-str">"script-src 'self'; object-src 'none'; connect-src https://api.pratyaksha.internal wss://api.pratyaksha.internal"</span>
   },
   <span class="code-key">"web_accessible_resources"</span>: [{
     <span class="code-key">"resources"</span>: [<span class="code-str">"models/*.onnx"</span>, <span class="code-str">"lib/*.js"</span>],
@@ -877,7 +877,7 @@
             <li>Privacy Policy document (in English + Hindi) linked in the store listing</li>
             <li>Remote code execution: explicitly None (all code bundled)</li>
             <li>Single purpose statement: "Privacy-preserving on-device browser automation"</li>
-            <li>For ISRO internal deployment: enterprise policy-based force-install (no store needed)</li>
+            <li>For Enterprise internal deployment: enterprise policy-based force-install (no store needed)</li>
           </ul>
         </div>
       </div>
@@ -933,7 +933,7 @@
         <div class="phase-item">Performance optimization + profiling</div>
         <div class="phase-item">Security audit + pen test</div>
         <div class="phase-item">Web Store submission prep</div>
-        <div class="phase-item">Demo recording for SIH submission</div>
+        <div class="phase-item">Demo recording for Benchmark submission</div>
       </div>
     </div>
   </section>

@@ -1,28 +1,64 @@
 /**
  * PRATYAKSHA DOM Action Dispatcher & Perception Engine
- * ISRO Problem Statement 26171
+ * Sovereign Privacy-First Browser Agent
  * 
  * High-precision browser perception, element tagging, semantic matching,
  * and resilient cross-framework interaction (React, Vue, Angular, Gmail/RichText).
  */
 
 window.PratyakshaDOM = (function() {
-  let highlightBox = null;
-  let actionBadge = null;
+  let agentCursor = null;
+  let cursorMoveId = 0;
   const elementIdMap = new Map();
 
-  function ensureHighlightElements() {
-    if (!highlightBox || !document.body.contains(highlightBox)) {
-      highlightBox = document.createElement('div');
-      highlightBox.id = 'pratyaksha-highlighter-box';
-      highlightBox.className = 'pulse';
-
-      actionBadge = document.createElement('div');
-      actionBadge.id = 'pratyaksha-action-badge';
-      highlightBox.appendChild(actionBadge);
-
-      document.body.appendChild(highlightBox);
+  function ensureAgentCursor() {
+    if (!agentCursor || !document.documentElement.contains(agentCursor)) {
+      agentCursor = document.createElement('div');
+      agentCursor.id = 'pratyaksha-agent-cursor';
+      agentCursor.setAttribute('aria-hidden', 'true');
+      agentCursor.innerHTML = '<svg viewBox="0 0 28 34" focusable="false" aria-hidden="true"><path d="M2 1.5 2 27.3 8.7 20.7l4.7 9.8 4.1-2-4.7-9.8 10.7-.9L2 1.5Z" fill="#111827" stroke="#fff" stroke-width="2.8" stroke-linejoin="round" stroke-linecap="round"/></svg><span class="pratyaksha-cursor-ripple"></span>';
+      document.documentElement.appendChild(agentCursor);
     }
+    return agentCursor;
+  }
+
+  function moveAgentCursor(el, { click = false } = {}) {
+    const cursor = ensureAgentCursor();
+    const rect = el.getBoundingClientRect();
+    const x = Math.max(8, Math.min(window.innerWidth - 12, rect.left + rect.width / 2));
+    const y = Math.max(8, Math.min(window.innerHeight - 12, rect.top + rect.height / 2));
+    cursor.classList.remove('is-clicking');
+    cursor.classList.add('is-visible');
+    const fromX = Number(cursor.dataset.x) || Math.min(window.innerWidth * 0.56, window.innerWidth - 18);
+    const fromY = Number(cursor.dataset.y) || Math.min(window.innerHeight * 0.52, window.innerHeight - 18);
+    const distance = Math.hypot(x - fromX, y - fromY);
+    const duration = matchMedia('(prefers-reduced-motion: reduce)').matches
+      ? 80
+      : Math.max(260, Math.min(820, distance / 0.85));
+    const moveId = ++cursorMoveId;
+    const startAt = performance.now();
+    const arc = Math.min(22, distance * 0.035) * (x >= fromX ? 1 : -1);
+
+    cursor.dataset.x = String(x);
+    cursor.dataset.y = String(y);
+    const animate = now => {
+      if (moveId !== cursorMoveId || !cursor.isConnected) return;
+      const progress = Math.min(1, (now - startAt) / duration);
+      const eased = progress < 0.5
+        ? 4 * progress * progress * progress
+        : 1 - Math.pow(-2 * progress + 2, 3) / 2;
+      const nextX = fromX + (x - fromX) * eased;
+      const nextY = fromY + (y - fromY) * eased + Math.sin(progress * Math.PI) * arc;
+      cursor.style.left = `${nextX}px`;
+      cursor.style.top = `${nextY}px`;
+      if (progress < 1) requestAnimationFrame(animate);
+      else if (click) {
+        cursor.classList.add('is-clicking');
+        setTimeout(() => cursor?.classList.remove('is-clicking'), 460);
+      }
+    };
+    requestAnimationFrame(animate);
+    return { x, y, duration };
   }
 
   function getUniqueSelector(el) {
@@ -373,32 +409,16 @@ window.PratyakshaDOM = (function() {
       return results;
     },
 
-    /**
-     * Highlights element with visual pulse & action badge
-     */
+    /** Move the visible agent pointer to a page target. */
     highlight(target, label = 'TARGET') {
       const el = findElement(target);
       if (!el) return false;
-
-      ensureHighlightElements();
-      const rect = el.getBoundingClientRect();
-      const scrollX = window.scrollX || window.pageXOffset;
-      const scrollY = window.scrollY || window.pageYOffset;
-
-      highlightBox.style.width = `${rect.width + 6}px`;
-      highlightBox.style.height = `${rect.height + 6}px`;
-      highlightBox.style.top = `${rect.top + scrollY - 3}px`;
-      highlightBox.style.left = `${rect.left + scrollX - 3}px`;
-      highlightBox.style.display = 'block';
-
-      actionBadge.textContent = label;
+      moveAgentCursor(el);
       return true;
     },
 
     clearHighlight() {
-      if (highlightBox) {
-        highlightBox.style.display = 'none';
-      }
+      if (agentCursor) agentCursor.classList.remove('is-visible', 'is-clicking');
     },
 
     /**
@@ -423,17 +443,19 @@ window.PratyakshaDOM = (function() {
       }
 
       await this.scrollIntoView(el);
-      const tagId = el.getAttribute('data-pratyaksha-id') || '';
-      this.highlight(el, `⚡ PRATYAKSHA: CLICK [${tagId ? `#${tagId}` : 'TARGET'}]`);
-      await new Promise(r => setTimeout(r, 180));
+      const { x, y, duration } = moveAgentCursor(el, { click: true });
+      await new Promise(r => setTimeout(r, duration));
 
-      const eventOpts = { bubbles: true, cancelable: true, view: window };
+      const eventOpts = { bubbles: true, cancelable: true, view: window, clientX: x, clientY: y, screenX: x, screenY: y, button: 0, buttons: 1 };
+      el.dispatchEvent(new PointerEvent('pointermove', eventOpts));
+      el.dispatchEvent(new MouseEvent('mousemove', eventOpts));
       el.dispatchEvent(new PointerEvent('pointerdown', eventOpts));
       el.dispatchEvent(new MouseEvent('mousedown', eventOpts));
       el.focus();
-      el.dispatchEvent(new PointerEvent('pointerup', eventOpts));
-      el.dispatchEvent(new MouseEvent('mouseup', eventOpts));
-      el.dispatchEvent(new MouseEvent('click', eventOpts));
+      const releaseOpts = { ...eventOpts, buttons: 0 };
+      el.dispatchEvent(new PointerEvent('pointerup', releaseOpts));
+      el.dispatchEvent(new MouseEvent('mouseup', releaseOpts));
+      el.dispatchEvent(new MouseEvent('click', releaseOpts));
 
       // If it's a native submit button inside a form, ensure form submission
       if (el.tagName === 'BUTTON' && el.type === 'submit' && el.form) {
@@ -458,9 +480,8 @@ window.PratyakshaDOM = (function() {
       }
 
       await this.scrollIntoView(el);
-      const tagId = el.getAttribute('data-pratyaksha-id') || '';
-      this.highlight(el, `⌨️ PRATYAKSHA: TYPING [${tagId ? `#${tagId}` : 'INPUT'}]`);
-      await new Promise(r => setTimeout(r, 150));
+      const { duration } = moveAgentCursor(el);
+      await new Promise(r => setTimeout(r, duration));
 
       el.focus();
 
@@ -468,9 +489,17 @@ window.PratyakshaDOM = (function() {
                                 el.getAttribute('contenteditable') === 'true' ||
                                 el.getAttribute('contenteditable') === '';
 
+      const characters = Array.from(String(value));
+      const typingDelay = character => {
+        // Five characters per word gives 40–48 ms per character at 250–300 WPM.
+        const base = 12000 / (250 + Math.random() * 50);
+        const pause = /[.,!?;:]/.test(character) ? 36 : (/\s/.test(character) ? 8 : 0);
+        return base + pause;
+      };
+
       if (isContentEditable) {
         // Rich text editors: Gmail body, Slack, Notion, Quill, etc.
-        if (options.clearFirst || value) {
+        if (options.clearFirst) {
           try {
             // Select all and delete
             const sel = window.getSelection();
@@ -481,12 +510,13 @@ window.PratyakshaDOM = (function() {
             document.execCommand('delete', false);
           } catch (_) { el.innerText = ''; }
         }
-        try {
-          document.execCommand('insertText', false, value);
-        } catch (_) {
-          el.innerText = value;
+        for (const character of characters) {
+          let inserted = false;
+          try { inserted = document.execCommand('insertText', false, character); } catch (_) {}
+          if (!inserted) el.appendChild(document.createTextNode(character));
+          el.dispatchEvent(new InputEvent('input', { data: character, inputType: 'insertText', bubbles: true }));
+          await new Promise(r => setTimeout(r, typingDelay(character)));
         }
-        el.dispatchEvent(new InputEvent('input', { data: value, inputType: 'insertText', bubbles: true }));
         el.dispatchEvent(new Event('change', { bubbles: true }));
 
       } else {
@@ -505,9 +535,13 @@ window.PratyakshaDOM = (function() {
         const isTA = el instanceof HTMLTextAreaElement;
         const proto = isTA ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
         const setter = Object.getOwnPropertyDescriptor(proto, 'value')?.set;
-        if (setter) setter.call(el, value); else el.value = value;
-
-        el.dispatchEvent(new InputEvent('input', { bubbles: true, cancelable: true, data: value }));
+        let currentValue = options.clearFirst ? '' : el.value;
+        for (const character of characters) {
+          currentValue += character;
+          if (setter) setter.call(el, currentValue); else el.value = currentValue;
+          el.dispatchEvent(new InputEvent('input', { bubbles: true, cancelable: true, data: character, inputType: 'insertText' }));
+          await new Promise(r => setTimeout(r, typingDelay(character)));
+        }
         el.dispatchEvent(new Event('change', { bubbles: true }));
       }
 
@@ -545,6 +579,25 @@ window.PratyakshaDOM = (function() {
       }
 
       await new Promise(r => setTimeout(r, 300));
+      return true;
+    },
+
+    /**
+     * Dispatches Escape key to dismiss modals, tooltips, or open menus
+     */
+    async pressEscape() {
+      const eventOpts = {
+        key: 'Escape',
+        code: 'Escape',
+        keyCode: 27,
+        which: 27,
+        bubbles: true,
+        cancelable: true,
+        view: window
+      };
+      (document.activeElement || document.body).dispatchEvent(new KeyboardEvent('keydown', eventOpts));
+      (document.activeElement || document.body).dispatchEvent(new KeyboardEvent('keyup', eventOpts));
+      await new Promise(r => setTimeout(r, 200));
       return true;
     },
 

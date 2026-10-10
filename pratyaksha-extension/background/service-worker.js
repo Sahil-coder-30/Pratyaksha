@@ -1,6 +1,6 @@
 /**
  * PRATYAKSHA Service Worker (Manifest V3)
- * ISRO Problem Statement 26171
+ * Sovereign On-Device Privacy-Preserving Browser Agent
  */
 
 import { getEffectiveConfig } from '../env.js';
@@ -53,6 +53,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 });
 
 async function ensureContentScriptInjected(tabId) {
+  // Chrome's internal pages (chrome://, chrome-extension://, etc.) reject
+  // programmatic injection. Treat them as unsupported targets before trying
+  // either scripting API so normal tab changes do not create extension errors.
+  const tab = await chrome.tabs.get(tabId);
+  let protocol = '';
+  try { protocol = new URL(tab.url || tab.pendingUrl || '').protocol; } catch (_) {}
+  if (!['http:', 'https:', 'file:'].includes(protocol)) return false;
+
   try {
     // 1. Try to ping the tab first
     const pong = await chrome.tabs.sendMessage(tabId, { type: 'PING' });

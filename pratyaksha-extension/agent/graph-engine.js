@@ -1,11 +1,15 @@
 /**
  * PRATYAKSHA LangGraph StateGraph Autonomous Browser Engine
- * ISRO Problem Statement 26171
+ * Sovereign, Privacy-First Browser Agent
  *
- * Perception → Reason → Execute → Observe loop.
+ * Perception → Reason → Execute → Observe → (Backtrack/Recover) loop.
  * Powered by Mistral AI (codestral-latest / mistral-large) with Gemini fallback.
- * Includes: anti-hallucination verification gate, canonical service routing,
- * multi-tool execution, retry-on-error, tab sync, conversation memory.
+ * Includes:
+ * - Mechanical Backtracking & State Rollback (go_back on dead ends)
+ * - Strict Loop & Dead-End Detection (action signature matching & repetition prevention)
+ * - Dynamic Target Blacklisting & Self-Correction Prompts
+ * - Anti-Hallucination Mechanical Verification Gate
+ * - Canonical Service Pre-Flight Routing
  */
 
 import {
@@ -43,16 +47,21 @@ export function detectTargetService(task = '') {
 }
 
 // ─────────────────────────────────────────────────────────
-// DOM table formatter — what the model reads each step
+// DOM table formatter — with dynamic target blacklisting
 // ─────────────────────────────────────────────────────────
-function buildDOMTable(elements = [], max = 75) {
+function buildDOMTable(elements = [], max = 75, blacklistedTargets = new Set()) {
   if (!elements.length) return 'No interactive elements detected.';
 
-  const header = '[ID]  TAG            TYPE/ROLE     LABEL / PLACEHOLDER / TEXT                     VALUE?';
+  const header = '[ID]  TAG            TYPE/ROLE     LABEL / PLACEHOLDER / TEXT                     STATUS/VAL';
   const sep    = '─'.repeat(header.length);
 
-  // Prioritize actionable inputs, textboxes, and buttons
+  // Deprioritize blacklisted elements, prioritize visible form inputs and buttons
   const sorted = [...elements].sort((a, b) => {
+    const isBlA = blacklistedTargets.has(Number(a.id));
+    const isBlB = blacklistedTargets.has(Number(b.id));
+    if (isBlA && !isBlB) return 1;
+    if (!isBlA && isBlB) return -1;
+
     const isInputA = /input|textarea|textbox|combobox/i.test(`${a.tag} ${a.type} ${a.role}`);
     const isInputB = /input|textarea|textbox|combobox/i.test(`${b.tag} ${b.type} ${b.role}`);
     if (isInputA && !isInputB) return -1;
@@ -61,11 +70,16 @@ function buildDOMTable(elements = [], max = 75) {
   });
 
   const rows = sorted.slice(0, max).map(el => {
+    const isBl = blacklistedTargets.has(Number(el.id));
     const id    = String(el.id || '').padStart(4, ' ');
     const tag   = `<${el.tag || '?'}>`.padEnd(14, ' ');
     const type  = (el.type || el.role || '').padEnd(13, ' ');
-    const label = (el.label || el.text || '').replace(/\s+/g, ' ').slice(0, 46).padEnd(46, ' ');
-    const val   = el.value ? `"${el.value.slice(0, 20)}"` : '';
+    let label   = (el.label || el.text || '').replace(/\s+/g, ' ').slice(0, 46);
+    if (isBl) {
+      label = `[FAILED/DO-NOT-USE] ${label}`.slice(0, 46);
+    }
+    label = label.padEnd(46, ' ');
+    const val   = isBl ? '⚠️ BLACKLISTED' : (el.value ? `"${el.value.slice(0, 20)}"` : '');
     return `[${id}]  ${tag} ${type} ${label} ${val}`;
   });
 
@@ -75,8 +89,8 @@ function buildDOMTable(elements = [], max = 75) {
 // ─────────────────────────────────────────────────────────
 // System prompt factory
 // ─────────────────────────────────────────────────────────
-function buildSystemPrompt(pageContext, stepCount, maxSteps, targetService = null, taskObjective = '') {
-  const table = buildDOMTable(pageContext.elements);
+function buildSystemPrompt(pageContext, stepCount, maxSteps, targetService = null, taskObjective = '', blacklistedTargets = new Set()) {
+  const table = buildDOMTable(pageContext.elements, 75, blacklistedTargets);
   const currentUrl = pageContext.url || '';
   const isWrongDomain = targetService && !targetService.hostMatch.test(currentUrl);
 
@@ -92,7 +106,16 @@ DO NOT click random buttons or links on the current page! Navigate to ${targetSe
 `;
   }
 
-  return `You are PRATYAKSHA (प्रत्यक्ष) — a world-class autonomous browser agent built for ISRO (PS-26171).
+  let blacklistWarning = '';
+  if (blacklistedTargets.size > 0) {
+    blacklistWarning = `
+⚠️ ACTIVE BLACKLIST NOTICE:
+The following element IDs have already failed, timed out, or caused dead ends: [${Array.from(blacklistedTargets).join(', ')}].
+DO NOT TARGET THESE ELEMENTS AGAIN. Attempting to use them will trigger an automatic backtrack error.
+`;
+  }
+
+  return `You are PRATYAKSHA (प्रत्यक्ष) — a world-class sovereign, privacy-first autonomous browser agent.
 You operate a real browser tab. You perceive the current page and call tools to complete the user's goal.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -105,6 +128,7 @@ INTERACTIVE ELEMENTS (sorted by relevance, inputs first):
 ${table}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ${navDirective}
+${blacklistWarning}
 STRATEGY RULES — read carefully before every action:
 
 🔴 RULE 0 – NAVIGATION FIRST
@@ -148,7 +172,17 @@ STRATEGY RULES — read carefully before every action:
   Once compose/form fields are present in the table, you may batch multiple
   type_into_element calls in a single step to fill all fields cleanly.
 
-🔴 RULE 7 – FINISH CORRECTLY
+🔴 RULE 7 – ADAPTIVE BACKTRACKING & SELF-CORRECTION
+  When an action fails, takes you to an unexpected page, or does not advance the objective:
+  1. NEVER REPEAT A FAILING TARGET. If click_element on [ID 8] failed, trying [ID 8] again is forbidden.
+  2. If an action led you to an irrelevant page or dead end, call go_back immediately to return to the previous page.
+  3. If an expected field/button is not in the DOM table:
+     - Call scroll_page({ direction: "down", pixels: 600 }) to bring off-screen elements into view.
+     - Call wait_for to wait for dynamic SPAs to finish rendering.
+     - Look for alternative buttons (e.g. "+", icon buttons, "Write", "New").
+  4. Reflect on what went wrong and pick an alternative branch.
+
+🔴 RULE 8 – FINISH CORRECTLY
   Call finish_task(success:true) ONLY AFTER the actions (e.g. Send click) have actually succeeded.
   Include key details: URL visited, fields typed, and confirmation in the summary.`;
 }
@@ -160,15 +194,20 @@ export class LangGraphAgent {
   constructor(options = {}) {
     this.provider  = options.provider  || 'mistral';
     this.apiKey    = (options.apiKey   || '').trim();
-    this.model     = options.model     || (this.provider === 'mistral' ? 'codestral-latest' : 'gemini-3.8-flash');
+    this.model     = options.model     || (this.provider === 'mistral' ? 'mistral-large-latest' : 'gemini-3.8-flash');
     this.vault     = options.vault     || null;
     this.maxSteps  = options.maxSteps  || 20;
     this.onEvent   = options.onEvent   || (() => {});
     this.isCancelled = false;
+    this.abortController = new AbortController();
 
     this.state = {
       task: '', sanitizedTask: '', messages: [],
       activeTab: null, domElements: [], actionHistory: [],
+      checkpoints: [],
+      blacklistedTargets: new Set(),
+      consecutiveFailures: 0,
+      lastActionSig: null,
       stepCount: 0, status: 'IDLE', finalSummary: null
     };
   }
@@ -176,7 +215,12 @@ export class LangGraphAgent {
   cancel() {
     this.isCancelled = true;
     this.state.status = 'CANCELLED';
-    this._emit('CANCELLED', { message: 'Agent cancelled by user.' });
+    if (this.abortController) {
+      try {
+        this.abortController.abort();
+      } catch (_) {}
+    }
+    this._emit('CANCELLED', { message: 'Agent stopped immediately by user.' });
   }
 
   _emit(type, payload = {}) {
@@ -188,9 +232,14 @@ export class LangGraphAgent {
   // ───────────────────────────────────────────────────────
   async run(userTask, activeTab) {
     this.isCancelled = false;
+    this.abortController = new AbortController();
     this.state = {
       task: userTask, sanitizedTask: '', messages: [],
       activeTab, domElements: [], actionHistory: [],
+      checkpoints: [],
+      blacklistedTargets: new Set(),
+      consecutiveFailures: 0,
+      lastActionSig: null,
       stepCount: 0, status: 'RUNNING', finalSummary: null
     };
 
@@ -218,6 +267,18 @@ export class LangGraphAgent {
       const pageCtx = await this._perceive();
       this.state.domElements = pageCtx.elements || [];
 
+      // Save valid state checkpoint for backtracking
+      if (pageCtx.url && (!targetService || targetService.hostMatch.test(pageCtx.url))) {
+        if (!this.state.checkpoints.some(cp => cp.url === pageCtx.url)) {
+          this.state.checkpoints.push({
+            step: this.state.stepCount,
+            url: pageCtx.url,
+            title: pageCtx.title,
+            elementsCount: pageCtx.elements?.length || 0
+          });
+        }
+      }
+
       // Step 1 fast path: If target service requested and tab is on wrong page, navigate immediately
       if (this.state.stepCount === 1 && targetService && !targetService.hostMatch.test(pageCtx.url || '')) {
         this._emit('STATE_CHANGE', { state: 'ACTING', label: `Step 1: Navigating to ${targetService.name} (${targetService.url})…` });
@@ -233,7 +294,7 @@ export class LangGraphAgent {
         this._emit('TOOL_CALL', { toolName: 'open_url', args: navAction.args });
         this._emit('OBSERVATION', { observation: navAction.observation });
         await this._sleep(1000);
-        continue; // Rescan DOM on the newly opened page
+        continue;
       }
 
       // Reason
@@ -244,19 +305,48 @@ export class LangGraphAgent {
           ? await this._reasonMistral(pageCtx, targetService)
           : await this._reasonGemini(pageCtx, targetService);
       } catch (err) {
+        if (err.message === 'STOPPED_BY_USER' || this.isCancelled || this.abortController?.signal?.aborted) {
+          break;
+        }
         this._emit('TOOL_ERROR', { error: `Reasoning failed: ${err.message}` });
         await this._sleep(2000);
         continue;
       }
 
-      if (this.isCancelled) break;
+      if (this.isCancelled || this.abortController?.signal?.aborted) break;
       if (decision.thought) this._emit('THOUGHT', { thought: decision.thought });
 
-      // Normalise to array
+      // Normalise actions
       let actions = decision.actions || [];
       if (!actions.length) {
         actions = [{ toolName: 'wait_seconds', args: { seconds: 2, reason: 'Scanning DOM for interactive elements' }, callId: this._id() }];
       }
+
+      // ── REPETITIVE ACTION LOOP DETECTION ──
+      const firstAction = actions[0];
+      const currentSig = firstAction ? `${firstAction.toolName}:${JSON.stringify(firstAction.args)}` : '';
+
+      if (currentSig && currentSig === this.state.lastActionSig && firstAction.toolName !== 'wait_seconds' && firstAction.toolName !== 'finish_task') {
+        this.state.consecutiveFailures++;
+        this._emit('STATE_CHANGE', {
+          state: 'BACKTRACKING',
+          label: `⚠️ Loop Detected: Repeated action "${firstAction.toolName}". Triggering self-correction…`
+        });
+
+        if (firstAction.args?.target_id) {
+          this.state.blacklistedTargets.add(Number(firstAction.args.target_id));
+        }
+
+        this._addUserMessage(`🚨 LOOP DETECTED: You repeated the exact same action: ${firstAction.toolName}(${JSON.stringify(firstAction.args)}). This action did not make progress and is now BLACKLISTED. You must choose a DIFFERENT tool or element from the table.`);
+
+        // Replace action with a pivot scroll to reveal alternative elements
+        actions = [{
+          toolName: 'scroll_page',
+          args: { direction: 'down', pixels: 500 },
+          callId: this._id()
+        }];
+      }
+      this.state.lastActionSig = currentSig;
 
       // ── MECHANICAL VERIFICATION GATE BEFORE ACCEPTING finish_task ──
       const finish = actions.find(a => a.toolName === 'finish_task');
@@ -344,6 +434,71 @@ export class LangGraphAgent {
           this._emit('TOOL_ERROR', { error: err.message });
         }
 
+        // ── ERROR RECOVERY & BACKTRACKING HANDLER ──
+        if (toolError) {
+          this.state.consecutiveFailures++;
+          if (action.args?.target_id) {
+            this.state.blacklistedTargets.add(Number(action.args.target_id));
+          }
+
+          // Strict Backtracking Threshold: consecutiveFailures >= 2
+          if (this.state.consecutiveFailures >= 2) {
+            this._emit('STATE_CHANGE', {
+              state: 'BACKTRACKING',
+              label: `🔄 Backtracking: ${this.state.consecutiveFailures} consecutive failures. Reverting and recovering…`
+            });
+
+            // If we navigated to a dead-end, revert browser history
+            const lastGoodCp = this.state.checkpoints[this.state.checkpoints.length - 1];
+            const currentTabUrl = this.state.activeTab?.url || '';
+
+            if (lastGoodCp && lastGoodCp.url !== currentTabUrl) {
+              this._emit('STATE_CHANGE', {
+                state: 'BACKTRACKING',
+                label: `Reverting browser history back to ${lastGoodCp.title || lastGoodCp.url}…`
+              });
+              try {
+                await chrome.tabs.goBack(this.state.activeTab.id);
+                await this._sleep(1000);
+                this.state.activeTab = await chrome.tabs.get(this.state.activeTab.id);
+                observation += `\n[BACKTRACK]: Reverted back to ${this.state.activeTab.url}.`;
+              } catch (_) {}
+            } else {
+              // Try dismissing any modal/overlay with Escape
+              try {
+                await chrome.tabs.sendMessage(this.state.activeTab.id, {
+                  type: 'EXECUTE_ACTION',
+                  payload: { action: 'PRESS_ESCAPE' }
+                });
+              } catch (_) {}
+            }
+
+            this._addUserMessage(`🚨 BACKTRACK EXECUTED: Actions failed ${this.state.consecutiveFailures} times consecutively. Element ${JSON.stringify(action.args)} is BLACKLISTED. The browser was stabilized. Analyze the updated DOM table and pick an alternative approach.`);
+            this.state.consecutiveFailures = 0;
+          }
+        } else {
+          // Success on action — check for domain drift
+          const currentUrl = this.state.activeTab?.url || '';
+          if (targetService && !targetService.hostMatch.test(currentUrl) && action.toolName === 'click_element') {
+            this._emit('STATE_CHANGE', {
+              state: 'BACKTRACKING',
+              label: `🚨 Click navigated away from ${targetService.name} to ${currentUrl}. Auto-backtracking with go_back…`
+            });
+            if (action.args?.target_id) {
+              this.state.blacklistedTargets.add(Number(action.args.target_id));
+            }
+            try {
+              await chrome.tabs.goBack(this.state.activeTab.id);
+              await this._sleep(1000);
+              this.state.activeTab = await chrome.tabs.get(this.state.activeTab.id);
+              observation += `\n[BACKTRACK]: Click led away from ${targetService.name}. Reverted back to ${this.state.activeTab.url}. Element #${action.args?.target_id} is blacklisted.`;
+            } catch (_) {}
+            this._addUserMessage(`🚨 DRIFT DETECTED: Clicking element #${action.args?.target_id} navigated to an unrelated page (${currentUrl}). Browser was automatically navigated back. That element is blacklisted. Pick an on-page control.`);
+          } else {
+            this.state.consecutiveFailures = 0;
+          }
+        }
+
         action.observation = observation;
         this._emit('OBSERVATION', { observation });
 
@@ -370,7 +525,10 @@ export class LangGraphAgent {
       await this._sleep(350);
     }
 
-    if (this.isCancelled) return { success: false, summary: 'Cancelled.', steps: this.state.stepCount };
+    if (this.isCancelled || this.abortController?.signal?.aborted) {
+      this.state.status = 'CANCELLED';
+      return { success: false, summary: 'Agent stopped immediately by user.', steps: this.state.stepCount };
+    }
 
     const budgetMsg = `Reached step limit (${this.maxSteps}).`;
     this._emit('BUDGET_REACHED', { summary: budgetMsg });
@@ -414,37 +572,58 @@ export class LangGraphAgent {
   // Mistral reasoning
   // ───────────────────────────────────────────────────────
   async _reasonMistral(pageCtx, targetService) {
+    if (this.isCancelled || this.abortController?.signal?.aborted) {
+      throw new Error('STOPPED_BY_USER');
+    }
     if (!this.apiKey) throw new Error('Mistral API key missing.');
 
-    const systemPrompt = buildSystemPrompt(pageCtx, this.state.stepCount, this.maxSteps, targetService, this.state.sanitizedTask);
+    const systemPrompt = buildSystemPrompt(pageCtx, this.state.stepCount, this.maxSteps, targetService, this.state.sanitizedTask, this.state.blacklistedTargets);
     const messages = [{ role: 'system', content: systemPrompt }, ...this.state.messages];
 
-    let model = this.model || 'codestral-latest';
+    let model = this.model || 'mistral-large-latest';
 
-    const call = async (m, msgs) => fetch('https://api.mistral.ai/v1/chat/completions', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${this.apiKey}` },
-      body: JSON.stringify({
-        model: m,
-        messages: msgs,
-        tools: MISTRAL_TOOL_DECLARATIONS,
-        tool_choice: 'auto',
-        temperature: 0.1
-      })
-    });
+    const call = async (m, msgs) => {
+      if (this.isCancelled || this.abortController?.signal?.aborted) {
+        throw new Error('STOPPED_BY_USER');
+      }
+      try {
+        return await fetch('https://api.mistral.ai/v1/chat/completions', {
+          method: 'POST',
+          signal: this.abortController?.signal,
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${this.apiKey}` },
+          body: JSON.stringify({
+            model: m,
+            messages: msgs,
+            tools: MISTRAL_TOOL_DECLARATIONS,
+            tool_choice: 'auto',
+            temperature: 0.1
+          })
+        });
+      } catch (err) {
+        if (err.name === 'AbortError' || this.isCancelled || this.abortController?.signal?.aborted) {
+          throw new Error('STOPPED_BY_USER');
+        }
+        throw err;
+      }
+    };
 
     let resp = await call(model, messages);
 
-    // Tier fallback: mistral-large-latest → codestral-latest
-    if (resp.status === 403 && model !== 'codestral-latest') {
-      this._emit('STATE_CHANGE', { state: 'REASONING', label: 'Tier limit — switching to codestral-latest…' });
+    // Tier fallback: mistral-large-latest → codestral-latest (only if 403 tier limit)
+    if (resp.status === 403 && model === 'mistral-large-latest') {
+      this._emit('STATE_CHANGE', {
+        state: 'REASONING',
+        label: 'Mistral API key tier does not allow mistral-large-latest — falling back to codestral-latest…'
+      });
       model = 'codestral-latest';
       resp = await call(model, messages);
     }
 
     // Retry on 429 / 503
     if (resp.status === 429 || resp.status === 503) {
+      if (this.isCancelled || this.abortController?.signal?.aborted) throw new Error('STOPPED_BY_USER');
       await this._sleep(2000);
+      if (this.isCancelled || this.abortController?.signal?.aborted) throw new Error('STOPPED_BY_USER');
       resp = await call(model, messages);
     }
 
@@ -513,26 +692,40 @@ export class LangGraphAgent {
   // Gemini reasoning
   // ───────────────────────────────────────────────────────
   async _reasonGemini(pageCtx, targetService) {
+    if (this.isCancelled || this.abortController?.signal?.aborted) {
+      throw new Error('STOPPED_BY_USER');
+    }
     if (!this.apiKey) throw new Error('Gemini API key missing.');
 
     let model = this.model || 'gemini-3.8-flash';
     if (/gemini-2\.0/.test(model)) model = 'gemini-3.8-flash';
 
-    const systemPrompt = buildSystemPrompt(pageCtx, this.state.stepCount, this.maxSteps, targetService, this.state.sanitizedTask);
+    const systemPrompt = buildSystemPrompt(pageCtx, this.state.stepCount, this.maxSteps, targetService, this.state.sanitizedTask, this.state.blacklistedTargets);
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${this.apiKey}`;
 
     let resp;
     for (let i = 0; i < 3; i++) {
-      resp = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          systemInstruction: { parts: [{ text: systemPrompt }] },
-          contents: this.state.messages,
-          tools: [{ functionDeclarations: BROWSER_TOOL_DECLARATIONS }],
-          generationConfig: { temperature: 0.1 }
-        })
-      });
+      if (this.isCancelled || this.abortController?.signal?.aborted) {
+        throw new Error('STOPPED_BY_USER');
+      }
+      try {
+        resp = await fetch(url, {
+          method: 'POST',
+          signal: this.abortController?.signal,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            systemInstruction: { parts: [{ text: systemPrompt }] },
+            contents: this.state.messages,
+            tools: [{ functionDeclarations: BROWSER_TOOL_DECLARATIONS }],
+            generationConfig: { temperature: 0.1 }
+          })
+        });
+      } catch (err) {
+        if (err.name === 'AbortError' || this.isCancelled || this.abortController?.signal?.aborted) {
+          throw new Error('STOPPED_BY_USER');
+        }
+        throw err;
+      }
       if (resp.ok || (resp.status !== 429 && resp.status !== 503)) break;
       await this._sleep((i + 1) * 1500);
     }
@@ -644,5 +837,26 @@ export class LangGraphAgent {
   }
 
   _id() { return `call_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`; }
-  _sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+  _sleep(ms) {
+    if (this.isCancelled || this.abortController?.signal?.aborted) return Promise.resolve();
+    return new Promise((resolve) => {
+      let timer = null;
+      const onAbort = () => {
+        if (timer) clearTimeout(timer);
+        resolve();
+      };
+      if (this.abortController?.signal) {
+        if (this.abortController.signal.aborted) {
+          return resolve();
+        }
+        this.abortController.signal.addEventListener('abort', onAbort, { once: true });
+      }
+      timer = setTimeout(() => {
+        if (this.abortController?.signal) {
+          this.abortController.signal.removeEventListener('abort', onAbort);
+        }
+        resolve();
+      }, ms);
+    });
+  }
 }

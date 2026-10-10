@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>PRATYAKSHA — ML &amp; Privacy Module: System Design &amp; Specs | SIH 2026 PS-26171</title>
+  <title>PRATYAKSHA — ML &amp; Privacy Module: System Design &amp; Specs | Sovereign Privacy Shield</title>
   <link rel="preconnect" href="https://fonts.googleapis.com"/>
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet"/>
@@ -28,9 +28,9 @@
       --sidebar-muted: #9C948D;
       --sidebar-accent: #EA580C;
 
-      --isro-orange: #EA580C;
-      --isro-orange-light: #FFF7ED;
-      --isro-orange-border: #FDBA74;
+      --brand-orange: #EA580C;
+      --brand-orange-light: #FFF7ED;
+      --brand-orange-border: #FDBA74;
 
       --color-danger: #DC2626;
       --color-danger-bg: #FEF2F2;
@@ -217,7 +217,7 @@
       text-decoration: none;
     }
     .module-select-trigger:hover {
-      background: #2E2623; border-color: var(--isro-orange);
+      background: #2E2623; border-color: var(--brand-orange);
     }
     .module-select-left {
       display: flex; align-items: center; gap: 8px;
@@ -334,7 +334,7 @@
       color: var(--text-muted); text-decoration: none;
       transition: color 0.15s;
     }
-    .breadcrumb-nav a:hover { color: var(--isro-orange); }
+    .breadcrumb-nav a:hover { color: var(--brand-orange); }
     .breadcrumb-sep { opacity: 0.5; font-size: 10px; }
     .breadcrumb-current { color: var(--text-main); font-weight: 600; }
 
@@ -361,9 +361,9 @@
     }
     .hero-pill {
       display: inline-flex; align-items: center; gap: 7px;
-      background: var(--isro-orange-light);
-      border: 1px solid var(--isro-orange-border);
-      color: var(--isro-orange); padding: 4px 12px;
+      background: var(--brand-orange-light);
+      border: 1px solid var(--brand-orange-border);
+      color: var(--brand-orange); padding: 4px 12px;
       border-radius: 20px; font-size: 11.5px;
       font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase;
     }
@@ -433,7 +433,7 @@
     .chapter-title-wrap { flex: 1; }
     .chapter-subtitle {
       font-family: 'JetBrains Mono', monospace;
-      font-size: 11px; font-weight: 700; color: var(--isro-orange);
+      font-size: 11px; font-weight: 700; color: var(--brand-orange);
       text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 2px;
     }
     .chapter-title {
@@ -493,7 +493,7 @@
     .callout-icon { font-size: 18px; line-height: 1; margin-top: 3px; flex-shrink: 0; }
     .callout-body { flex: 1; }
     .callout-body strong { display: block; margin-bottom: 3px; font-weight: 700; }
-    .callout.orange { background: var(--isro-orange-light); border-color: var(--isro-orange-border); color: #9A3412; }
+    .callout.orange { background: var(--brand-orange-light); border-color: var(--brand-orange-border); color: #9A3412; }
     .callout.green { background: var(--color-success-bg); border-color: var(--color-success-border); color: #065F46; }
     .callout.danger { background: var(--color-danger-bg); border-color: var(--color-danger-border); color: #991B1B; }
 
@@ -578,7 +578,7 @@
       white-space: nowrap; text-transform: uppercase;
       letter-spacing: 0.03em;
     }
-    .badge-orange { background: var(--isro-orange-light); color: var(--isro-orange); border: 1px solid var(--isro-orange-border); }
+    .badge-orange { background: var(--brand-orange-light); color: var(--brand-orange); border: 1px solid var(--brand-orange-border); }
     .badge-blue { background: var(--color-info-bg); color: var(--color-info); border: 1px solid var(--color-info-border); }
     .badge-green { background: var(--color-success-bg); color: var(--color-success); border: 1px solid var(--color-success-border); }
     .badge-red { background: var(--color-danger-bg); color: var(--color-danger); border: 1px solid var(--color-danger-border); }
@@ -600,7 +600,7 @@
       content: ''; position: absolute;
       top: 0; left: 0; right: 0; height: 3px;
       border-radius: var(--radius-md) var(--radius-md) 0 0;
-      background: var(--isro-orange);
+      background: var(--brand-orange);
     }
     .feature-card-header {
       display: flex; justify-content: space-between; align-items: flex-start;
@@ -608,7 +608,7 @@
     }
     .feature-card-num {
       font-family: 'JetBrains Mono', monospace; font-size: 10.5px;
-      font-weight: 700; color: var(--isro-orange);
+      font-weight: 700; color: var(--brand-orange);
     }
     .feature-card-title {
       font-family: 'Outfit', sans-serif; font-size: 16px;
@@ -630,8 +630,8 @@
     }
     .step-number-badge {
       width: 28px; height: 28px; border-radius: 50%;
-      background: var(--isro-orange-light); border: 1.5px solid var(--isro-orange);
-      color: var(--isro-orange); font-family: 'JetBrains Mono', monospace;
+      background: var(--brand-orange-light); border: 1.5px solid var(--brand-orange);
+      color: var(--brand-orange); font-family: 'JetBrains Mono', monospace;
       font-size: 12px; font-weight: 800; display: flex; align-items: center;
       justify-content: center; flex-shrink: 0; margin-top: 2px;
     }
@@ -653,7 +653,7 @@
     }
     .clean-bullets li::before {
       content: '▸'; position: absolute; left: 4px;
-      color: var(--isro-orange); font-weight: 700;
+      color: var(--brand-orange); font-weight: 700;
     }
 
     /* FOOTER */
@@ -663,7 +663,7 @@
       display: flex; justify-content: space-between; align-items: center;
       flex-wrap: wrap; gap: 14px; font-size: 12.5px; color: var(--text-muted);
     }
-    .doc-footer a { color: var(--isro-orange); text-decoration: none; font-weight: 600; }
+    .doc-footer a { color: var(--brand-orange); text-decoration: none; font-weight: 600; }
 
     @media (max-width: 900px) {
       .mobile-topbar { display: flex; }
@@ -714,7 +714,7 @@
   <aside class="sidebar" id="sidebar">
     <div class="sidebar-header">
       <button class="sidebar-close-btn" id="sidebarCloseBtn" aria-label="Close Sidebar">&#x2715;</button>
-      <div class="brand-badge">SIH 2026 · PS ID 26171</div>
+      <div class="brand-badge">PRATYAKSHA · Sovereign Privacy Shield</div>
       <div class="brand-title">PRATYAKSHA <span class="brand-devanagari">प्रत्यक्ष</span></div>
       <div class="brand-subtitle">On-Device Perception &amp; Local Privacy Shield</div>
     </div>
@@ -814,7 +814,7 @@
       <section class="hero">
         <div class="hero-top">
           <div class="hero-pill">Module 08 &middot; Official Blueprint</div>
-          <div class="hero-meta">ISRO PS ID 26171 &middot; Theme: Smart Automation</div>
+          <div class="hero-meta">Enterprise Visual Privacy Engine &middot; Theme: Smart Automation</div>
         </div>
         <h1>ML &amp; Privacy Module: System Design &amp; Specs</h1>
         <div class="hero-tagline">
@@ -876,7 +876,7 @@ FINAL PRIVACY GATE (Fail-Closed Outbound Audit Barrier)
 └── Allows: Redacted Screenshot WebP + Sanitized Semantic JSON Payload
 │
 ▼
-SERVER AI AGENT (ISRO Intranet / Cloud VLM)
+SERVER AI AGENT (Private Intranet / Cloud VLM)
 └── Reasons over [PERSON_A71C], element roles, and masked screenshot &rarr; returns action JSON (CLICK, TYPE, SCROLL)</pre>
         </div>
 
@@ -1510,7 +1510,7 @@ Background / Content Script &rarr; Remote Server AI Agent</pre>
           </div>
         </div>
         <p class="chapter-lead">
-          End-to-end component architecture, 16-layer technology stack, operational data loop, SIH evaluation mapping, and phased implementation order.
+          End-to-end component architecture, 16-layer technology stack, operational data loop, Benchmark evaluation mapping, and phased implementation order.
         </p>
 
         <!-- Tech Stack Table -->
@@ -1597,17 +1597,17 @@ PrivacyEngine
           </div>
         </div>
 
-        <!-- SIH Evaluation Mapping -->
+        <!-- Benchmark Evaluation Mapping -->
         <div class="sub-section">
           <div class="sub-title">
-            <span>Module-to-SIH Evaluation Mapping</span>
+            <span>Module-to-Benchmark Evaluation Mapping</span>
             <span class="sub-title-pill">Section 19</span>
           </div>
           <div class="table-container">
             <table>
               <thead>
                 <tr>
-                  <th>SIH Evaluation Dimension</th>
+                  <th>Benchmark Evaluation Dimension</th>
                   <th>Your Contribution</th>
                   <th>Evidence to Collect</th>
                 </tr>
@@ -1678,7 +1678,7 @@ PrivacyEngine
             <span>Final Deliverable Summary</span>
             <span class="sub-title-pill">Section 21</span>
           </div>
-          <div class="clean-card" style="border-left: 4px solid var(--isro-orange);">
+          <div class="clean-card" style="border-left: 4px solid var(--brand-orange);">
             <p>
               Your completed module is demonstrable as a <strong>self-contained local privacy firewall</strong>:
             </p>
@@ -1687,7 +1687,7 @@ PrivacyEngine
 DOM + screenshot &rarr; local perception &rarr; PII/entity fusion &rarr; session-stable anonymization &rarr; visual/text redaction &rarr; privacy audit &rarr; sanitized context &rarr; AI agent</pre>
             </div>
             <p style="margin-top: 12px; color: var(--text-muted); font-size: 13.5px;">
-              Guarantees that ISRO personnel and enterprise operators can deploy autonomous agentic workflows with complete privacy assurance.
+              Guarantees that Enterprise personnel and enterprise operators can deploy autonomous agentic workflows with complete privacy assurance.
             </p>
           </div>
         </div>
@@ -1695,7 +1695,7 @@ DOM + screenshot &rarr; local perception &rarr; PII/entity fusion &rarr; session
 
       <!-- FOOTER -->
       <footer class="doc-footer">
-        <div>PRATYAKSHA &middot; SIH 2026 PS ID 26171 (ISRO)</div>
+        <div>PRATYAKSHA &middot; Sovereign Privacy Shield (Enterprise)</div>
         <div>
           <a href="./07_reality_check_and_innovations.html">&larr; Module 07 Reality Audit</a> &nbsp;|&nbsp;
           <a href="./index.html">Master Hub &rarr;</a>

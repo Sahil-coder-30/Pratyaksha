@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>PRATYAKSHA — Browser Agent Engine | SIH 2026 PS-26171 (ISRO)</title>
+  <title>PRATYAKSHA — Browser Agent Engine | Sovereign Privacy Shield</title>
   <link rel="preconnect" href="https://fonts.googleapis.com"/>
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet"/>
@@ -27,9 +27,9 @@
       --sidebar-muted: #A8A29E;
       --sidebar-accent: #EA580C;
 
-      --isro-orange: #EA580C;
-      --isro-orange-light: #FFF7ED;
-      --isro-orange-border: #FDBA74;
+      --brand-orange: #EA580C;
+      --brand-orange-light: #FFF7ED;
+      --brand-orange-border: #FDBA74;
 
       --color-danger: #DC2626;
       --color-danger-bg: #FEF2F2;
@@ -549,10 +549,10 @@
   <aside class="sidebar" id="sidebar">
     <div class="sidebar-header">
       <button class="sidebar-close-btn" id="sidebarCloseBtn" aria-label="Close Sidebar">&#x2715;</button>
-      <div class="brand-badge">SIH 2026 · ISRO PS-26171</div>
+      <div class="brand-badge">PRATYAKSHA · Sovereign Privacy Shield</div>
       <div class="brand-title">PRATYAKSHA <span class="brand-devanagari">प्रत्यक्ष</span></div>
       <div class="brand-subtitle">Autonomous Browser Agent Execution Engine</div>
-      <div class="org-tag">Organization: ISRO / Dept. of Space</div>
+      <div class="org-tag">Organization: Sovereign On-Device AI</div>
     </div>
 
     <div class="doc-tabs">
@@ -630,7 +630,7 @@
         </li>
         <li class="toc-item">
           <a href="#demo-flow" class="toc-link">
-            <span class="toc-icon">🎭</span> ISRO Tender Demo Walkthrough
+            <span class="toc-icon">🎭</span> Enterprise Tender Demo Walkthrough
           </a>
         </li>
       </ul>
@@ -668,7 +668,7 @@
       <section class="doc-section" id="what-is-agent">
         <div class="section-header">
           <div class="section-icon-badge">🤔</div>
-          <h2 class="section-title">What is a Browser Agent? (In the Context of PS-26171)</h2>
+          <h2 class="section-title">What is a Browser Agent? (In the Context of Sovereign Shield)</h2>
         </div>
         <p class="section-lead">
           A browser agent is an autonomous software system that can <strong>perceive</strong> web state, <strong>reason</strong> over user instructions, and <strong>execute</strong> native browser actions — clicking buttons, filling multi-step forms, scrolling, navigating, and reading tabular data — exactly like a human operator.
@@ -929,7 +929,7 @@
                 <div class="action-title">NAVIGATE</div>
               </div>
               <div class="action-desc">
-                Navigates the tab to a target URL. Strictly verified against the domain allowlist (e.g., <code>*.isro.gov.in</code>). External URLs are blocked immediately.
+                Navigates the tab to a target URL. Strictly verified against the domain allowlist (e.g., <code>*.Enterprise.gov.in</code>). External URLs are blocked immediately.
               </div>
             </div>
             <div><span class="action-risk-pill med">⚠️ Medium Risk · Allowlist Checked</span></div>
@@ -1105,7 +1105,7 @@ Vault Lookup: <span class="str">"⟨AADHAAR_e8f1⟩"</span> → <span class="fn"
           <h2 class="section-title">Security &amp; Adversarial Hardening</h2>
         </div>
         <p class="section-lead">
-          For defense and space applications like ISRO, autonomous browser agents must withstand adversarial web content and prompt injection attacks:
+          For defense and space applications like Enterprise, autonomous browser agents must withstand adversarial web content and prompt injection attacks:
         </p>
 
         <div class="table-container">
@@ -1136,7 +1136,7 @@ Vault Lookup: <span class="str">"⟨AADHAAR_e8f1⟩"</span> → <span class="fn"
               <tr>
                 <td class="strong-col">Off-Domain Redirection</td>
                 <td>Compromised VLM response instructs agent to navigate to external tracking domain</td>
-                <td>Strict domain allowlist (e.g. <code>*.isro.gov.in</code>, <code>*.nic.in</code>) blocks off-domain navigation before the event is dispatched.</td>
+                <td>Strict domain allowlist (e.g. <code>*.Enterprise.gov.in</code>, <code>*.nic.in</code>) blocks off-domain navigation before the event is dispatched.</td>
               </tr>
               <tr>
                 <td class="strong-col">Adversarial CV Patches</td>
@@ -1237,14 +1237,14 @@ Vault Lookup: <span class="str">"⟨AADHAAR_e8f1⟩"</span> → <span class="fn"
       <section class="doc-section" id="demo-flow">
         <div class="section-header">
           <div class="section-icon-badge">🎭</div>
-          <h2 class="section-title">ISRO SIH Stage Demo Scenario — Step-by-Step</h2>
+          <h2 class="section-title">Enterprise Benchmark Stage Demo Scenario — Step-by-Step</h2>
         </div>
 
         <div class="callout warn">
           <div class="callout-icon">🎯</div>
           <div class="callout-body">
             <strong>Demonstrate Real Defense Workflows, Not Toy Scenarios:</strong>
-            Never demo pizza ordering, hotel bookings, or shoe shopping. ISRO judges want to see their actual daily challenges solved: GeM procurement bids, e-Office document reviews, and confidential satellite payload tender approvals.
+            Never demo pizza ordering, hotel bookings, or shoe shopping. Security Evaluators want to see their actual daily challenges solved: GeM procurement bids, e-Office document reviews, and confidential satellite payload tender approvals.
           </div>
         </div>
 
@@ -1296,7 +1296,7 @@ Vault Lookup: <span class="str">"⟨AADHAAR_e8f1⟩"</span> → <span class="fn"
               <tr>
                 <td class="strong-col">BONUS AIR-GAP</td>
                 <td>Presenter disables WiFi on demo laptop. Reruns task against local Qwen2.5-VL instance on <code>localhost:8000</code>.</td>
-                <td>Task succeeds with zero internet connection. Confirms air-gapped ISRO intranet readiness.</td>
+                <td>Task succeeds with zero internet connection. Confirms air-gapped Private Intranet readiness.</td>
               </tr>
             </tbody>
           </table>
@@ -1305,7 +1305,7 @@ Vault Lookup: <span class="str">"⟨AADHAAR_e8f1⟩"</span> → <span class="fn"
 
       <!-- ── FOOTER ── -->
       <footer class="doc-footer">
-        <div>PRATYAKSHA · SIH 2026 · Problem Statement 26171 · ISRO / Dept. of Space</div>
+        <div>PRATYAKSHA · PRATYAKSHA · Visual Privacy Specification · Sovereign On-Device AI</div>
         <div class="footer-nav-links">
           <a href="./01_master_plan.html">← 01 Master Plan</a>
           <a href="./03_perception_problem.html" style="margin-left:14px;">Next: 03 Perception Deep-Dive →</a>

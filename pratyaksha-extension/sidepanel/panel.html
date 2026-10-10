@@ -3,11 +3,11 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>PRATYAKSHA — Privacy-First Browser Agent</title>
+  <title>PRATYAKSHA</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Outfit:wght@500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="panel.css">
+  <link rel="stylesheet" href="panel.css?v=6">
 </head>
 <body>
   <div class="chat-app-root">
@@ -16,64 +16,19 @@
     <header class="app-header">
       <div class="header-left">
         <div class="brand-badge">
-          <div class="brand-icon">
+          <div class="brand-icon" aria-hidden="true">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
               <circle cx="12" cy="12" r="10"/>
               <polygon points="12 6 16 14 8 14 12 6"/>
               <circle cx="12" cy="12" r="2" fill="currentColor"/>
             </svg>
           </div>
-          <div class="brand-meta">
-            <div class="brand-name">PRATYAKSHA</div>
-            <div class="engine-badge" id="engineIndicator">
-              <span class="engine-dot"></span>
-              <span id="engineName">Mistral Agent</span>
-            </div>
-          </div>
+          <div class="brand-name">PRATYAKSHA</div>
         </div>
       </div>
 
       <div class="header-right">
-        <!-- Target Tab Context Pill -->
-        <div class="header-pill target-pill" id="targetPill" title="Target Webpage">
-          <span class="pill-icon">🌐</span>
-          <span class="pill-text" id="tabDomain">Detecting...</span>
-          <span class="elements-badge" id="elementsCount">0</span>
-          <button id="rescanBtn" class="pill-action-btn" title="Re-scan DOM">
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-              <polyline points="23 4 23 10 17 10"/>
-              <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
-            </svg>
-          </button>
-        </div>
-
-        <!-- Privacy Shield Pill -->
-        <button class="header-pill shield-pill" id="vaultBtn" title="Inspect Privacy Shield Token Vault">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
-            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-          </svg>
-          <span id="metricBlocked">0</span>
-          <span class="shield-label">Shielded</span>
-        </button>
-
-        <!-- Debug Trace Drawer Toggle -->
-        <button id="toggleTraceBtn" class="header-icon-btn" title="Toggle Real-Time Terminal Trace">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <polyline points="4 17 10 11 4 5"/>
-            <line x1="12" y1="19" x2="20" y2="19"/>
-          </svg>
-        </button>
-
-        <!-- New Chat / Clear Session -->
-        <button id="newChatBtn" class="header-icon-btn" title="New Session / Clear Chat">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <line x1="12" y1="5" x2="12" y2="19"/>
-            <line x1="5" y1="12" x2="19" y2="12"/>
-          </svg>
-        </button>
-
-        <!-- Settings Modal Toggle -->
-        <button id="settingsBtn" class="header-icon-btn" title="Settings & API Keys">
+        <button id="settingsBtn" class="header-icon-btn" title="Settings" aria-label="Settings">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <circle cx="12" cy="12" r="3"/>
             <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
@@ -85,82 +40,35 @@
     <!-- Main Scrollable Chat Stream Container -->
     <main class="chat-thread-container" id="chatContainer">
       <div class="chat-messages" id="chatMessages">
-
-        <!-- Welcome State (Displayed when no messages) -->
-        <div class="welcome-card" id="welcomeScreen">
-          <div class="welcome-logo">
-            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-              <circle cx="12" cy="12" r="10"/>
-              <polygon points="12 6 16 14 8 14 12 6"/>
-              <circle cx="12" cy="12" r="2" fill="currentColor"/>
+        <section class="welcome-state" id="welcomeScreen" aria-labelledby="welcomeTitle">
+          <div class="welcome-mark" aria-hidden="true">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M4 2.5 4 21l5.2-5.1 3.2 6.8 3.1-1.5-3.2-6.8 7.4-.2L4 2.5Z" fill="currentColor" stroke="none"/>
+              <path d="m15.5 4.5 1-2M19.5 8h2M17.5 12l1.4 1.4"/>
             </svg>
           </div>
-          <h2 class="welcome-title">प्रत्यक्ष PRATYAKSHA</h2>
-          <p class="welcome-subtitle">Autonomous Browser Agent · Privacy Shield Edition (ISRO PS-26171)</p>
-          
-          <div class="target-card-compact">
-            <div class="target-card-header">
-              <span class="target-card-dot"></span>
-              <span class="target-card-label">Active Webpage</span>
-            </div>
-            <div class="tab-title-text" id="tabTitle">Detecting active Chrome tab...</div>
-          </div>
-
-          <div class="suggestion-chips-grid">
-            <button class="chip" data-prompt="Search for Chandrayaan-3 mission achievements on Google and open official ISRO link">
-              <span class="chip-icon">🔍</span>
-              <span class="chip-text">Search Chandrayaan-3</span>
-            </button>
-            <button class="chip" data-prompt="Fill form with email test@isro.gov.in, phone 9876543210 and Aadhaar 200000000009">
-              <span class="chip-icon">🛡️</span>
-              <span class="chip-text">Test PII Shield</span>
-            </button>
-            <button class="chip" data-prompt="Find and click the search bar or main search input on this page">
-              <span class="chip-icon">🎯</span>
-              <span class="chip-text">Click Search Field</span>
-            </button>
-            <button class="chip" data-prompt="Scroll down to inspect more content on this page">
-              <span class="chip-icon">📜</span>
-              <span class="chip-text">Scroll Page</span>
-            </button>
-          </div>
-        </div>
-
+          <h1 id="welcomeTitle">What would you like me to do?</h1>
+          <p>I’ll work directly in the active tab.</p>
+        </section>
       </div>
     </main>
 
     <!-- Bottom Input Dock -->
     <footer class="chat-input-dock" id="inputDock">
-      <div class="dock-top-bar">
-        <div class="dock-left-controls">
-          <label class="switch-sm" title="Fully Autonomous LangGraph Execution Loop">
-            <input type="checkbox" id="autonomousToggle" checked>
-            <span class="slider-sm round"></span>
-            <span class="switch-text">⚡ Auto</span>
-          </label>
-        </div>
-        <div class="dock-right-status">
-          <div class="status-indicator online" id="statusPill" title="Ready to execute">
-            <span class="status-dot"></span>
-            <span class="status-text">READY</span>
-          </div>
-        </div>
-      </div>
-
       <div class="dock-input-row">
         <textarea
           id="promptInput"
           rows="1"
-          placeholder="Ask PRATYAKSHA to browse, search, or interact on this page..."
+          placeholder="Ask me to do something on this page…"
           autocomplete="off"
         ></textarea>
         
         <div class="dock-actions">
-          <button id="stopBtn" class="btn-stop-dock" style="display:none;" title="Stop Execution">
+          <button id="stopBtn" class="btn-stop-dock" style="display:none;" title="Stop" aria-label="Stop agent">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
               <rect x="5" y="5" width="14" height="14" rx="2"/>
             </svg>
-            <span>Stop</span>
+            <span class="visually-hidden">Stop</span>
           </button>
           <button id="runBtn" class="btn-send-dock" title="Run Agent (Enter)">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4">
@@ -171,76 +79,7 @@
         </div>
       </div>
 
-      <div class="dock-hint-row">
-        <span>Enter to run · Shift+Enter for new line · 100% on-device PII masking</span>
-      </div>
     </footer>
-
-    <!-- Token Vault Slide-Over Drawer -->
-    <div class="drawer-backdrop" id="vaultDrawerBackdrop" style="display:none;"></div>
-    <aside class="slide-drawer" id="vaultDrawer" style="display:none;">
-      <div class="drawer-header">
-        <div class="drawer-title-group">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#22C55E" stroke-width="2.2">
-            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-          </svg>
-          <h3>Privacy Shield Token Vault</h3>
-        </div>
-        <button id="closeVaultDrawerBtn" class="drawer-close-btn">&times;</button>
-      </div>
-
-      <div class="drawer-body">
-        <div class="metrics-grid">
-          <div class="metric-item">
-            <div class="metric-val" id="metricBlockedDrawer">0</div>
-            <div class="metric-desc">PII Shielded</div>
-          </div>
-          <div class="metric-item">
-            <div class="metric-val" id="metricTokens">0</div>
-            <div class="metric-desc">Active Tokens</div>
-          </div>
-          <div class="metric-item">
-            <div class="metric-val" id="metricEngine">WASM</div>
-            <div class="metric-desc">Verhoeff/PAN</div>
-          </div>
-        </div>
-
-        <div class="vault-table-wrapper">
-          <div class="vault-empty" id="vaultEmpty">
-            No sensitive citizen data in active session.<br>
-            Aadhaar, PAN, phone numbers, and emails are anonymized on-device before reasoning.
-          </div>
-          <table class="vault-table" id="vaultTable" style="display:none;">
-            <thead>
-              <tr>
-                <th>Type</th>
-                <th>Pseudonym</th>
-                <th>Sample</th>
-              </tr>
-            </thead>
-            <tbody id="vaultTableBody"></tbody>
-          </table>
-        </div>
-      </div>
-    </aside>
-
-    <!-- Collapsible Bottom Terminal Trace Drawer -->
-    <div class="trace-drawer" id="traceDrawer" style="display:none;">
-      <div class="trace-header">
-        <div class="trace-title">
-          <span class="trace-dot"></span>
-          <span>REAL-TIME AGENT TRACE</span>
-        </div>
-        <div class="trace-actions">
-          <button id="clearLogsBtn" class="btn-text-sm">Clear</button>
-          <button id="closeTraceBtn" class="btn-text-sm">&times;</button>
-        </div>
-      </div>
-      <div class="terminal-log" id="terminalLogs">
-        <div class="log-line info">[INIT] PRATYAKSHA Agent v1.0.0 initialized.</div>
-        <div class="log-line info">[VAULT] Local Privacy Firewall listening.</div>
-      </div>
-    </div>
 
   </div><!-- /chat-app-root -->
 
@@ -255,11 +94,11 @@
         <div class="form-group">
           <label for="engineSelect">Planner Engine / AI Provider</label>
           <select id="engineSelect" class="form-input">
-            <option value="mistral" selected>Mistral AI (codestral / mistral-large)</option>
+            <option value="mistral" selected>Mistral AI (mistral-large-latest)</option>
             <option value="gemini">Google Gemini Cloud VLM</option>
             <option value="deterministic">Deterministic Semantic Planner (Offline / 0-Config)</option>
           </select>
-          <small class="form-hint">Mistral Codestral provides high-speed autonomous reasoning with native tool calling.</small>
+          <small class="form-hint">Mistral Large provides premier autonomous reasoning with native browser tool calling.</small>
         </div>
         <div class="form-group" id="mistralGroup">
           <label for="mistralApiKey">Mistral API Key</label>
@@ -267,8 +106,8 @@
           <small class="form-hint">Stored securely in local browser storage only.</small>
           <label for="mistralModel" style="margin-top: 8px;">Mistral Model</label>
           <select id="mistralModel" class="form-input">
-            <option value="codestral-latest" selected>codestral-latest (Recommended / Flagship)</option>
-            <option value="mistral-large-latest">mistral-large-latest (Enterprise Tier)</option>
+            <option value="mistral-large-latest" selected>mistral-large-latest (Recommended / Flagship)</option>
+            <option value="codestral-latest">codestral-latest (Coding Specialized)</option>
             <option value="mistral-small-latest">mistral-small-latest (Fast)</option>
           </select>
         </div>

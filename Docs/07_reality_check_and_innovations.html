@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>PRATYAKSHA — Reality Check, Innovation Audit &amp; ML Sustainability | SIH 2026 PS-26171 (ISRO)</title>
+  <title>PRATYAKSHA — Reality Check, Innovation Audit &amp; ML Sustainability | Sovereign Privacy Shield</title>
   <link rel="preconnect" href="https://fonts.googleapis.com"/>
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet"/>
@@ -14,7 +14,7 @@
       --text-main:#1C1917;--text-body:#332F2B;--text-muted:#736B63;--text-light:#948B80;
       --sidebar-bg:#1C1917;--sidebar-surface:#262220;--sidebar-border:#332E2A;
       --sidebar-text:#F5F5F4;--sidebar-muted:#A8A29E;--sidebar-accent:#EA580C;
-      --isro-orange:#EA580C;--isro-orange-light:#FFF7ED;--isro-orange-border:#FDBA74;
+      --brand-orange:#EA580C;--brand-orange-light:#FFF7ED;--brand-orange-border:#FDBA74;
       --color-danger:#DC2626;--color-danger-bg:#FEF2F2;--color-danger-border:#FECACA;
       --color-success:#059669;--color-success-bg:#ECFDF5;--color-success-border:#A7F3D0;
       --color-warn:#D97706;--color-warn-bg:#FFFBEB;--color-warn-border:#FDE68A;
@@ -58,7 +58,7 @@
     .hero{background:linear-gradient(135deg,#fff 0%,#FAF4EB 100%);border:1px solid var(--border-warm);border-radius:var(--radius-xl);padding:44px 40px 38px;margin-bottom:40px;position:relative;box-shadow:var(--shadow-sm)}
     .hero::before{content:"";position:absolute;top:0;left:0;right:0;height:4px;background:linear-gradient(90deg,#DC2626 0%,#EA580C 40%,#059669 100%);border-radius:var(--radius-xl) var(--radius-xl) 0 0}
     .hero-top{display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:16px;margin-bottom:18px}
-    .hero-pill{display:inline-flex;align-items:center;gap:8px;background:var(--isro-orange-light);border:1px solid var(--isro-orange-border);color:var(--isro-orange);padding:5px 14px;border-radius:20px;font-size:12px;font-weight:700;letter-spacing:.04em;text-transform:uppercase}
+    .hero-pill{display:inline-flex;align-items:center;gap:8px;background:var(--brand-orange-light);border:1px solid var(--brand-orange-border);color:var(--brand-orange);padding:5px 14px;border-radius:20px;font-size:12px;font-weight:700;letter-spacing:.04em;text-transform:uppercase}
     .hero h1{font-family:"Outfit",sans-serif;font-size:clamp(28px,3.5vw,42px);font-weight:800;color:var(--text-main);line-height:1.18;letter-spacing:-.02em;margin-bottom:12px}
     .hero-tagline{font-size:16px;color:var(--text-muted);font-weight:400;margin-bottom:24px;line-height:1.6}
     .hero-chips{display:flex;gap:10px;flex-wrap:wrap}
@@ -73,7 +73,7 @@
     .callout{border-radius:var(--radius-md);padding:18px 22px;margin:20px 0;font-size:14.5px;line-height:1.65;display:flex;gap:14px;align-items:flex-start;border:1px solid}
     .callout-icon{font-size:20px;line-height:1;margin-top:2px;flex-shrink:0}
     .callout-body{flex:1}.callout-title{font-weight:700;margin-bottom:5px;font-size:14px}
-    .callout.orange{background:var(--isro-orange-light);border-color:var(--isro-orange-border);color:#92400E}
+    .callout.orange{background:var(--brand-orange-light);border-color:var(--brand-orange-border);color:#92400E}
     .callout.blue{background:var(--color-info-bg);border-color:var(--color-info-border);color:#1E40AF}
     .callout.green{background:var(--color-success-bg);border-color:var(--color-success-border);color:#065F46}
     .callout.red{background:var(--color-danger-bg);border-color:var(--color-danger-border);color:#991B1B}
@@ -174,19 +174,19 @@
     .sprint-card.p1::before{background:var(--color-success)}
     .sprint-card.p2::before{background:var(--color-info)}
     .sprint-card.p3::before{background:var(--color-purple)}
-    .sprint-card.p4::before{background:var(--isro-orange)}
+    .sprint-card.p4::before{background:var(--brand-orange)}
     .sp-phase{font-family:"JetBrains Mono",monospace;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);margin-bottom:6px}
     .sp-title{font-family:"Outfit",sans-serif;font-size:16px;font-weight:700;color:var(--text-main);margin-bottom:14px}
     .sprint-card ul{list-style:none}
     .sprint-card li{font-size:13px;color:var(--text-body);margin-bottom:7px;padding-left:18px;position:relative;line-height:1.5}
-    .sprint-card li::before{content:"b8";position:absolute;left:0;color:var(--isro-orange);font-size:10px;top:3px}
+    .sprint-card li::before{content:"b8";position:absolute;left:0;color:var(--brand-orange);font-size:10px;top:3px}
     .sprint-card li.w::before{color:var(--color-warn)}
     .sprint-card li.x::before{content:"¹5";color:var(--color-danger)}
     .sprint-card li.g::before{content:"¹3";color:var(--color-success)}
     /* METRIC */
     .metric-row{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin:20px 0}
     .metric-card{background:#fff;border:1px solid var(--border-warm);border-radius:var(--radius-md);padding:18px 16px;text-align:center;box-shadow:var(--shadow-sm)}
-    .metric-val{font-family:"Outfit",sans-serif;font-size:28px;font-weight:800;color:var(--isro-orange);line-height:1;margin-bottom:4px}
+    .metric-val{font-family:"Outfit",sans-serif;font-size:28px;font-weight:800;color:var(--brand-orange);line-height:1;margin-bottom:4px}
     .metric-label{font-size:12px;color:var(--text-muted);font-weight:500}
     .metric-sub{font-size:11px;color:var(--text-light);margin-top:3px}
     .mono{font-family:"JetBrains Mono",monospace;font-size:11.5px}
@@ -247,7 +247,7 @@
     </div>
     <h1>Honest. Buildable. Differentiated.<br/>The PRATYAKSHA Reality Audit.</h1>
     <div class="hero-tagline">
-      This module strips every claim in the previous docs to its core truth. No slide-ware. No marketing. Only what will actually compile, run, and demo on a laptop in front of ISRO judges.
+      This module strips every claim in the previous docs to its core truth. No slide-ware. No marketing. Only what will actually compile, run, and demo on a laptop in front of Security Evaluators.
       Then it reveals <strong>six genuine innovations</strong> that no other team will submit &mdash; all provably real, all buildable in 14 days.
     </div>
     <div class="hero-chips">
@@ -269,8 +269,8 @@
     <div class="callout red">
       <div class="callout-icon">&#9888;&#65039;</div>
       <div class="callout-body">
-        <div class="callout-title">Why Fake Claims Kill You in Front of ISRO Judges</div>
-        ISRO&apos;s panel includes working researchers and engineers. If a judge asks &quot;what is your OCR CER on the IIIT-ILST benchmark?&quot; and your answer is silence, you lose credibility instantly &mdash; not just for that claim, but for everything. One honest, provable claim beats five unverifiable ones.
+        <div class="callout-title">Why Fake Claims Kill You in Front of Security Evaluators</div>
+        Enterprise&apos;s panel includes working researchers and engineers. If a judge asks &quot;what is your OCR CER on the IIIT-ILST benchmark?&quot; and your answer is silence, you lose credibility instantly &mdash; not just for that claim, but for everything. One honest, provable claim beats five unverifiable ones.
       </div>
     </div>
 
@@ -287,9 +287,9 @@
             <td>Quote <strong>&quot;~200ms on M2/RTX GPU&quot;</strong> honestly. Explain that the cycle runs in background asynchronously &mdash; the user doesn&apos;t wait for it.</td>
           </tr>
           <tr>
-            <td><strong>&quot;Custom-trained Indic-CRNN on Devanagari, fine-tuned on ISRO documents in Days 4&ndash;7&quot;</strong></td>
+            <td><strong>&quot;Custom-trained Indic-CRNN on Devanagari, fine-tuned on Enterprise documents in Days 4&ndash;7&quot;</strong></td>
             <td><span class="pill pill-fake">&#10060; FAKE</span></td>
-            <td>Fine-tuning a CTC OCR for Devanagari conjunct clusters, building a synthetic data pipeline, quantizing to INT8 ONNX, and writing a CTC beam-search decoder in 3 days is a PhD-scale task. Completely unverifiable at SIH.</td>
+            <td>Fine-tuning a CTC OCR for Devanagari conjunct clusters, building a synthetic data pipeline, quantizing to INT8 ONNX, and writing a CTC beam-search decoder in 3 days is a PhD-scale task. Completely unverifiable at Benchmark.</td>
             <td>Remove entirely. Use <strong>PaddleOCR-v3 en_PP-OCRv3 (ONNX)</strong> scoped to digit+Latin regions. Indian PII (Aadhaar, PAN, GSTIN) is ALL ASCII. No Devanagari recognition required.</td>
           </tr>
           <tr>
@@ -339,7 +339,7 @@
       <div class="section-icon-badge">&#9201;</div>
       <h2 class="section-title">Honest Latency Profiling &mdash; Per Device Class</h2>
     </div>
-    <p class="section-lead">Real numbers based on publicly documented ONNX Runtime Web benchmarks for equivalent model sizes. These are the numbers you quote &mdash; and demonstrate &mdash; at SIH.</p>
+    <p class="section-lead">Real numbers based on publicly documented ONNX Runtime Web benchmarks for equivalent model sizes. These are the numbers you quote &mdash; and demonstrate &mdash; at Benchmark.</p>
     <div class="latency-grid">
       <div class="latency-card">
         <div class="latency-device">&#128640; Best Case</div>
@@ -459,7 +459,7 @@
           <div class="ml-spec"><span class="ml-spec-l">Source</span><span class="ml-spec-v">HuggingFace ONNX Community</span></div>
           <div class="ml-why">
             <div class="ml-why-t">&#128273; The PDF/Canvas Blindspot Solver</div>
-            <strong>This model solves the reason PS-26171 is hard.</strong> DOM extraction cannot read text inside a rendered PDF in Chrome PDF viewer. DBNet can. Without this, ISRO e-Office portal PDFs have zero PII protection.
+            <strong>This model solves the reason Sovereign Shield is hard.</strong> DOM extraction cannot read text inside a rendered PDF in Chrome PDF viewer. DBNet can. Without this, Enterprise e-Office portal PDFs have zero PII protection.
           </div>
         </div>
 
@@ -606,7 +606,7 @@
           <ul style="margin:12px 0 12px 18px;font-size:14px;line-height:1.8;">
             <li><strong>Tier 0 &mdash; Structural Priors (0ms):</strong> <code>input[type=password]</code>, <code>autocomplete="cc-number"</code>, <code>aria-label</code> containing PII keywords &rarr; mask instantly, zero ML. Catches ~55% of form PII.</li>
             <li><strong>Tier 1 &mdash; Text PII Scan (0.5ms):</strong> Regex + Verhoeff on all DOM text nodes. Catches another ~25% of visible-text PII without any GPU call.</li>
-            <li><strong>Tier 2 &mdash; Vision ML (100&ndash;400ms, only for opaque content):</strong> Only fires on tiles containing <code>&lt;canvas&gt;</code>, <code>&lt;embed&gt;</code> (PDF), <code>&lt;img&gt;</code>, <code>&lt;video&gt;</code>, or unreadable shadow DOM. The dHash filter further restricts this to only changed tiles. On a typical ISRO portal: affects ~15&ndash;30% of tiles.</li>
+            <li><strong>Tier 2 &mdash; Vision ML (100&ndash;400ms, only for opaque content):</strong> Only fires on tiles containing <code>&lt;canvas&gt;</code>, <code>&lt;embed&gt;</code> (PDF), <code>&lt;img&gt;</code>, <code>&lt;video&gt;</code>, or unreadable shadow DOM. The dHash filter further restricts this to only changed tiles. On a typical Enterprise portal: affects ~15&ndash;30% of tiles.</li>
           </ul>
           <p><strong>Result:</strong> On a normal text-based web form, the entire privacy shield completes in &lt;5ms (Tier 0 + Tier 1 only). The GPU wakes up only for pages with scanned documents or images.</p>
         </div>
@@ -787,7 +787,7 @@
         <ul>
           <li class="g">Build IndoGov-PII Bench: 50 synthetic screenshots with ground-truth PII bounding boxes</li>
           <li class="g">Metric harness: Precision, Recall, F1, IoU on the benchmark &mdash; quote real numbers</li>
-          <li class="g">Full rehearsal demo: ISRO e-Office tender form, GeM portal, DigiLocker upload</li>
+          <li class="g">Full rehearsal demo: Enterprise e-Office tender form, GeM portal, DigiLocker upload</li>
           <li class="g">WebGPU fallback to WASM: test on an old Intel laptop for graceful degradation</li>
           <li class="x">DO NOT add new features on demo day. Stability &gt; features. Always.</li>
         </ul>
@@ -799,7 +799,7 @@
   <section class="doc-section" id="judging">
     <div class="section-header">
       <div class="section-icon-badge">&#127942;</div>
-      <h2 class="section-title">The Winning Demo Script &mdash; Exactly What to Show ISRO Judges</h2>
+      <h2 class="section-title">The Winning Demo Script &mdash; Exactly What to Show Security Evaluators</h2>
     </div>
     <div class="metric-row">
       <div class="metric-card">
@@ -827,9 +827,9 @@
     <div class="callout green">
       <div class="callout-icon">&#127919;</div>
       <div class="callout-body">
-        <div class="callout-title">Demo Script &mdash; 6-Step Sequence for ISRO Judges</div>
+        <div class="callout-title">Demo Script &mdash; 6-Step Sequence for Security Evaluators</div>
         <ol style="padding-left:18px;font-size:14px;line-height:2.2;">
-          <li><strong>Show the extension installed</strong> and the green side panel badge on the ISRO e-Office supplier form.</li>
+          <li><strong>Show the extension installed</strong> and the green side panel badge on the Enterprise e-Office supplier form.</li>
           <li><strong>Type a real Aadhaar number</strong> into a form field. Side panel instantly shows: <em>&quot;&#x27E8;AADHAAR_01&#x27E9; registered &mdash; Verhoeff: &#10003;&quot;</em>. The outgoing JSON contains only the token, not the number.</li>
           <li><strong>Open a scanned Aadhaar PDF</strong> in Chrome PDF viewer. Wait 1&ndash;2 seconds. Side panel shows face photo and Aadhaar digits detected by vision models, blurred on sanitized canvas with semantic pill labels.</li>
           <li><strong>Say &quot;fill the supplier registration form.&quot;</strong> Agent perceives page, sends sanitized SoM-annotated canvas to local VLM, which returns JSON action plan. Plan shown in side panel. Press Confirm. Agent fills all fields, rehydrating tokens to real values locally.</li>
@@ -843,7 +843,7 @@
       <div class="callout-icon">&#128226;</div>
       <div class="callout-body">
         <div class="callout-title">Final Honest Note for the Team</div>
-        The architecture is genuinely novel. The privacy guarantee is real and provable. The ML stack is sustainable and achievable. But winning SIH requires a <strong>working, demonstrable system</strong> &mdash; not perfect documentation. Build Phases 1&ndash;2 completely before touching Phase 3. A Phase 1+2 demo with honest latency numbers will beat a Phase 1+3 demo that crashes in front of judges because the WebGPU pipeline wasn&apos;t tested on the judging laptop. <strong>Stability first. Innovation in the architecture. Build backwards from the demo.</strong>
+        The architecture is genuinely novel. The privacy guarantee is real and provable. The ML stack is sustainable and achievable. But winning Benchmark requires a <strong>working, demonstrable system</strong> &mdash; not perfect documentation. Build Phases 1&ndash;2 completely before touching Phase 3. A Phase 1+2 demo with honest latency numbers will beat a Phase 1+3 demo that crashes in front of judges because the WebGPU pipeline wasn&apos;t tested on the judging laptop. <strong>Stability first. Innovation in the architecture. Build backwards from the demo.</strong>
       </div>
     </div>
   </section>

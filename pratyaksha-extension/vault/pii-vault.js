@@ -1,8 +1,6 @@
 /**
  * PRATYAKSHA (प्रत्यक्ष) On-Device Privacy Vault
- * ISRO Problem Statement 26171
- * 
- * Client-Side Deterministic & Checksum-Validated PII Shield
+ * Sovereign Client-Side Deterministic & Checksum-Validated PII Shield
  * Implements:
  *  - Verhoeff Algorithm for 12-digit Indian Aadhaar validation
  *  - Form 49A Regex & Entity Classification for Indian PAN
