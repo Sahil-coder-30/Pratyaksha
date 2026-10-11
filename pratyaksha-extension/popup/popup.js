@@ -13,22 +13,30 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (tabs && tabs[0]) {
       const url = tabs[0].url || '';
       try {
-        popupDomain.textContent = new URL(url).hostname;
+        if (popupDomain) {
+          popupDomain.textContent = new URL(url).hostname;
+        }
       } catch {
-        popupDomain.textContent = 'Active Page';
+        if (popupDomain) {
+          popupDomain.textContent = 'Active Page';
+        }
       }
     }
   } catch (err) {
-    popupDomain.textContent = 'Ready';
+    if (popupDomain) popupDomain.textContent = 'Ready';
   }
 
-  openSidePanelBtn.addEventListener('click', async () => {
-    try {
-      const currentWindow = await chrome.windows.getCurrent();
-      await chrome.sidePanel.open({ windowId: currentWindow.id });
-      window.close(); // close popup once side panel opens
-    } catch (err) {
-      console.error('Error opening side panel:', err);
-    }
-  });
+  if (openSidePanelBtn) {
+    openSidePanelBtn.addEventListener('click', async () => {
+      try {
+        const currentWindow = await chrome.windows.getCurrent();
+        if (currentWindow?.id) {
+          await chrome.sidePanel.open({ windowId: currentWindow.id });
+        }
+        window.close(); // close popup once side panel opens
+      } catch (err) {
+        console.error('Error opening side panel:', err);
+      }
+    });
+  }
 });
