@@ -1,0 +1,25 @@
+
+{
+  "manifest_version": 3,
+  "name": "Privacy-Preserving Vision Agent",
+  "version": "0.1.0",
+  "description": "Locally observes webpage context for privacy-aware browser automation.",
+  "permissions": [],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "http://*/*",
+        "https://*/*"
+      ],
+      "js": [
+        "shared/schemas.js",
+        "content/dom_analyzer.js",
+        "content/content.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ]
+}
