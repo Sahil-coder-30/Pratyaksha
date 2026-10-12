@@ -16,7 +16,7 @@ window.PratyakshaDOM = (function() {
       agentCursor = document.createElement('div');
       agentCursor.id = 'pratyaksha-agent-cursor';
       agentCursor.setAttribute('aria-hidden', 'true');
-      agentCursor.innerHTML = '<svg viewBox="0 0 28 34" focusable="false" aria-hidden="true"><path d="M2 1.5 2 27.3 8.7 20.7l4.7 9.8 4.1-2-4.7-9.8 10.7-.9L2 1.5Z" fill="#111827" stroke="#fff" stroke-width="2.8" stroke-linejoin="round" stroke-linecap="round"/></svg><span class="pratyaksha-cursor-ripple"></span>';
+      agentCursor.innerHTML = '<svg viewBox="0 0 28 30" focusable="false" aria-hidden="true"><path d="M2 1.5 26 10.6 17.4 13.5 22.8 24.8 16.5 27.8 11.1 16.6 5 22.5 2 1.5Z" fill="#1B4611" stroke="#fff" stroke-width="2.8" stroke-linejoin="round" stroke-linecap="round"/></svg><span class="pratyaksha-cursor-ripple"></span>';
       document.documentElement.appendChild(agentCursor);
     }
     return agentCursor;

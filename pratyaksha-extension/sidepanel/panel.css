@@ -103,14 +103,12 @@ body {
 .brand-icon {
   width: 28px;
   height: 28px;
-  border-radius: 8px;
-  background: linear-gradient(145deg, #EEF2FF, #F5F7FC);
-  border: 1px solid #E0E6F4;
-  color: var(--accent);
+  border-radius: 7px;
   display: flex;
   align-items: center;
   justify-content: center;
 }
+.brand-icon img { display: block; width: 28px; height: 28px; border-radius: 7px; }
 
 .brand-meta {
   display: flex;

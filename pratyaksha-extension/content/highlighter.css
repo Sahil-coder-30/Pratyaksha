@@ -5,7 +5,7 @@
   left: 0;
   z-index: 2147483647;
   width: 28px;
-  height: 34px;
+  height: 30px;
   pointer-events: none;
   opacity: 0;
   transform: translate(-2px, -2px) scale(.92);
@@ -22,7 +22,7 @@
 #pratyaksha-agent-cursor svg {
   display: block;
   width: 28px;
-  height: 34px;
+  height: 30px;
 }
 
 #pratyaksha-agent-cursor .pratyaksha-cursor-ripple {
@@ -31,7 +31,7 @@
   left: 7px;
   width: 12px;
   height: 12px;
-  border: 2px solid #315bd6;
+  border: 2px solid #1b4611;
   border-radius: 50%;
   opacity: 0;
   transform: scale(.35);

@@ -37,7 +37,7 @@ Use a light, neutral interface with white surfaces, quiet gray borders, readable
 - Ready/privacy state: green. Agent activity and focus: blue. Errors and stop: red. Retain labels and icons so color is not the only status cue.
 - Keep internal traces, tool calls, metrics, status pills, and suggestion tiles out of the customer-facing chat.
 - Motion: smooth ease-in/ease-out pointer travel, with duration based on travel distance; honor `prefers-reduced-motion`.
-- Page interaction indicator: one compact near-black pointer silhouette with a white keyline and a restrained blue click ripple. Do not add a second shaft line or a trailing cursor effect. It is `aria-hidden`, pointer-events-none, and never blocks website controls.
+- Page interaction indicator: one compact forest-green pointer silhouette with a white keyline and a restrained green click ripple. Do not add a second shaft line or a trailing cursor effect. It is `aria-hidden`, pointer-events-none, and never blocks website controls.
 - Progressive text entry uses a randomized 250–300 WPM pace (five characters per word), with short punctuation pauses.
 - The cursor is an in-page visual indicator. Chrome content scripts cannot move the operating system’s real mouse pointer; actual activation still uses the extension’s page interaction code.
 

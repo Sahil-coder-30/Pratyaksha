@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="610" height="124" viewBox="0 0 610 124" fill="none" role="img" aria-labelledby="title desc">
+  <title id="title">PRATYAKSHA — Private Browser Automation</title>
+  <desc id="desc">A browser agent operates a page while its sensitive information is visibly redacted on-device.</desc>
+  <defs>
+    <filter id="pointerShadow" x="-40%" y="-25%" width="180%" height="175%" color-interpolation-filters="sRGB">
+      <feDropShadow dx="1" dy="2" stdDeviation="1.8" flood-color="#101820" flood-opacity=".34"/>
+    </filter>
+  </defs>
+  <g transform="translate(7 9)" stroke-linecap="round" stroke-linejoin="round">
+    <!-- The browser is the product surface; masked text means sensitive values stay private. -->
+    <rect x="8" y="7" width="92" height="98" rx="14" fill="#F7F8FA" stroke="#182230" stroke-width="5"/>
+    <path d="M10 32h88" stroke="#182230" stroke-width="4"/>
+    <circle cx="23" cy="20" r="3" fill="#315BD6"/>
+    <circle cx="33" cy="20" r="3" fill="#16805D"/>
+    <circle cx="43" cy="20" r="3" fill="#E97435"/>
+    <path d="M22 45h29M22 74h44" stroke="#AAB4C2" stroke-width="4"/>
+    <path d="M22 57h45" stroke="#D7DDE5" stroke-width="9"/>
+    <rect x="22" y="52" width="46" height="10" rx="3" fill="#182230"/>
+    <path d="m31 53-4 8m14-8-4 8m14-8-4 8" stroke="#F4A261" stroke-width="2"/>
+    <rect x="56" y="81" width="40" height="14" rx="5" fill="#16805D"/>
+    <path d="m62 88 3 3 5-6" stroke="#FFFFFF" stroke-width="2"/>
+    <!-- Classic Figma-style agent cursor: dark pointer, white keyline, soft lift. -->
+    <path d="m70 78 2 23 7-7 6 12 6-3-6-12 10-1-25-12Z" fill="#111111" stroke="#FFFFFF" stroke-width="3.5" filter="url(#pointerShadow)"/>
+    <path d="m70 78 2 23 7-7 6 12 6-3-6-12 10-1-25-12Z" stroke="#182230" stroke-width="1.5"/>
+  </g>
+  <text x="132" y="57" fill="#182230" font-family="Inter, Avenir Next, Arial, sans-serif" font-size="35" font-weight="760" letter-spacing="2.25">PRATYAKSHA</text>
+  <text x="134" y="82" fill="#315BD6" font-family="Inter, Avenir Next, Arial, sans-serif" font-size="12" font-weight="700" letter-spacing="1.75">PRIVATE BROWSER AUTOMATION</text>
+  <text x="134" y="103" fill="#667085" font-family="Inter, Avenir Next, Arial, sans-serif" font-size="11.5" font-weight="500" letter-spacing=".45">Your agent acts. Sensitive data stays on your device.</text>
+</svg>

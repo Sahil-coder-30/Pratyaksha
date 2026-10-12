@@ -27,10 +27,9 @@ body {
 .brand-row { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .brand-emblem {
   width: 36px; height: 36px; flex: 0 0 36px; border-radius: 11px;
-  display: grid; place-items: center; color: var(--accent);
-  background: linear-gradient(145deg, rgba(49,91,214,.10), rgba(22,128,93,.04));
-  border: 1px solid rgba(49,91,214,.18);
+  display: grid; place-items: center;
 }
+.brand-emblem img { display: block; width: 36px; height: 36px; border-radius: 11px; }
 .brand-text .title { font-size: 13px; font-weight: 750; letter-spacing: .025em; white-space: nowrap; }
 .brand-text .hindi { color: var(--accent); }
 .brand-text .subtitle { color: var(--muted); font-size: 10px; }
