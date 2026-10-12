@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PRATYAKSHA — 3D Multi-Orb Visualizer Preview</title>
+  <link rel="icon" type="image/svg+xml" href="../public/dark_favicon.svg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700;800&family=Inter:wght@400;500;600;700&display=swap"
+    rel="stylesheet">
+  <link rel="stylesheet" href="../pratyaksha-extension/sidepanel/panel.css?v=11">
+  <style>
+    body {
+      background: #E8EEFA;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      margin: 0;
+      padding: 24px;
+      font-family: 'Inter', sans-serif;
+    }
+
+    .preview-stage {
+      display: flex;
+      gap: 36px;
+      align-items: flex-start;
+      max-width: 980px;
+      width: 100%;
+    }
+
+    .phone-mockup {
+      width: 380px;
+      height: 640px;
+      background: #F5F7FC;
+      border-radius: 28px;
+      box-shadow: 0 24px 64px rgba(23, 38, 75, 0.16), 0 4px 16px rgba(49, 94, 247, 0.08);
+      border: 1px solid #D5DEEE;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+    }
+
+    .controls-panel {
+      flex: 1;
+      background: #FFFFFF;
+      padding: 28px;
+      border-radius: 20px;
+      box-shadow: 0 12px 32px rgba(23, 38, 75, 0.08);
+      border: 1px solid #E0E7F5;
+    }
+
+    .controls-panel h2 {
+      font-family: 'Outfit', sans-serif;
+      font-size: 22px;
+      color: #17264B;
+      margin-bottom: 8px;
+    }
+
+    .controls-panel p {
+      color: #7887A6;
+      font-size: 13.5px;
+      line-height: 1.6;
+      margin-bottom: 24px;
+    }
+
+    .state-btn-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 10px;
+      margin-bottom: 24px;
+    }
+
+    .state-btn {
+      padding: 12px 16px;
+      border-radius: 12px;
+      border: 1px solid #E0E7F5;
+      background: #F5F7FC;
+      color: #17264B;
+      font-weight: 600;
+      font-size: 13px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .state-btn:hover {
+      background: #EEF3FF;
+      border-color: #315EF7;
+      color: #315EF7;
+      transform: translateY(-1px);
+    }
+
+    .state-btn.active {
+      background: #315EF7;
+      color: white;
+      border-color: #315EF7;
+      box-shadow: 0 4px 14px rgba(49, 94, 247, 0.35);
+    }
+
+    .feature-card {
+      background: #F8FAFD;
+      border: 1px solid #EAEFF9;
+      border-radius: 14px;
+      padding: 16px;
+      margin-bottom: 12px;
+    }
+
+    .feature-card h4 {
+      font-size: 13px;
+      color: #17264B;
+      margin-bottom: 4px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .feature-card p {
+      font-size: 12px;
+      color: #7887A6;
+      margin: 0;
+      line-height: 1.5;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="preview-stage">
+    <!-- Side Panel Frame Preview -->
+    <div class="phone-mockup chat-app-root">
+      <header class="app-header">
+        <div class="header-left">
+          <div class="brand-badge" title="PRATYAKSHA">
+            <img src="../public/dark_logo.svg" alt="PRATYAKSHA" class="brand-header-logo">
+          </div>
+        </div>
+        <div class="header-right">
+          <button class="btn-new-chat">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <line x1="12" y1="5" x2="12" y2="19" />
+              <line x1="5" y1="12" x2="19" y2="12" />
+            </svg>
+            <span>New Chat</span>
+          </button>
+        </div>
+      </header>
+
+      <!-- Living AI Background 3D Atmosphere (Continuously active behind chats) -->
+      <div class="ambient-chat-aura" id="ambientAura" data-state="idle" aria-hidden="true">
+        <!-- Floating 3D Translucent Glass Orbs -->
+        <div class="bg-3d-orb bg-orb-1">
+          <div class="bg-orb-body"></div>
+          <div class="bg-orb-specular"></div>
+          <div class="bg-orb-ring"></div>
+          <div class="bg-orb-satellite sat-1"></div>
+        </div>
+
+        <div class="bg-3d-orb bg-orb-2">
+          <div class="bg-orb-body"></div>
+          <div class="bg-orb-specular"></div>
+          <div class="bg-orb-ring"></div>
+          <div class="bg-orb-satellite sat-2"></div>
+        </div>
+
+        <div class="bg-3d-orb bg-orb-3">
+          <div class="bg-orb-body"></div>
+          <div class="bg-orb-specular"></div>
+        </div>
+
+        <!-- Flowing Liquid Aurora Mesh -->
+        <div class="bg-aurora-mesh"></div>
+
+        <!-- Floating Quantum Stardust Particles -->
+        <div class="bg-particles-layer">
+          <span class="bg-particle bp-1"></span>
+          <span class="bg-particle bp-2"></span>
+          <span class="bg-particle bp-3"></span>
+          <span class="bg-particle bp-4"></span>
+          <span class="bg-particle bp-5"></span>
+          <span class="bg-particle bp-6"></span>
+          <span class="bg-particle bp-7"></span>
+          <span class="bg-particle bp-8"></span>
+        </div>
+
+        <!-- Neural Dot Matrix Grid -->
+        <div class="aura-neural-grid"></div>
+      </div>
+
+      <main class="chat-thread-container" style="justify-content: center;">
+
+        <section class="welcome-state" id="welcomeScreen" style="margin: auto 0;">
+          <!-- 3D Multi-Orb System -->
+          <div class="pratyaksha-orb-container" id="welcomeOrb" data-state="idle" role="img"
+            aria-label="PRATYAKSHA 3D AI Orb">
+            <div class="orb-halo"></div>
+            <canvas id="orb3dCanvas" class="orb-3d-canvas" width="220" height="220"></canvas>
+            <div class="orb-ground-shadow"></div>
+          </div>
+
+          <h1 id="welcomeTitle">What can I help you with?</h1>
+
+          <!-- Pre-Task Suggestion Pills -->
+          <div class="welcome-pretasks" id="welcomePretasks" role="group" aria-label="Suggested quick tasks">
+            <button type="button" class="pretask-pill" data-task="Summarize this page in 3 key takeaways"
+              title="Summarize page content">
+              <span class="pretask-icon">⚡</span>
+              <span class="pretask-text">Summarize page</span>
+            </button>
+            <button type="button" class="pretask-pill"
+              data-task="Extract all data, tables, and statistics from this page" title="Extract structured data">
+              <span class="pretask-icon">📊</span>
+              <span class="pretask-text">Extract data</span>
+            </button>
+            <button type="button" class="pretask-pill"
+              data-task="Find inputs on this page and help me fill out the form" title="Fill out inputs and forms">
+              <span class="pretask-icon">✍️</span>
+              <span class="pretask-text">Fill form</span>
+            </button>
+            <button type="button" class="pretask-pill"
+              data-task="Locate the primary action buttons and navigation links on this page"
+              title="Identify main buttons and actions">
+              <span class="pretask-icon">🎯</span>
+              <span class="pretask-text">Key actions</span>
+            </button>
+          </div>
+        </section>
+      </main>
+
+      <footer class="chat-input-dock">
+        <div class="dock-input-row">
+          <textarea placeholder="Ask me to do something on this page…" rows="1" style="resize:none;"></textarea>
+          <div class="dock-actions">
+            <button class="btn-run-dock" title="Send">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <line x1="12" y1="19" x2="12" y2="5" />
+                <polyline points="5 12 12 5 19 12" />
+              </svg>
+            </button>
+          </div>
+        </div>
+      </footer>
+    </div>
+
+    <!-- Interactive Inspector & State Toggles -->
+    <div class="controls-panel">
+      <h2>3D Multi-Orb System</h2>
+      <p>Move your cursor over the orb to experience real-time 3D parallax tilt, depth-sorted satellite orbits, and
+        volumetric glass reflections. Click the orb to trigger a quantum energy pulse!</p>
+
+      <h3 style="font-size:12px; text-transform:uppercase; letter-spacing:0.06em; color:#7887A6; margin-bottom:12px;">
+        Test AI States</h3>
+      <div class="state-btn-grid">
+        <button class="state-btn active" data-state="idle">
+          <span>🔵</span> Idle (Default)
+        </button>
+        <button class="state-btn" data-state="thinking">
+          <span>⚡</span> Thinking (Active)
+        </button>
+        <button class="state-btn" data-state="responding">
+          <span>✨</span> Responding
+        </button>
+        <button class="state-btn" data-state="error">
+          <span>🔴</span> Warning/Error
+        </button>
+      </div>
+
+      <div class="feature-card">
+        <h4><span>🌐</span> 4 Orbiting 3D Satellite Orbs</h4>
+        <p>Multiple micro-orbs orbit on distinct 3D inclined planes with real Z-depth occlusion (dimming behind the main
+          sphere, glowing in front).</p>
+      </div>
+
+      <div class="feature-card">
+        <h4><span>💎</span> Volumetric Glass Sphere & Core</h4>
+        <p>Dynamic specular gloss, cyan Fresnel rim glow, subsurface refraction caustics, and an inner pulsating quantum
+          core.</p>
+      </div>
+
+      <div class="feature-card">
+        <h4><span>🎯</span> 3D Gyroscope & Mouse Parallax</h4>
+        <p>Perspective camera tilts up to 25° following cursor coordinates with smooth lerp dampening.</p>
+      </div>
+    </div>
+  </div>
+
+  <script type="module">
+    import { Orb3DController } from '../pratyaksha-extension/sidepanel/orb-3d.js';
+
+    let orb = null;
+    try {
+      const canvas = document.getElementById('orb3dCanvas');
+      if (canvas) {
+        orb = new Orb3DController(canvas);
+      }
+    } catch (err) {
+      console.warn('[PRATYAKSHA DEMO] Failed to initialize Orb3DController:', err);
+    }
+
+    const buttons = document.querySelectorAll('.state-btn');
+    buttons.forEach(btn => {
+      btn.addEventListener('click', () => {
+        try {
+          buttons.forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          const state = btn.dataset.state;
+          if (orb && typeof orb.setState === 'function') {
+            orb.setState(state);
+          }
+          const welcomeOrb = document.getElementById('welcomeOrb');
+          if (welcomeOrb) welcomeOrb.dataset.state = state;
+          const ambientAura = document.getElementById('ambientAura');
+          if (ambientAura) ambientAura.dataset.state = state;
+        } catch (err) {
+          console.warn('[PRATYAKSHA DEMO] State toggle error:', err);
+        }
+      });
+    });
+
+    try {
+      const ambientAura = document.getElementById('ambientAura');
+      if (ambientAura) {
+        window.addEventListener('pointermove', (e) => {
+          try {
+            if (!window.innerWidth || !window.innerHeight) return;
+            const x = (e.clientX / window.innerWidth - 0.5) * 16;
+            const y = (e.clientY / window.innerHeight - 0.5) * 16;
+            ambientAura.style.setProperty('--aura-mouse-x', `${x.toFixed(1)}px`);
+            ambientAura.style.setProperty('--aura-mouse-y', `${y.toFixed(1)}px`);
+          } catch (_) { }
+        }, { passive: true });
+      }
+    } catch (_) { }
+
+    // Pre-task pill click interaction in demo
+    document.addEventListener('click', (e) => {
+      const pill = e.target.closest('.pretask-pill');
+      if (!pill) return;
+      const textarea = document.querySelector('.chat-input-dock textarea');
+      if (textarea && pill.dataset.task) {
+        textarea.value = pill.dataset.task;
+        textarea.focus();
+        if (orb && typeof orb.triggerPulse === 'function') {
+          orb.triggerPulse();
+        }
+      }
+    });
+  </script>
+</body>
+
+</html>

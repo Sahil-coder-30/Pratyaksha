@@ -5,11 +5,13 @@
 import { globalVault } from '../vault/pii-vault.js';
 import { getEffectiveConfig } from '../env.js';
 import { LangGraphAgent } from '../agent/graph-engine.js';
+import { Orb3DController } from './orb-3d.js';
 
 let activeTab = null;
 let pageContext = null;
 let isExecuting = false;
 let activeAgent = null;
+let activeOrb3D = null;
 
 // DOM Elements — Header
 const settingsBtn = document.getElementById('settingsBtn');
@@ -46,7 +48,22 @@ document.addEventListener('DOMContentLoaded', async () => {
   await loadSettings();
   await refreshActiveTab();
   setupEventListeners();
+  initOrb3D();
 });
+
+function initOrb3D() {
+  try {
+    const canvas = document.getElementById('orb3dCanvas');
+    if (canvas) {
+      if (activeOrb3D) {
+        try { activeOrb3D.destroy(); } catch (_) { }
+      }
+      activeOrb3D = new Orb3DController(canvas);
+    }
+  } catch (err) {
+    console.warn('[PRATYAKSHA] Error initializing Orb3DController:', err);
+  }
+}
 
 // Setup event handlers
 function setupEventListeners() {
@@ -61,10 +78,8 @@ function setupEventListeners() {
       // 1-Click Instant UI restore (0ms latency, zero extra token burn)
       setBusyState(false);
 
-      // Instantly clear element highlights on the inspected webpage
-      if (activeTab?.id) {
-        chrome.tabs.sendMessage(activeTab.id, { type: 'CLEAR_HIGHLIGHT' }).catch(() => {});
-      }
+      // Instantly clear element highlights and agent cursor on the inspected webpage
+      clearTabHighlightsAndCursor();
 
       if (currentAgentMessageEl) {
         const activity = currentAgentMessageEl.querySelector('.agent-activity');
@@ -96,6 +111,24 @@ function setupEventListeners() {
     });
   }
 
+  // New Chat Button
+  const newChatBtn = document.getElementById('newChatBtn');
+  if (newChatBtn) {
+    newChatBtn.addEventListener('click', handleNewChat);
+  }
+
+  // Pre-task quick action suggestion pills
+  document.addEventListener('click', (e) => {
+    const pill = e.target.closest('.pretask-pill');
+    if (!pill) return;
+    const task = pill.dataset.task;
+    if (!task || !promptInput) return;
+    promptInput.value = task;
+    promptInput.style.height = 'auto';
+    promptInput.focus();
+    handleRunPrompt();
+  });
+
   // Settings Modal
   if (settingsBtn) settingsBtn.addEventListener('click', () => settingsModal.style.display = 'flex');
   if (closeSettingsBtn) closeSettingsBtn.addEventListener('click', () => settingsModal.style.display = 'none');
@@ -115,10 +148,26 @@ function setupEventListeners() {
       refreshActiveTab();
     }
   });
+
+  // Subtle 3D background mouse parallax
+  try {
+    const ambientAura = document.getElementById('ambientAura');
+    if (ambientAura) {
+      window.addEventListener('pointermove', (e) => {
+        try {
+          if (!window.innerWidth || !window.innerHeight) return;
+          const x = (e.clientX / window.innerWidth - 0.5) * 16;
+          const y = (e.clientY / window.innerHeight - 0.5) * 16;
+          ambientAura.style.setProperty('--aura-mouse-x', `${x.toFixed(1)}px`);
+          ambientAura.style.setProperty('--aura-mouse-y', `${y.toFixed(1)}px`);
+        } catch (_) { }
+      }, { passive: true });
+    }
+  } catch (_) { }
 }
 
 // Internal trace events are intentionally not rendered in the customer UI.
-function log() {}
+function log() { }
 
 // Load user settings
 async function loadSettings() {
@@ -152,25 +201,34 @@ async function loadSettings() {
       mistralModel: config.mistralModel || 'mistral-large-latest',
       provider: 'mistral'
     });
-    log('🔑 Auto-detected Mistral Agent API key from environment config.', 'info');
   }
 }
 
 // Save user settings
 async function saveSettings() {
-  const provider = engineSelect ? engineSelect.value : 'mistral';
-  await chrome.storage.local.set({
-    provider,
-    engineMode: provider,
-    mistralApiKey: mistralApiKey ? mistralApiKey.value.trim() : '',
-    mistralModel: mistralModel ? mistralModel.value : 'mistral-large-latest',
-    geminiApiKey: geminiApiKey ? geminiApiKey.value.trim() : '',
-    geminiModel: geminiModel ? geminiModel.value : 'gemini-3.8-flash',
-    privacyMode: privacyLevel ? privacyLevel.value : 'strict'
-  });
+  try {
+    const provider = engineSelect ? engineSelect.value : 'mistral';
+    const config = await getEffectiveConfig();
+    const data = await chrome.storage.local.get(['mistralApiKey', 'geminiApiKey']);
 
-  if (settingsModal) settingsModal.style.display = 'none';
-  log(`Settings updated. Active provider: ${provider.toUpperCase()}`, 'info');
+    const activeMistralKey = (mistralApiKey?.value || '').trim() || data.mistralApiKey || config.mistralApiKey || '';
+    const activeGeminiKey = (geminiApiKey?.value || '').trim() || data.geminiApiKey || config.geminiApiKey || '';
+
+    await chrome.storage.local.set({
+      provider,
+      engineMode: provider,
+      mistralApiKey: activeMistralKey,
+      mistralModel: mistralModel ? mistralModel.value : 'mistral-large-latest',
+      geminiApiKey: activeGeminiKey,
+      geminiModel: geminiModel ? geminiModel.value : 'gemini-3.8-flash',
+      privacyMode: privacyLevel ? privacyLevel.value : 'strict'
+    });
+
+    if (settingsModal) settingsModal.style.display = 'none';
+    log(`Settings updated. Active provider: ${provider.toUpperCase()}`, 'info');
+  } catch (err) {
+    console.error('[PRATYAKSHA] Error saving settings:', err);
+  }
 }
 
 // Refresh active tab and verify content script injection
@@ -226,7 +284,7 @@ async function scanCurrentPage() {
   if (response && response.elements) {
     pageContext = response;
     let hostname = 'page';
-    try { hostname = new URL(response.url).hostname; } catch (_) {}
+    try { hostname = new URL(response.url).hostname; } catch (_) { }
     log(`DOM Indexed: Found ${response.elements.length} actionable elements on ${hostname}`, 'info');
   }
 }
@@ -249,6 +307,9 @@ async function handleRunPrompt() {
   promptInput.style.height = 'auto';
 
   // The welcome state belongs only to the empty conversation.
+  if (activeOrb3D) {
+    activeOrb3D.stop();
+  }
   document.getElementById('welcomeScreen')?.remove();
 
   // 1. Render User Message Bubble
@@ -258,6 +319,13 @@ async function handleRunPrompt() {
   createAgentMessageSlot();
 
   setBusyState(true);
+  if (activeTab?.id) {
+    try {
+      chrome.tabs.sendMessage(activeTab.id, { type: 'SET_CONTROL_ACTIVE', active: true }, () => {
+        if (chrome.runtime.lastError) { }
+      });
+    } catch (_) { }
+  }
   log(`User Request: "${rawPrompt}"`, 'info');
 
   try {
@@ -307,10 +375,12 @@ async function handleRunPrompt() {
       // Clean stop — already handled in 1-click stopBtn event
       return;
     }
+    setOrbState('error');
     log(`[ERROR] ${err.message}`, 'error');
     finishAgentMessage(`❌ Error: ${err.message}`, false);
   } finally {
     setBusyState(false);
+    clearTabHighlightsAndCursor();
     setTimeout(() => { activeAgent = null; }, 300);
   }
 }
@@ -318,68 +388,232 @@ async function handleRunPrompt() {
 // ── Chat Rendering Functions ─────────────────────────────────
 
 function renderUserMessage(text) {
-  const row = document.createElement('div');
-  row.className = 'chat-row user';
-  row.innerHTML = `<div class="user-bubble">${escapeHtml(text)}</div>`;
-  chatMessages.appendChild(row);
-  scrollToBottom();
+  try {
+    if (!chatMessages) return;
+    const row = document.createElement('div');
+    row.className = 'chat-row user';
+    row.innerHTML = `<div class="user-bubble">${escapeHtml(text)}</div>`;
+    chatMessages.appendChild(row);
+    scrollToBottom();
+  } catch (err) {
+    console.warn('[PRATYAKSHA] renderUserMessage error:', err);
+  }
+}
+
+function setOrbState(state) {
+  try {
+    const orbs = document.querySelectorAll('.pratyaksha-orb-container, .header-mini-orb');
+    orbs.forEach(orb => {
+      if (orb?.dataset) orb.dataset.state = state;
+    });
+    const aura = document.getElementById('ambientAura');
+    if (aura?.dataset) {
+      aura.dataset.state = state;
+    }
+    if (activeOrb3D && typeof activeOrb3D.setState === 'function') {
+      activeOrb3D.setState(state);
+    }
+  } catch (err) {
+    console.warn('[PRATYAKSHA] setOrbState warning:', err);
+  }
+}
+
+function handleNewChat() {
+  try {
+    if (activeAgent) {
+      try { activeAgent.cancel(); } catch (_) { }
+      setBusyState(false);
+    }
+    clearTabHighlightsAndCursor();
+
+    if (chatMessages) {
+      chatMessages.innerHTML = '';
+      renderWelcomeScreen();
+    }
+
+    if (promptInput) {
+      promptInput.value = '';
+      promptInput.style.height = 'auto';
+      try { promptInput.focus(); } catch (_) { }
+    }
+
+    currentAgentMessageEl = null;
+    currentAnswerBubbleEl = null;
+    setOrbState('idle');
+  } catch (err) {
+    console.warn('[PRATYAKSHA] handleNewChat error:', err);
+  }
+}
+
+function renderWelcomeScreen() {
+  try {
+    if (!chatMessages) return;
+    const welcomeSection = document.createElement('section');
+    welcomeSection.className = 'welcome-state';
+    welcomeSection.id = 'welcomeScreen';
+    welcomeSection.setAttribute('aria-labelledby', 'welcomeTitle');
+
+    welcomeSection.innerHTML = `
+      <!-- 3D Multi-Orb System (Volumetric Central Sphere & 3D Orbiting Satellites) -->
+      <div class="pratyaksha-orb-container" id="welcomeOrb" data-state="idle" role="img" aria-label="PRATYAKSHA 3D AI Orb">
+        <div class="orb-halo"></div>
+        <canvas id="orb3dCanvas" class="orb-3d-canvas" width="220" height="220"></canvas>
+        <div class="orb-ground-shadow"></div>
+      </div>
+
+      <h1 id="welcomeTitle">What can I help you with?</h1>
+
+      <!-- Pre-Task Suggestion Pills -->
+      <div class="welcome-pretasks" id="welcomePretasks" role="group" aria-label="Suggested quick tasks">
+        <button type="button" class="pretask-pill" data-task="Summarize this page in 3 key takeaways" title="Summarize page content">
+          <span class="pretask-icon">⚡</span>
+          <span class="pretask-text">Summarize page</span>
+        </button>
+        <button type="button" class="pretask-pill" data-task="Extract all data, tables, and statistics from this page" title="Extract structured data">
+          <span class="pretask-icon">📊</span>
+          <span class="pretask-text">Extract data</span>
+        </button>
+        <button type="button" class="pretask-pill" data-task="Find inputs on this page and help me fill out the form" title="Fill out inputs and forms">
+          <span class="pretask-icon">✍️</span>
+          <span class="pretask-text">Fill form</span>
+        </button>
+        <button type="button" class="pretask-pill" data-task="Locate the primary action buttons and navigation links on this page" title="Identify main buttons and actions">
+          <span class="pretask-icon">🎯</span>
+          <span class="pretask-text">Key actions</span>
+        </button>
+      </div>
+    `;
+
+    chatMessages.appendChild(welcomeSection);
+    initOrb3D();
+  } catch (err) {
+    console.warn('[PRATYAKSHA] renderWelcomeScreen error:', err);
+  }
 }
 
 function createAgentMessageSlot() {
-  const msgId = Date.now();
-  const row = document.createElement('div');
-  row.className = 'chat-row agent';
-  row.id = `msg-${msgId}`;
-  row.innerHTML = `<div class="agent-activity" role="status" aria-label="Working"><span class="activity-spinner"></span></div><div class="agent-answer-bubble" id="answer-${msgId}" style="display:none;"></div>`;
+  try {
+    if (!chatMessages) return;
+    const msgId = Date.now();
+    const row = document.createElement('div');
+    row.className = 'chat-row agent';
+    row.id = `msg-${msgId}`;
+    row.innerHTML = `<div class="agent-tag-header"><span class="agent-ai-icon">✦</span><span class="agent-ai-name">PRATYAKSHA AI</span></div><div class="agent-activity" role="status" aria-label="Working"><div class="micro-orb" data-state="thinking"><div class="micro-orb-core"></div><div class="micro-orb-ring"></div></div><span class="activity-label">Thinking…</span></div><div class="agent-answer-bubble" id="answer-${msgId}" style="display:none;"></div>`;
 
-  chatMessages.appendChild(row);
+    chatMessages.appendChild(row);
 
-  currentAgentMessageEl = row;
-  currentAnswerBubbleEl = row.querySelector(`#answer-${msgId}`);
+    currentAgentMessageEl = row;
+    currentAnswerBubbleEl = row.querySelector(`#answer-${msgId}`);
 
-  scrollToBottom();
+    scrollToBottom();
+  } catch (err) {
+    console.warn('[PRATYAKSHA] createAgentMessageSlot error:', err);
+  }
 }
 
 function handleAgentEvent(event) {
-  switch (event.type) {
-    case 'TASK_COMPLETE':
-      finishAgentMessage(event.summary, true);
-      break;
+  try {
+    if (!event) return;
+    switch (event.type) {
+      case 'STATE_CHANGE':
+        if (['REASONING', 'ACTING', 'PERCEIVING', 'BACKTRACKING'].includes(event.state)) {
+          setOrbState('thinking');
+          const actLabel = currentAgentMessageEl?.querySelector('.activity-label');
+          if (actLabel && event.label) {
+            actLabel.textContent = event.label.replace(/^Step \d+:\s*/, '');
+          }
+        }
+        break;
 
-    case 'BUDGET_REACHED':
-      finishAgentMessage(event.summary, false);
-      break;
+      case 'TASK_COMPLETE':
+        setOrbState('responding');
+        finishAgentMessage(event.summary, true);
+        setTimeout(() => { try { setOrbState('idle'); } catch (_) { } }, 2400);
+        break;
 
-    case 'CANCELLED':
-      finishAgentMessage(event.message || 'Execution cancelled by user.', false);
-      break;
+      case 'BUDGET_REACHED':
+        setOrbState('idle');
+        finishAgentMessage(event.summary, false);
+        break;
+
+      case 'CANCELLED':
+        setOrbState('idle');
+        finishAgentMessage(event.message || 'Execution cancelled by user.', false);
+        break;
+
+      case 'TOOL_ERROR':
+        setOrbState('error');
+        setTimeout(() => {
+          try {
+            if (isExecuting) setOrbState('thinking');
+            else setOrbState('idle');
+          } catch (_) { }
+        }, 2000);
+        break;
+    }
+  } catch (err) {
+    console.warn('[PRATYAKSHA] handleAgentEvent error:', err);
   }
+}
+
+function clearTabHighlightsAndCursor() {
+  if (!activeTab?.id) return;
+  try {
+    chrome.tabs.sendMessage(activeTab.id, { type: 'CLEAR_HIGHLIGHT' }, () => {
+      if (chrome.runtime.lastError) { }
+    });
+  } catch (_) { }
+  try {
+    chrome.tabs.sendMessage(activeTab.id, { type: 'SET_CONTROL_ACTIVE', active: false }, () => {
+      if (chrome.runtime.lastError) { }
+    });
+  } catch (_) { }
+  try {
+    chrome.tabs.sendMessage(activeTab.id, { type: 'EXECUTE_ACTION', payload: { action: 'CLEAR_HIGHLIGHT' } }, () => {
+      if (chrome.runtime.lastError) { }
+    });
+  } catch (_) { }
 }
 
 function finishAgentMessage(summaryText, isSuccess = true) {
-  if (currentAgentMessageEl) {
-    const activity = currentAgentMessageEl.querySelector('.agent-activity');
-    if (activity) activity.remove();
+  try {
+    clearTabHighlightsAndCursor();
+    if (currentAgentMessageEl) {
+      const activity = currentAgentMessageEl.querySelector('.agent-activity');
+      if (activity) {
+        try { activity.remove(); } catch (_) { }
+      }
+    }
+    if (currentAnswerBubbleEl && summaryText) {
+      currentAnswerBubbleEl.style.display = 'block';
+      currentAnswerBubbleEl.innerHTML = formatMarkdown(summaryText);
+    }
+    scrollToBottom();
+  } catch (err) {
+    console.warn('[PRATYAKSHA] finishAgentMessage error:', err);
   }
-  if (currentAnswerBubbleEl && summaryText) {
-    currentAnswerBubbleEl.style.display = 'block';
-    currentAnswerBubbleEl.innerHTML = formatMarkdown(summaryText);
-  }
-
-  scrollToBottom();
 }
 
 function setBusyState(busy) {
-  isExecuting = busy;
-  if (runBtn) runBtn.disabled = busy;
-  if (stopBtn) stopBtn.style.display = busy ? 'inline-flex' : 'none';
+  try {
+    isExecuting = busy;
+    if (runBtn) runBtn.disabled = busy;
+    if (stopBtn) stopBtn.style.display = busy ? 'inline-flex' : 'none';
+    setOrbState(busy ? 'thinking' : 'idle');
+  } catch (err) {
+    console.warn('[PRATYAKSHA] setBusyState error:', err);
+  }
 }
 
 function scrollToBottom() {
-  if (!chatContainer) return;
-  requestAnimationFrame(() => {
-    chatContainer.scrollTop = chatContainer.scrollHeight;
-  });
+  try {
+    if (!chatContainer) return;
+    requestAnimationFrame(() => {
+      try {
+        chatContainer.scrollTop = chatContainer.scrollHeight;
+      } catch (_) { }
+    });
+  } catch (_) { }
 }
 
 function escapeHtml(str) {

@@ -602,7 +602,12 @@ export async function executeBrowserTool(toolName, args = {}, activeTab, vault) 
 
     // ── finish_task ──────────────────────────────────────────────────────────
     case 'finish_task': {
-      sendToTab(tabId, { type: 'EXECUTE_ACTION', payload: { action: 'CLEAR_HIGHLIGHT' } }).catch(() => {});
+      try {
+        await sendToTab(tabId, { type: 'CLEAR_HIGHLIGHT' });
+      } catch (_) {}
+      try {
+        await sendToTab(tabId, { type: 'EXECUTE_ACTION', payload: { action: 'CLEAR_HIGHLIGHT' } });
+      } catch (_) {}
       return {
         observation: `Task finished: ${args.summary}`,
         isFinished: true,

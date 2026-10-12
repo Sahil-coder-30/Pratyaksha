@@ -220,7 +220,50 @@ export class LangGraphAgent {
         this.abortController.abort();
       } catch (_) {}
     }
+    this._clearCursorAndHighlight().catch(() => {});
     this._emit('CANCELLED', { message: 'Agent stopped immediately by user.' });
+  }
+
+  async _clearCursorAndHighlight() {
+    const tabId = this.state.activeTab?.id;
+    if (!tabId) return;
+    try {
+      await new Promise(resolve => {
+        chrome.tabs.sendMessage(tabId, { type: 'CLEAR_HIGHLIGHT' }, () => {
+          if (chrome.runtime.lastError) {}
+          resolve();
+        });
+      });
+    } catch (_) {}
+    try {
+      await new Promise(resolve => {
+        chrome.tabs.sendMessage(tabId, { type: 'SET_CONTROL_ACTIVE', active: false }, () => {
+          if (chrome.runtime.lastError) {}
+          resolve();
+        });
+      });
+    } catch (_) {}
+    try {
+      await new Promise(resolve => {
+        chrome.tabs.sendMessage(tabId, { type: 'EXECUTE_ACTION', payload: { action: 'CLEAR_HIGHLIGHT' } }, () => {
+          if (chrome.runtime.lastError) {}
+          resolve();
+        });
+      });
+    } catch (_) {}
+  }
+
+  async _setScreenControl(active = true) {
+    const tabId = this.state.activeTab?.id;
+    if (!tabId) return;
+    try {
+      await new Promise(resolve => {
+        chrome.tabs.sendMessage(tabId, { type: 'SET_CONTROL_ACTIVE', active }, () => {
+          if (chrome.runtime.lastError) {}
+          resolve();
+        });
+      });
+    } catch (_) {}
   }
 
   _emit(type, payload = {}) {
@@ -242,6 +285,9 @@ export class LangGraphAgent {
       lastActionSig: null,
       stepCount: 0, status: 'RUNNING', finalSummary: null
     };
+
+    // Activate glowing screen control border on the inspected tab
+    this._setScreenControl(true).catch(() => {});
 
     // 1. Privacy sanitize
     const { sanitizedText, detected } = this.vault?.anonymize
@@ -387,6 +433,7 @@ export class LangGraphAgent {
       // Re-check finish_task after gate
       const verifiedFinish = actions.find(a => a.toolName === 'finish_task');
       if (verifiedFinish) {
+        await this._clearCursorAndHighlight();
         const summary = verifiedFinish.args?.summary || 'Task completed.';
         this.state.status = 'COMPLETED';
         this.state.finalSummary = summary;
@@ -423,6 +470,7 @@ export class LangGraphAgent {
           }
 
           if (result.isFinished) {
+            await this._clearCursorAndHighlight();
             this.state.status = 'COMPLETED';
             this.state.finalSummary = result.summary;
             this._emit('TASK_COMPLETE', { summary: result.summary, success: result.success !== false, steps: this.state.stepCount });
@@ -524,6 +572,8 @@ export class LangGraphAgent {
 
       await this._sleep(350);
     }
+
+    await this._clearCursorAndHighlight();
 
     if (this.isCancelled || this.abortController?.signal?.aborted) {
       this.state.status = 'CANCELLED';

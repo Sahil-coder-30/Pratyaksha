@@ -27,6 +27,33 @@
       return true;
     }
 
+    if (type === 'CLEAR_HIGHLIGHT' || type === 'REMOVE_CURSOR') {
+      try {
+        if (window.PratyakshaDOM?.clearHighlight) {
+          window.PratyakshaDOM.clearHighlight();
+        } else {
+          const leftovers = document.querySelectorAll('#pratyaksha-agent-cursor, #pratyaksha-control-frame');
+          leftovers.forEach(el => { try { el.remove(); } catch (_) {} });
+        }
+      } catch (err) {
+        console.warn('[PRATYAKSHA] Clear highlight warning:', err);
+      }
+      try { sendResponse({ success: true }); } catch (_) {}
+      return true;
+    }
+
+    if (type === 'SET_CONTROL_ACTIVE') {
+      try {
+        if (window.PratyakshaDOM?.setControlActive) {
+          window.PratyakshaDOM.setControlActive(message.active !== false);
+        }
+      } catch (err) {
+        console.warn('[PRATYAKSHA] Set control active warning:', err);
+      }
+      try { sendResponse({ success: true }); } catch (_) {}
+      return true;
+    }
+
     if (type === 'EXECUTE_ACTION') {
       handleAction(payload)
         .then(result  => sendResponse({ success: true, result }))
@@ -82,7 +109,16 @@
         return window.PratyakshaDOM.highlight(target, `🎯 ${semantic_hint || selector || String(target_id)}`);
 
       case 'CLEAR_HIGHLIGHT':
+      case 'REMOVE_CURSOR':
         window.PratyakshaDOM.clearHighlight();
+        return true;
+
+      case 'START_CONTROL':
+        window.PratyakshaDOM?.setControlActive?.(true);
+        return true;
+
+      case 'STOP_CONTROL':
+        window.PratyakshaDOM?.setControlActive?.(false);
         return true;
 
       case 'WAIT':

@@ -4,9 +4,11 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Mission Operations Portal — PRATYAKSHA Agent Demo Page</title>
+  <link rel="icon" type="image/svg+xml" href="../public/dark_favicon.svg">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700;800&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../pratyaksha-extension/content/highlighter.css">
   <style>
     :root {
       --bg: #F8F9FA;
@@ -165,7 +167,10 @@
         <h1><span>🚀 प्रत्यक्ष</span> Operations Command Portal</h1>
         <p style="font-size: 13px; color: #A8A29E; margin-top: 4px;">Live test bench for PRATYAKSHA Browser Automation Agent</p>
       </div>
-      <span class="badge">AGENT BENCHMARK</span>
+      <div style="display: flex; gap: 8px; align-items: center;">
+        <button id="previewGlowBtn" class="badge" style="cursor: pointer; background: rgba(49, 94, 247, 0.2); border: 1px solid #315EF7; color: #60A5FA;">⚡ Preview Control Glow</button>
+        <span class="badge">AGENT BENCHMARK</span>
+      </div>
     </header>
 
     <!-- Search Section -->
@@ -277,6 +282,40 @@
       document.getElementById('scientistForm').reset();
       logEvent('FORM RESET', 'click');
     });
+
+    // Preview glowing control border
+    const previewGlowBtn = document.getElementById('previewGlowBtn');
+    if (previewGlowBtn) {
+      let glowActive = false;
+      previewGlowBtn.addEventListener('click', () => {
+        try {
+          glowActive = !glowActive;
+          let frame = document.getElementById('pratyaksha-control-frame');
+          if (glowActive) {
+            if (!frame) {
+              frame = document.createElement('div');
+              frame.id = 'pratyaksha-control-frame';
+              frame.innerHTML = '<div class="control-badge"><span class="control-badge-dot"></span><span>PRATYAKSHA AI IN CONTROL</span></div>';
+              document.documentElement.appendChild(frame);
+            }
+            frame.classList.add('is-active');
+            previewGlowBtn.textContent = '⏹ Remove Control Glow';
+            previewGlowBtn.style.color = '#EF4444';
+            previewGlowBtn.style.borderColor = '#EF4444';
+          } else {
+            if (frame) {
+              frame.classList.remove('is-active');
+              frame.remove();
+            }
+            previewGlowBtn.textContent = '⚡ Preview Control Glow';
+            previewGlowBtn.style.color = '#315EF7';
+            previewGlowBtn.style.borderColor = '#315EF7';
+          }
+        } catch (err) {
+          console.warn('Control glow preview error:', err);
+        }
+      });
+    }
   </script>
 </body>
 </html>

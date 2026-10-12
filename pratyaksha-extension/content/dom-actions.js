@@ -8,57 +8,121 @@
 
 window.PratyakshaDOM = (function() {
   let agentCursor = null;
+  let controlFrame = null;
   let cursorMoveId = 0;
   const elementIdMap = new Map();
 
-  function ensureAgentCursor() {
-    if (!agentCursor || !document.documentElement.contains(agentCursor)) {
-      agentCursor = document.createElement('div');
-      agentCursor.id = 'pratyaksha-agent-cursor';
-      agentCursor.setAttribute('aria-hidden', 'true');
-      agentCursor.innerHTML = '<svg viewBox="0 0 28 30" focusable="false" aria-hidden="true"><path d="M2 1.5 26 10.6 17.4 13.5 22.8 24.8 16.5 27.8 11.1 16.6 5 22.5 2 1.5Z" fill="#1B4611" stroke="#fff" stroke-width="2.8" stroke-linejoin="round" stroke-linecap="round"/></svg><span class="pratyaksha-cursor-ripple"></span>';
-      document.documentElement.appendChild(agentCursor);
+  function ensureControlFrame() {
+    try {
+      const root = document.documentElement || document.body;
+      if (!root) return null;
+      if (!controlFrame || !document.documentElement.contains(controlFrame)) {
+        controlFrame = document.createElement('div');
+        controlFrame.id = 'pratyaksha-control-frame';
+        controlFrame.setAttribute('aria-hidden', 'true');
+        controlFrame.innerHTML = '<div class="control-badge"><span class="control-badge-dot"></span><span>PRATYAKSHA AI IN CONTROL</span></div>';
+        root.appendChild(controlFrame);
+      }
+      return controlFrame;
+    } catch (err) {
+      console.warn('[PRATYAKSHA] Error ensuring control frame:', err);
+      return null;
     }
-    return agentCursor;
+  }
+
+  function setControlActive(active = true) {
+    try {
+      if (active) {
+        const frame = ensureControlFrame();
+        if (frame) {
+          void frame.offsetWidth;
+          frame.classList.add('is-active');
+        }
+      } else {
+        if (controlFrame) {
+          try { controlFrame.classList.remove('is-active'); } catch (_) {}
+          try { controlFrame.remove(); } catch (_) {}
+          controlFrame = null;
+        }
+        const leftovers = document.querySelectorAll('#pratyaksha-control-frame');
+        leftovers.forEach(el => {
+          try { el.remove(); } catch (_) {}
+        });
+      }
+    } catch (err) {
+      console.warn('[PRATYAKSHA] setControlActive error:', err);
+    }
+  }
+
+  function ensureAgentCursor() {
+    try {
+      const root = document.documentElement || document.body;
+      if (!root) return null;
+      if (!agentCursor || !document.documentElement.contains(agentCursor)) {
+        agentCursor = document.createElement('div');
+        agentCursor.id = 'pratyaksha-agent-cursor';
+        agentCursor.setAttribute('aria-hidden', 'true');
+        agentCursor.innerHTML = '<svg class="figma-cursor-icon" viewBox="0 0 24 24" focusable="false" aria-hidden="true"><path d="M5.65 12.37H5.46L5.32 12.5L0.5 16.88V1.2L11.78 12.37H5.65Z" fill="#000000" stroke="#FFFFFF" stroke-width="1.8" stroke-linejoin="round"/></svg><span class="pratyaksha-cursor-ripple"></span>';
+        root.appendChild(agentCursor);
+      }
+      return agentCursor;
+    } catch (err) {
+      console.warn('[PRATYAKSHA] Error ensuring agent cursor:', err);
+      return null;
+    }
   }
 
   function moveAgentCursor(el, { click = false } = {}) {
+    try { setControlActive(true); } catch (_) {}
     const cursor = ensureAgentCursor();
-    const rect = el.getBoundingClientRect();
-    const x = Math.max(8, Math.min(window.innerWidth - 12, rect.left + rect.width / 2));
-    const y = Math.max(8, Math.min(window.innerHeight - 12, rect.top + rect.height / 2));
-    cursor.classList.remove('is-clicking');
-    cursor.classList.add('is-visible');
-    const fromX = Number(cursor.dataset.x) || Math.min(window.innerWidth * 0.56, window.innerWidth - 18);
-    const fromY = Number(cursor.dataset.y) || Math.min(window.innerHeight * 0.52, window.innerHeight - 18);
-    const distance = Math.hypot(x - fromX, y - fromY);
-    const duration = matchMedia('(prefers-reduced-motion: reduce)').matches
-      ? 80
-      : Math.max(260, Math.min(820, distance / 0.85));
-    const moveId = ++cursorMoveId;
-    const startAt = performance.now();
-    const arc = Math.min(22, distance * 0.035) * (x >= fromX ? 1 : -1);
+    if (!cursor || !el || typeof el.getBoundingClientRect !== 'function') {
+      return { x: 0, y: 0, duration: 100 };
+    }
 
-    cursor.dataset.x = String(x);
-    cursor.dataset.y = String(y);
-    const animate = now => {
-      if (moveId !== cursorMoveId || !cursor.isConnected) return;
-      const progress = Math.min(1, (now - startAt) / duration);
-      const eased = progress < 0.5
-        ? 4 * progress * progress * progress
-        : 1 - Math.pow(-2 * progress + 2, 3) / 2;
-      const nextX = fromX + (x - fromX) * eased;
-      const nextY = fromY + (y - fromY) * eased + Math.sin(progress * Math.PI) * arc;
-      cursor.style.left = `${nextX}px`;
-      cursor.style.top = `${nextY}px`;
-      if (progress < 1) requestAnimationFrame(animate);
-      else if (click) {
-        cursor.classList.add('is-clicking');
-        setTimeout(() => cursor?.classList.remove('is-clicking'), 460);
-      }
-    };
-    requestAnimationFrame(animate);
-    return { x, y, duration };
+    try {
+      const rect = el.getBoundingClientRect();
+      const x = Math.max(8, Math.min(window.innerWidth - 12, rect.left + rect.width / 2));
+      const y = Math.max(8, Math.min(window.innerHeight - 12, rect.top + rect.height / 2));
+      cursor.classList.remove('is-clicking');
+      cursor.classList.add('is-visible');
+      const fromX = Number(cursor.dataset.x) || Math.min(window.innerWidth * 0.56, window.innerWidth - 18);
+      const fromY = Number(cursor.dataset.y) || Math.min(window.innerHeight * 0.52, window.innerHeight - 18);
+      const distance = Math.hypot(x - fromX, y - fromY);
+      const duration = matchMedia('(prefers-reduced-motion: reduce)').matches
+        ? 80
+        : Math.max(260, Math.min(820, distance / 0.85));
+      const moveId = ++cursorMoveId;
+      const startAt = performance.now();
+      const arc = Math.min(22, distance * 0.035) * (x >= fromX ? 1 : -1);
+
+      cursor.dataset.x = String(x);
+      cursor.dataset.y = String(y);
+      const animate = now => {
+        try {
+          if (moveId !== cursorMoveId || !cursor.isConnected) return;
+          const progress = Math.min(1, (now - startAt) / duration);
+          const eased = progress < 0.5
+            ? 4 * progress * progress * progress
+            : 1 - Math.pow(-2 * progress + 2, 3) / 2;
+          const nextX = fromX + (x - fromX) * eased;
+          const nextY = fromY + (y - fromY) * eased + Math.sin(progress * Math.PI) * arc;
+          cursor.style.left = `${nextX}px`;
+          cursor.style.top = `${nextY}px`;
+          if (progress < 1) requestAnimationFrame(animate);
+          else if (click) {
+            cursor.classList.add('is-clicking');
+            setTimeout(() => {
+              try { cursor?.classList.remove('is-clicking'); } catch (_) {}
+            }, 460);
+          }
+        } catch (_) {}
+      };
+      requestAnimationFrame(animate);
+      return { x, y, duration };
+    } catch (err) {
+      console.warn('[PRATYAKSHA] moveAgentCursor error:', err);
+      return { x: 0, y: 0, duration: 100 };
+    }
   }
 
   function getUniqueSelector(el) {
@@ -418,7 +482,32 @@ window.PratyakshaDOM = (function() {
     },
 
     clearHighlight() {
-      if (agentCursor) agentCursor.classList.remove('is-visible', 'is-clicking');
+      try {
+        cursorMoveId++;
+        if (agentCursor) {
+          try { agentCursor.classList.remove('is-visible', 'is-clicking'); } catch (_) {}
+          try { agentCursor.remove(); } catch (_) {}
+          agentCursor = null;
+        }
+        const leftovers = document.querySelectorAll('#pratyaksha-agent-cursor');
+        leftovers.forEach(el => {
+          try { el.remove(); } catch (_) {}
+        });
+        setControlActive(false);
+        return true;
+      } catch (err) {
+        console.warn('[PRATYAKSHA] clearHighlight error:', err);
+        return false;
+      }
+    },
+
+    removeCursor() {
+      return this.clearHighlight();
+    },
+
+    setControlActive(active = true) {
+      setControlActive(active);
+      return true;
     },
 
     /**
