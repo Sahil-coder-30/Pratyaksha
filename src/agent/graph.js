@@ -2,21 +2,24 @@
  * PRATYAKSHA LangGraph StateGraph Workflow
  * Sovereign Privacy-First Browser Agent
  *
- * Assembles the outer orchestration graph connecting:
- * intake -> privacy -> planner -> policy -> browser_agent -> verification -> recovery -> finalize.
- * Supports conditional routing, bounded recovery, human-in-the-loop interrupts, and checkpoints.
+ * Orchestrates the modular agent workflow:
+ * - Independent Planner Agent (`plannerAgentNode`) in `planner-agent.js`
+ * - Core Browser Actor Agent (`browserActorAgentNode`) in `browser-actor-agent.js`
+ * with boundary safety checks (privacy, policy, verification, recovery, finalize).
  */
 
 import { StateGraph, START, END, interrupt } from '@langchain/langgraph';
 import { AgentState } from './state.js';
 import { anonymizeInputTask } from '../safety/privacy.js';
-import { plannerNode } from './planner.js';
+import { plannerAgentNode, createPlannerAgent } from './planner-agent.js';
+import { browserActorAgentNode, createBrowserActorAgent } from './browser-actor-agent.js';
 import { classifyAction } from '../safety/action-policy.js';
-import { createApprovalRequest, verifyApproval, consumeApproval } from '../safety/approval.js';
-import { browserAgentTurn } from './agent.js';
-import { verifierNode, VERIFICATION_OUTCOMES } from './verifier.js';
+import { createApprovalRequest } from '../safety/approval.js';
+import { verifierNode } from './verifier.js';
 import { recoveryNode } from './recovery.js';
 import { TOOL_NAMES } from '../shared/constants.js';
+
+export { createPlannerAgent, createBrowserActorAgent };
 
 /**
  * Creates and compiles the complete LangGraph agent workflow.
@@ -71,29 +74,18 @@ export function createAgentGraph(options = {}) {
       };
     })
 
-    // ── 3. PLANNER NODE ───────────────────────────────────────────────────────
+    // ── 3. PLANNER AGENT NODE (Independent Module) ───────────────────────────
     .addNode('planner', async (state) => {
-      events?.emit?.('THINKING', {
-        phase: 'plan',
-        text: 'Analyzing page context & formulating structured execution plan…',
-        step: 0,
+      return plannerAgentNode(state, {
+        model,
+        useModelPlanner: options.useModelPlanner,
+        events,
         maxSteps
       });
-      const planUpdate = await plannerNode(state, { model });
-      if (planUpdate.plan?.subgoals?.length) {
-        events?.emit?.('THINKING', {
-          phase: 'plan',
-          text: `Execution plan formulated with ${planUpdate.plan.subgoals.length} subgoal(s).`,
-          step: 0,
-          maxSteps
-        });
-      }
-      return planUpdate;
     })
 
     // ── 4. POLICY NODE ────────────────────────────────────────────────────────
     .addNode('policy', async (state) => {
-      // Determine next planned action to evaluate safety
       const subgoals = state.plan?.subgoals || [];
       const currentIdx = state.currentSubgoalIndex || 0;
       const currentSubgoal = subgoals[currentIdx];
@@ -119,7 +111,6 @@ export function createAgentGraph(options = {}) {
       }
 
       if (policyDecision.requiresApproval) {
-        // If not already approved in state
         if (state.approvalStatus !== 'APPROVED') {
           const req = createApprovalRequest({
             threadId: state.threadId,
@@ -128,7 +119,6 @@ export function createAgentGraph(options = {}) {
             pageContext: state.browserSession
           });
 
-          // LangGraph interrupt for human-in-the-loop decision
           if (options.enableInterrupts !== false) {
             interrupt({
               type: 'APPROVAL_REQUIRED',
@@ -153,9 +143,9 @@ export function createAgentGraph(options = {}) {
       return { status: 'POLICY_ALLOWED' };
     })
 
-    // ── 5. BROWSER AGENT NODE ─────────────────────────────────────────────────
+    // ── 5. CORE BROWSER ACTOR AGENT NODE (Independent Module) ────────────────
     .addNode('browser_agent', async (state) => {
-      const update = await browserAgentTurn(state, {
+      return browserActorAgentNode(state, {
         model,
         chromeApi,
         vault,
@@ -163,13 +153,11 @@ export function createAgentGraph(options = {}) {
         maxSteps,
         events
       });
-      return update;
     })
 
     // ── 6. VERIFICATION NODE ──────────────────────────────────────────────────
     .addNode('verification', async (state) => {
-      const update = await verifierNode(state, { events });
-      return update;
+      return verifierNode(state, { events });
     })
 
     // ── 7. RECOVERY NODE ──────────────────────────────────────────────────────
@@ -180,8 +168,7 @@ export function createAgentGraph(options = {}) {
         step: state.stepCount,
         maxSteps
       });
-      const update = await recoveryNode(state, { chromeApi });
-      return update;
+      return recoveryNode(state, { chromeApi });
     })
 
     // ── 8. FINALIZE NODE ──────────────────────────────────────────────────────
@@ -274,20 +261,16 @@ export function createAgentGraph(options = {}) {
     })
 
     .addConditionalEdges('browser_agent', (state) => {
-      // 1. Step budget reached -> must verify & finalize
       if ((state.stepCount || 0) >= maxSteps) return 'verification';
 
-      // 2. Model signaled task completion -> verify ground truth
       if (state.latestObservation?.isFinished || state.status === 'TASK_FINISHED_SIGNAL') {
         return 'verification';
       }
 
-      // 3. Tool execution failed -> route to recovery node
       if (state.status === 'TOOL_ERROR') {
         return 'recovery';
       }
 
-      // 4. Normal in-progress step -> continue execution loop via policy
       return 'policy';
     }, {
       verification: 'verification',
@@ -317,6 +300,75 @@ export function createAgentGraph(options = {}) {
       policy: 'policy'
     })
 
+    .addEdge('finalize', END);
+
+  return workflow.compile({
+    checkpointer
+  });
+}
+
+/**
+ * Creates a lean, direct Two-Agent StateGraph:
+ * Planner Agent -> Core Browser Actor Agent -> Finalize.
+ * Bypasses intermediate policy/recovery nodes for maximum throughput and lowest latency.
+ */
+export function createTwoAgentGraph(options = {}) {
+  const model = options.model;
+  const chromeApi = options.chromeApi;
+  const vault = options.vault;
+  const checkpointer = options.checkpointer;
+  const maxSteps = options.maxSteps || 100;
+  const events = options.events;
+
+  const workflow = new StateGraph(AgentState)
+    .addNode('planner', async (state) => {
+      return plannerAgentNode(state, {
+        model,
+        useModelPlanner: options.useModelPlanner,
+        events,
+        maxSteps
+      });
+    })
+    .addNode('browser_agent', async (state) => {
+      return browserActorAgentNode(state, {
+        model,
+        chromeApi,
+        vault,
+        signal: options.signal,
+        maxSteps,
+        events
+      });
+    })
+    .addNode('finalize', async (state) => {
+      const isSuccess = state.latestObservation?.isFinished && state.latestObservation?.success;
+      return {
+        status: isSuccess ? 'COMPLETED' : 'TERMINATED',
+        finalResult: {
+          success: !!isSuccess,
+          summary: state.latestObservation?.summary || (isSuccess ? 'Goal accomplished.' : 'Execution finished.'),
+          steps: state.stepCount || 1,
+          evidence: 'Browser execution completed'
+        }
+      };
+    })
+
+    .addEdge(START, 'planner')
+    .addConditionalEdges('planner', (state) => {
+      if (state.status === 'AWAITING_USER_INPUT') return 'finalize';
+      return 'browser_agent';
+    }, {
+      browser_agent: 'browser_agent',
+      finalize: 'finalize'
+    })
+    .addConditionalEdges('browser_agent', (state) => {
+      if ((state.stepCount || 0) >= maxSteps || state.latestObservation?.isFinished || state.status === 'TASK_FINISHED_SIGNAL') {
+        return 'finalize';
+      }
+      return 'browser_agent';
+    }, {
+      browser_agent: 'browser_agent',
+      finalize: 'finalize'
+    })
     .addEdge('finalize', END);
 
   return workflow.compile({

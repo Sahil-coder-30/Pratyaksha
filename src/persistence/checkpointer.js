@@ -73,6 +73,8 @@ export class ChromeStorageSaver extends MemorySaver {
     this.persistentStorage = options.storage || (typeof chrome !== 'undefined' && chrome?.storage?.local ? chrome.storage.local : null);
     this.storageKey = options.storageKey || 'pratyaksha_checkpoints';
     this.isHydrated = false;
+    this.asyncFlush = options.asyncFlush !== undefined ? options.asyncFlush : true;
+    this._flushPromise = null;
   }
 
   /**
@@ -120,6 +122,15 @@ export class ChromeStorageSaver extends MemorySaver {
   async flush() {
     if (!this.persistentStorage) return;
 
+    // Prune checkpoints to keep only the 10 most recent per thread to prevent unbounded payload growth
+    if (this.storage && typeof this.storage === 'object') {
+      for (const [threadId, checkpoints] of Object.entries(this.storage)) {
+        if (Array.isArray(checkpoints) && checkpoints.length > 10) {
+          this.storage[threadId] = checkpoints.slice(-10);
+        }
+      }
+    }
+
     try {
       const safeStorage = safeSerializeForChrome(this.storage || {});
       const safeWrites = safeSerializeForChrome(this.writes || {});
@@ -135,10 +146,7 @@ export class ChromeStorageSaver extends MemorySaver {
       await new Promise((resolve) => {
         if (typeof this.persistentStorage.set === 'function') {
           this.persistentStorage.set(payload, () => {
-            // Consume runtime.lastError to prevent Unchecked runtime.lastError warnings
-            if (typeof chrome !== 'undefined' && chrome?.runtime?.lastError) {
-              // Safely consumed
-            }
+            if (typeof chrome !== 'undefined' && chrome?.runtime?.lastError) {}
             resolve();
           });
         } else {
@@ -151,7 +159,21 @@ export class ChromeStorageSaver extends MemorySaver {
   }
 
   /**
-   * Puts a checkpoint into memory and flushes to chrome.storage.local.
+   * Non-blocking background flush trigger.
+   */
+  flushAsync() {
+    if (!this.persistentStorage) return;
+    if (this._flushPromise) return this._flushPromise;
+    this._flushPromise = this.flush()
+      .catch(() => {})
+      .finally(() => {
+        this._flushPromise = null;
+      });
+    return this._flushPromise;
+  }
+
+  /**
+   * Puts a checkpoint into memory and queues storage flush.
    */
   async put(config, checkpoint, metadata, newVersions) {
     // Scrub secrets from checkpoint channel values before saving
@@ -160,16 +182,24 @@ export class ChromeStorageSaver extends MemorySaver {
     }
 
     const result = await super.put(config, checkpoint, metadata, newVersions);
-    await this.flush();
+    if (this.asyncFlush) {
+      this.flushAsync();
+    } else {
+      await this.flush();
+    }
     return result;
   }
 
   /**
-   * Puts writes into memory and flushes to chrome.storage.local.
+   * Puts writes into memory and queues storage flush.
    */
   async putWrites(config, writes, taskId) {
     const result = await super.putWrites(config, writes, taskId);
-    await this.flush();
+    if (this.asyncFlush) {
+      this.flushAsync();
+    } else {
+      await this.flush();
+    }
     return result;
   }
 

@@ -171,63 +171,10 @@ export function generateDeterministicPlan(task = '', pageContext = {}) {
 }
 
 /**
- * LangGraph Planner Node
- * Generates plan using model if provided, falling back cleanly to deterministic planner.
+ * LangGraph Planner Node facade
+ * Delegates directly to independent planner-agent module.
  */
 export async function plannerNode(state, options = {}) {
-  const task = state.sanitizedTask || state.originalTask || '';
-  const pageContext = state.browserSession || {};
-  const model = options.model;
-
-  let plan = null;
-
-  if (model && typeof model.withStructuredOutput === 'function') {
-    try {
-      const structuredModel = model.withStructuredOutput(StructuredPlanSchema);
-      const prompt = `You are the master planner for the PRATYAKSHA autonomous browser agent.
-User Objective: "${task}"
-Current Browser State:
-URL: ${pageContext.url || 'None'}
-Title: ${pageContext.title || 'None'}
-
-Create a structured, step-by-step verifiable plan. Mark irreversible operations (Send, Pay, Delete).
-Define concrete verification criteria that must be verified against actual DOM evidence.
-
-CRITICAL DIRECTIVE ON MISSING INFORMATION:
-You are an autonomous browser agent. Only list an item in missingInformation if the task is strictly impossible to begin execution without human clarification (e.g. "send an email" with zero recipient or contact provided). For any general search, information retrieval, form interaction, navigation, or lookup task, DO NOT ask clarifying questions—leave missingInformation as an empty array [] and execute the plan autonomously.`;
-
-      const response = await structuredModel.invoke(prompt);
-      if (response) {
-        if (!Array.isArray(response.subgoals) || response.subgoals.length === 0) {
-          response.subgoals = [{
-            id: 1,
-            description: `Execute request: "${task}"`,
-            expectedAction: 'read_page',
-            riskTier: RISK_TIERS.READ_ONLY,
-            completionEvidence: 'Request processed'
-          }];
-        }
-        if (!Array.isArray(response.verificationCriteria) || response.verificationCriteria.length === 0) {
-          response.verificationCriteria = ['Task acknowledged'];
-        }
-        plan = response;
-      }
-    } catch (err) {
-      console.warn('[PRATYAKSHA Planner] Structured planning failed, using deterministic planner:', err.message);
-    }
-  }
-
-  if (!plan) {
-    plan = generateDeterministicPlan(task, pageContext);
-  }
-
-  // Only halt for user input if missingInformation contains genuine blocking requirements
-  const hasBlockingMissingInfo = Array.isArray(plan.missingInformation) &&
-    plan.missingInformation.length > 0 &&
-    plan.missingInformation.some(info => /recipient|password|secret|account\s+number|destination/i.test(info) || !plan.subgoals?.length);
-
-  return {
-    plan,
-    status: hasBlockingMissingInfo ? 'AWAITING_USER_INPUT' : 'PLANNING_COMPLETE'
-  };
+  const { plannerAgentNode } = await import('./planner-agent.js');
+  return plannerAgentNode(state, options);
 }

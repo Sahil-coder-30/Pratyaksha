@@ -21,7 +21,7 @@ export const SUPPORTED_PROVIDERS = Object.freeze({
 });
 
 export const DEFAULT_MODELS = Object.freeze({
-  [SUPPORTED_PROVIDERS.MISTRAL]: 'ministral-8b-latest',
+  [SUPPORTED_PROVIDERS.MISTRAL]: 'codestral-latest',
   [SUPPORTED_PROVIDERS.GEMINI]: 'gemini-3.5-flash',
   [SUPPORTED_PROVIDERS.OPENROUTER]: 'deepseek/deepseek-v4.1-flash'
 });
@@ -34,11 +34,12 @@ export function normalizeModelName(provider, model) {
   let m = (model || '').trim();
 
   if (!m) {
-    return DEFAULT_MODELS[p] || 'ministral-8b-latest';
+    return DEFAULT_MODELS[p] || 'codestral-latest';
   }
 
   if (p === SUPPORTED_PROVIDERS.MISTRAL) {
-    return 'ministral-8b-latest';
+    if (!m || m === 'mistral-large-latest') return 'codestral-latest';
+    return m;
   }
 
   if (p === SUPPORTED_PROVIDERS.GEMINI) {
@@ -97,7 +98,7 @@ export function makeModel(config = {}) {
           apiKey: valid.apiKey,
           model: valid.model,
           temperature: valid.temperature,
-          maxRetries: valid.maxRetries
+          maxRetries: Math.max(3, valid.maxRetries)
         });
 
       case SUPPORTED_PROVIDERS.GEMINI:
@@ -113,7 +114,7 @@ export function makeModel(config = {}) {
           apiKey: valid.apiKey,
           model: valid.model,
           temperature: valid.temperature,
-          maxRetries: valid.maxRetries,
+          maxRetries: Math.max(3, valid.maxRetries),
           // CRITICAL: OpenRouter requires an upfront credit reservation equal to maxTokens * price.
           // By default, ChatOpenAI requests up to 131,072 tokens which triggers HTTP 402 Payment Required
           // if key credits < ~$0.15. Setting maxTokens to 4096 keeps reservation down to ~$0.002.
@@ -158,5 +159,114 @@ export function makeModelWithFallbacks(primaryConfig, fallbackConfigs = []) {
     return primaryModel;
   }
 
-  return primaryModel.withFallbacks(fallbackModels);
+  const underlyingRunnable = primaryModel.withFallbacks(fallbackModels);
+
+  return {
+    primaryModel,
+    fallbackModels,
+    runnable: underlyingRunnable,
+
+    bindTools(tools, options) {
+      const boundPrimary = primaryModel.bindTools(tools, options);
+      const boundFallbacks = fallbackModels.map(fb => fb.bindTools(tools, options));
+      return boundPrimary.withFallbacks(boundFallbacks);
+    },
+
+    withStructuredOutput(schema, options) {
+      if (typeof primaryModel.withStructuredOutput === 'function') {
+        const boundPrimary = primaryModel.withStructuredOutput(schema, options);
+        const boundFallbacks = fallbackModels
+          .filter(fb => typeof fb.withStructuredOutput === 'function')
+          .map(fb => fb.withStructuredOutput(schema, options));
+        return boundFallbacks.length > 0
+          ? boundPrimary.withFallbacks(boundFallbacks)
+          : boundPrimary;
+      }
+      return underlyingRunnable;
+    },
+
+    async invoke(input, options) {
+      return underlyingRunnable.invoke(input, options);
+    },
+
+    async batch(inputs, options) {
+      return underlyingRunnable.batch(inputs, options);
+    },
+
+    async stream(input, options) {
+      return underlyingRunnable.stream(input, options);
+    }
+  };
+}
+
+/**
+ * Builds intelligent fallback configurations to withstand 429 rate limits,
+ * capacity exhaustion (e.g. Mistral 3505 backend_out_of_capacity), and downtime.
+ */
+export function buildAutomaticFallbacks(primaryConfig = {}, options = {}) {
+  const fallbacks = [];
+  const provider = (primaryConfig.provider || '').toLowerCase();
+  const currentModel = normalizeModelName(provider, primaryConfig.model);
+
+  if (provider === SUPPORTED_PROVIDERS.MISTRAL && primaryConfig.apiKey) {
+    // 1. Intra-provider degradation for Mistral capacity limits
+    const mistralFallbacks = ['open-mistral-nemo', 'codestral-latest', 'ministral-8b-latest'];
+    for (const cand of mistralFallbacks) {
+      if (cand !== currentModel) {
+        fallbacks.push({
+          provider: SUPPORTED_PROVIDERS.MISTRAL,
+          apiKey: primaryConfig.apiKey,
+          model: cand,
+          temperature: primaryConfig.temperature
+        });
+      }
+    }
+  } else if (provider === SUPPORTED_PROVIDERS.OPENROUTER && primaryConfig.apiKey) {
+    // 1. Intra-provider degradation for OpenRouter
+    const orFallbacks = ['deepseek/deepseek-chat', 'deepseek/deepseek-chat:free', 'deepseek/deepseek-v4.1-flash'];
+    for (const cand of orFallbacks) {
+      if (cand !== currentModel) {
+        fallbacks.push({
+          provider: SUPPORTED_PROVIDERS.OPENROUTER,
+          apiKey: primaryConfig.apiKey,
+          model: cand,
+          maxTokens: 4096,
+          temperature: primaryConfig.temperature
+        });
+      }
+    }
+  }
+
+  // 2. Cross-provider fallback to Google Gemini if available
+  if (options.geminiApiKey && provider !== SUPPORTED_PROVIDERS.GEMINI) {
+    fallbacks.push({
+      provider: SUPPORTED_PROVIDERS.GEMINI,
+      apiKey: options.geminiApiKey,
+      model: 'gemini-3.5-flash',
+      temperature: primaryConfig.temperature
+    });
+  }
+
+  // 3. Cross-provider fallback to OpenRouter if available
+  if (options.openrouterApiKey && provider !== SUPPORTED_PROVIDERS.OPENROUTER) {
+    fallbacks.push({
+      provider: SUPPORTED_PROVIDERS.OPENROUTER,
+      apiKey: options.openrouterApiKey,
+      model: 'deepseek/deepseek-chat',
+      maxTokens: 4096,
+      temperature: primaryConfig.temperature
+    });
+  }
+
+  // 4. Cross-provider fallback to Mistral if available
+  if (options.mistralApiKey && provider !== SUPPORTED_PROVIDERS.MISTRAL) {
+    fallbacks.push({
+      provider: SUPPORTED_PROVIDERS.MISTRAL,
+      apiKey: options.mistralApiKey,
+      model: 'open-mistral-nemo',
+      temperature: primaryConfig.temperature
+    });
+  }
+
+  return fallbacks;
 }

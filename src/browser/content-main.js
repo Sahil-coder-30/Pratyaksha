@@ -78,8 +78,9 @@
     } = payload;
 
     // Resolve a target element from id / selector / semantic hint
-    const numId = (target_id !== undefined && target_id !== null) ? Number(target_id) : null;
-    const target = numId !== null ? numId : (selector || semantic_hint || null);
+    const parsedId = Number(target_id);
+    const numId = (target_id !== undefined && target_id !== null && Number.isFinite(parsedId) && parsedId > 0) ? parsedId : null;
+    const target = numId !== null ? numId : (selector || semantic_hint || (target_id != null ? String(target_id) : null));
 
     switch (action) {
 

@@ -7,6 +7,7 @@ import assert from 'node:assert/strict';
 import {
   makeModel,
   makeModelWithFallbacks,
+  buildAutomaticFallbacks,
   validateModelConfig,
   normalizeModelName,
   SUPPORTED_PROVIDERS
@@ -36,8 +37,8 @@ test('Model Config Validation - Invalid Configurations Fail Early', () => {
 test('Model Normalization - Legacy & Default Mappings', () => {
   assert.equal(normalizeModelName('gemini', 'gemini-2.0-flash'), 'gemini-3.5-flash');
   assert.equal(normalizeModelName('gemini', ''), 'gemini-3.5-flash');
-  assert.equal(normalizeModelName('mistral', ''), 'ministral-8b-latest');
-  assert.equal(normalizeModelName('mistral', 'mistral-large-latest'), 'ministral-8b-latest');
+  assert.equal(normalizeModelName('mistral', ''), 'codestral-latest');
+  assert.equal(normalizeModelName('mistral', 'mistral-large-latest'), 'codestral-latest');
   assert.equal(normalizeModelName('openrouter', ''), 'deepseek/deepseek-v4.1-flash');
   assert.equal(normalizeModelName('openrouter', 'deepseek-v4.1-flash'), 'deepseek/deepseek-v4.1-flash');
   assert.equal(normalizeModelName('openrouter', 'deepseek/deepseek-chat'), 'deepseek/deepseek-chat');
@@ -83,8 +84,12 @@ test('Model Factory - Fallback Chaining', () => {
   );
 
   assert.ok(modelWithFb);
-  // Verify withFallbacks wrapped the model
+  // Verify withFallbacks wrapped the model and supports bindTools
   assert.ok(typeof modelWithFb.invoke === 'function');
+  assert.equal(typeof modelWithFb.bindTools, 'function');
+  const bound = modelWithFb.bindTools([]);
+  assert.ok(bound);
+  assert.ok(typeof bound.invoke === 'function');
 });
 
 test('Model Factory - OpenRouter Sets maxTokens to Prevent 402 Credit Exhaustion', () => {
@@ -117,4 +122,28 @@ test('Diagnostic Error Formatter - Clarifies OpenRouter 402 and Network Disconne
   const diagChange = diagnoseExecutionError(changeErr, changeErr.message, 'NETWORK_ERROR');
   assert.equal(diagChange.code, 'NETWORK_DISCONNECTED');
   assert.ok(diagChange.message.includes('net::ERR_NETWORK_CHANGED'));
+
+  // Test Mistral 429 backend_out_of_capacity
+  const err429 = new Error('API error occurred: Status 429 Body: {"type":"backend_out_of_capacity","code":"3505"}');
+  err429.status = 429;
+  const diag429 = diagnoseExecutionError(err429, err429.message, 'RATE_LIMIT_EXCEEDED');
+  assert.equal(diag429.code, 'RATE_LIMIT_EXCEEDED');
+  assert.ok(diag429.message.includes('429 Capacity / Rate Limit'));
+  assert.ok(diag429.message.includes('open-mistral-nemo'));
+});
+
+test('Model Factory - Automatic Degradation Fallback Generator', () => {
+  const fallbacks = buildAutomaticFallbacks(
+    { provider: 'mistral', apiKey: 'mock-key', model: 'ministral-8b-latest' },
+    { geminiApiKey: 'mock-gemini-key', openrouterApiKey: 'mock-or-key' }
+  );
+
+  assert.ok(Array.isArray(fallbacks));
+  assert.ok(fallbacks.length >= 3);
+  // Contains intra-provider degradation to open-mistral-nemo
+  assert.ok(fallbacks.some(f => f.provider === 'mistral' && f.model === 'open-mistral-nemo'));
+  // Contains cross-provider fallback to gemini
+  assert.ok(fallbacks.some(f => f.provider === 'gemini'));
+  // Contains cross-provider fallback to openrouter
+  assert.ok(fallbacks.some(f => f.provider === 'openrouter'));
 });

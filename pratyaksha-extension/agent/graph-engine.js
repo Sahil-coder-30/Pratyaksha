@@ -61848,6 +61848,1562 @@ var init_AppError = __esm({
   }
 });
 
+// faultkit-stub:stub-faultkit-logger
+var init_stub_faultkit_logger = __esm({
+  "faultkit-stub:stub-faultkit-logger"() {
+  }
+});
+
+// node_modules/faultkit/dist/esm/index.js
+var init_esm3 = __esm({
+  "node_modules/faultkit/dist/esm/index.js"() {
+    init_types2();
+    init_AppError();
+    init_errors5();
+    init_coerce2();
+    init_format();
+    init_stub_faultkit_logger();
+  }
+});
+
+// src/shared/errors.js
+function toErrorResponse2(err, options = {}) {
+  const appError = coerceToAppError(err, options?.errorCoercer);
+  const customOpts = {
+    isProduction: false,
+    genericServerErrorMessage: appError.message || err?.message || (typeof err === "string" ? err : "Internal error"),
+    ...options
+  };
+  const response = toErrorResponse(appError, customOpts);
+  if (response?.error?.message === "An unexpected error occurred. Our team has been notified." || response?.error?.message === "An unexpected error occurred." || response?.error?.message === "An unexpected internal server error occurred.") {
+    const rawMsg = err?.message || (typeof err === "string" ? err : null);
+    if (rawMsg) {
+      response.error.message = rawMsg;
+    }
+  }
+  if (!response?.error?.details && (err?.details || err?.cause || err?.response)) {
+    response.error.details = err.details || err.cause || err.response;
+  }
+  return response;
+}
+var formatError3, PratyakshaError, ToolExecutionError, ChannelClosedError, PolicyViolationError, BudgetExhaustedError, VerificationFailureError;
+var init_errors6 = __esm({
+  "src/shared/errors.js"() {
+    init_esm3();
+    formatError3 = toErrorResponse2;
+    if (typeof AppError._registerFormatter === "function") {
+      AppError._registerFormatter(toErrorResponse2);
+    }
+    PratyakshaError = class extends AppError {
+      constructor(message, options = {}) {
+        const statusCode = options.statusCode || 400;
+        const errorCode = options.code || "PRATYAKSHA_ERROR";
+        const details = options.details || null;
+        const isOperational = options.recoverable !== void 0 ? options.recoverable : true;
+        super(message, statusCode, errorCode, details, isOperational);
+        this.name = this.constructor.name;
+        this.code = errorCode;
+        this.recoverable = isOperational;
+        this.details = details || {};
+      }
+    };
+    ToolExecutionError = class extends PratyakshaError {
+      constructor(message, options = {}) {
+        super(message, { statusCode: 422, code: "TOOL_EXECUTION_ERROR", recoverable: true, ...options });
+        this.toolName = options.toolName || "unknown";
+      }
+    };
+    ChannelClosedError = class extends PratyakshaError {
+      constructor(message = "Message channel closed before a response was received", options = {}) {
+        super(message, { statusCode: 503, code: "CHANNEL_CLOSED", recoverable: true, ...options });
+      }
+    };
+    PolicyViolationError = class extends PratyakshaError {
+      constructor(message = "Action rejected by safety policy", options = {}) {
+        super(message, { statusCode: 403, code: "POLICY_VIOLATION", recoverable: false, ...options });
+        this.policy = options.policy || "ACTION_POLICY";
+      }
+    };
+    BudgetExhaustedError = class extends PratyakshaError {
+      constructor(message = "Execution step budget exhausted", options = {}) {
+        super(message, { statusCode: 429, code: "BUDGET_EXHAUSTED", recoverable: false, ...options });
+        this.budgetType = options.budgetType || "STEPS";
+      }
+    };
+    VerificationFailureError = class extends PratyakshaError {
+      constructor(message = "Task verification failed against live browser state", options = {}) {
+        super(message, { statusCode: 422, code: "VERIFICATION_FAILURE", recoverable: true, ...options });
+        this.criteria = options.criteria || [];
+      }
+    };
+  }
+});
+
+// node_modules/zod/index.js
+var init_zod = __esm({
+  "node_modules/zod/index.js"() {
+    init_external();
+    init_external();
+  }
+});
+
+// src/shared/constants.js
+var RISK_TIERS, TOOL_CATEGORIES, TOOL_NAMES, CANONICAL_SERVICES, FORBIDDEN_URL_PROTOCOLS;
+var init_constants = __esm({
+  "src/shared/constants.js"() {
+    RISK_TIERS = Object.freeze({
+      READ_ONLY: "READ_ONLY",
+      // Safe page extraction, inspection, search
+      REVERSIBLE: "REVERSIBLE",
+      // Navigation, scrolling, clicking normal links
+      SENSITIVE: "SENSITIVE",
+      // Form typing, logins, settings toggles
+      IRREVERSIBLE: "IRREVERSIBLE",
+      // Sending messages, transactions, deletes
+      RESTRICTED: "RESTRICTED"
+      // Privileged operations (e.g. arbitrary execute_js, dangerous protocols)
+    });
+    TOOL_CATEGORIES = Object.freeze({
+      NAVIGATION: "NAVIGATION",
+      READING: "READING",
+      INTERACTION: "INTERACTION",
+      OBSERVATION: "OBSERVATION",
+      WAITING: "WAITING",
+      COMPLETION: "COMPLETION"
+    });
+    TOOL_NAMES = Object.freeze({
+      SEARCH_WEB: "search_web",
+      OPEN_URL: "open_url",
+      GO_BACK: "go_back",
+      GO_FORWARD: "go_forward",
+      SWITCH_TAB: "switch_tab",
+      READ_PAGE: "read_page",
+      GET_PAGE_METADATA: "get_page_metadata",
+      GET_LINKS: "get_links",
+      FIND_ON_PAGE: "find_on_page",
+      EXTRACT_STRUCTURED: "extract_structured",
+      CLICK_ELEMENT: "click_element",
+      TYPE_INTO_ELEMENT: "type_into_element",
+      EXECUTE_JS: "execute_js",
+      INSPECT_DOM: "inspect_dom",
+      SCREENSHOT: "screenshot",
+      SCROLL_PAGE: "scroll_page",
+      WAIT_FOR: "wait_for",
+      WAIT_SECONDS: "wait_seconds",
+      FINISH_TASK: "finish_task"
+    });
+    CANONICAL_SERVICES = Object.freeze([
+      { pattern: /\bgmail\b/i, url: "https://mail.google.com", name: "Gmail", hostMatch: /mail\.google\.com/i },
+      { pattern: /\byoutube\b/i, url: "https://www.youtube.com", name: "YouTube", hostMatch: /youtube\.com/i },
+      { pattern: /\bgithub\b/i, url: "https://github.com", name: "GitHub", hostMatch: /github\.com/i },
+      { pattern: /\b(cricbuzz|cricket score)\b/i, url: "https://www.cricbuzz.com", name: "Cricbuzz", hostMatch: /cricbuzz\.com/i },
+      { pattern: /\bwikipedia\b/i, url: "https://www.wikipedia.org", name: "Wikipedia", hostMatch: /wikipedia\.org/i },
+      { pattern: /\b(twitter|x\.com)\b/i, url: "https://x.com", name: "Twitter/X", hostMatch: /x\.com|twitter\.com/i },
+      { pattern: /\breddit\b/i, url: "https://www.reddit.com", name: "Reddit", hostMatch: /reddit\.com/i },
+      { pattern: /\b(google search|google\.com)\b/i, url: "https://www.google.com", name: "Google", hostMatch: /google\.com/i }
+    ]);
+    FORBIDDEN_URL_PROTOCOLS = Object.freeze([
+      "chrome:",
+      "chrome-extension:",
+      "edge:",
+      "about:",
+      "data:",
+      "javascript:",
+      "vbscript:",
+      "devtools:"
+    ]);
+  }
+});
+
+// src/shared/schemas.js
+function createToolResult({
+  ok = true,
+  toolName,
+  observation = "",
+  page = {},
+  metadata = {},
+  newTabId = null,
+  screenshotDataUrl = null,
+  isFinished = false,
+  success: success2 = true,
+  summary = null
+}) {
+  return {
+    ok: !!ok,
+    toolName: String(toolName || "unknown"),
+    observation: String(observation || ""),
+    page: {
+      url: page.url || "",
+      title: page.title || "",
+      id: page.id || null
+    },
+    metadata: { ...metadata },
+    newTabId: newTabId !== null ? Number(newTabId) : null,
+    screenshotDataUrl: screenshotDataUrl || null,
+    isFinished: !!isFinished,
+    success: !!success2,
+    summary: summary || null,
+    error: null,
+    timestamp: Date.now()
+  };
+}
+function createToolError({
+  toolName,
+  error: error62,
+  page = {},
+  metadata = {},
+  recoverable = true
+}) {
+  const message = error62 instanceof Error ? error62.message : String(error62 || "Unknown error");
+  const code = error62?.code || "TOOL_EXECUTION_ERROR";
+  return {
+    ok: false,
+    toolName: String(toolName || "unknown"),
+    observation: `ERROR [${toolName}]: ${message}`,
+    page: {
+      url: page.url || "",
+      title: page.title || "",
+      id: page.id || null
+    },
+    metadata: { ...metadata },
+    newTabId: null,
+    screenshotDataUrl: null,
+    isFinished: false,
+    success: false,
+    summary: null,
+    error: {
+      message,
+      code,
+      recoverable: recoverable !== false,
+      details: error62?.details || {}
+    },
+    timestamp: Date.now()
+  };
+}
+function normalizeToolInvocation(toolName = "", rawArgs = {}) {
+  const TOOL_ALIASES = {
+    click: TOOL_NAMES.CLICK_ELEMENT,
+    click_button: TOOL_NAMES.CLICK_ELEMENT,
+    clickelement: TOOL_NAMES.CLICK_ELEMENT,
+    type: TOOL_NAMES.TYPE_INTO_ELEMENT,
+    type_text: TOOL_NAMES.TYPE_INTO_ELEMENT,
+    input: TOOL_NAMES.TYPE_INTO_ELEMENT,
+    input_text: TOOL_NAMES.TYPE_INTO_ELEMENT,
+    typeintoelement: TOOL_NAMES.TYPE_INTO_ELEMENT,
+    open: TOOL_NAMES.OPEN_URL,
+    goto: TOOL_NAMES.OPEN_URL,
+    navigate: TOOL_NAMES.OPEN_URL,
+    navigate_to: TOOL_NAMES.OPEN_URL,
+    openurl: TOOL_NAMES.OPEN_URL,
+    search: TOOL_NAMES.SEARCH_WEB,
+    web_search: TOOL_NAMES.SEARCH_WEB,
+    google_search: TOOL_NAMES.SEARCH_WEB,
+    searchweb: TOOL_NAMES.SEARCH_WEB,
+    read: TOOL_NAMES.READ_PAGE,
+    readpage: TOOL_NAMES.READ_PAGE,
+    extract: TOOL_NAMES.READ_PAGE,
+    scroll: TOOL_NAMES.SCROLL_PAGE,
+    scrollpage: TOOL_NAMES.SCROLL_PAGE,
+    finish: TOOL_NAMES.FINISH_TASK,
+    complete: TOOL_NAMES.FINISH_TASK,
+    done: TOOL_NAMES.FINISH_TASK,
+    finishtask: TOOL_NAMES.FINISH_TASK
+  };
+  const lower = String(toolName || "").toLowerCase().trim();
+  const canonicalName = TOOL_ALIASES[lower] || toolName;
+  const args = { ...rawArgs };
+  if (canonicalName === TOOL_NAMES.CLICK_ELEMENT) {
+    if (args.target_id === void 0) {
+      const rawTarget = args.id ?? args.target ?? args.element_id ?? args.targetId;
+      if (rawTarget !== void 0) {
+        const num = Number(rawTarget);
+        if (Number.isFinite(num) && num > 0) {
+          args.target_id = num;
+        } else {
+          args.semantic_hint = args.semantic_hint || String(rawTarget);
+        }
+      }
+    } else if (typeof args.target_id === "string" && !/^\d+$/.test(args.target_id)) {
+      args.semantic_hint = args.semantic_hint || args.target_id;
+      delete args.target_id;
+    }
+  } else if (canonicalName === TOOL_NAMES.TYPE_INTO_ELEMENT) {
+    if (args.target_id === void 0) {
+      const rawTarget = args.id ?? args.target ?? args.element_id ?? args.targetId;
+      if (rawTarget !== void 0) {
+        const num = Number(rawTarget);
+        if (Number.isFinite(num) && num > 0) {
+          args.target_id = num;
+        } else {
+          args.semantic_hint = args.semantic_hint || String(rawTarget);
+        }
+      }
+    } else if (typeof args.target_id === "string" && !/^\d+$/.test(args.target_id)) {
+      args.semantic_hint = args.semantic_hint || args.target_id;
+      delete args.target_id;
+    }
+    if (args.text === void 0 && args.value !== void 0) {
+      args.text = String(args.value);
+    }
+  } else if (canonicalName === TOOL_NAMES.OPEN_URL) {
+    if (!args.url && args.link) args.url = args.link;
+    if (!args.url && args.destination) args.url = args.destination;
+  } else if (canonicalName === TOOL_NAMES.SEARCH_WEB) {
+    if (!args.query && args.q) args.query = args.q;
+    if (!args.query && args.text) args.query = args.text;
+  } else if (canonicalName === TOOL_NAMES.FINISH_TASK) {
+    if (!args.summary && args.message) args.summary = args.message;
+    if (!args.summary && args.result) args.summary = args.result;
+    if (!args.summary && args.output) args.summary = args.output;
+  }
+  return { toolName: canonicalName, args };
+}
+function validateToolArgs(toolName, rawArgs = {}) {
+  const { toolName: canonicalName, args } = normalizeToolInvocation(toolName, rawArgs);
+  const schema = TOOL_ZOD_SCHEMAS[canonicalName];
+  if (!schema) {
+    throw new Error(`Unregistered tool: "${toolName}"`);
+  }
+  return schema.parse(args);
+}
+var TOOL_ZOD_SCHEMAS, BROWSER_TOOL_SPECS;
+var init_schemas4 = __esm({
+  "src/shared/schemas.js"() {
+    init_zod();
+    init_constants();
+    TOOL_ZOD_SCHEMAS = {
+      [TOOL_NAMES.SEARCH_WEB]: external_exports.object({
+        query: external_exports.string().min(1, "Search query cannot be empty").describe("The search query to look up on the web."),
+        engine: external_exports.enum(["google", "bing", "duckduckgo"]).default("google").describe("Search engine to use (default: google).")
+      }),
+      [TOOL_NAMES.OPEN_URL]: external_exports.object({
+        url: external_exports.string().min(1, "URL cannot be empty").describe('The full URL to open (e.g. "https://example.com/page").'),
+        rationale: external_exports.string().optional().describe("Why you are navigating here.")
+      }),
+      [TOOL_NAMES.GO_BACK]: external_exports.object({}).describe("Navigates the current tab back one page in browser history."),
+      [TOOL_NAMES.GO_FORWARD]: external_exports.object({}).describe("Navigates the current tab forward one page in browser history."),
+      [TOOL_NAMES.SWITCH_TAB]: external_exports.object({
+        title_contains: external_exports.string().optional().describe("Keyword that the target tab title must contain (case-insensitive)."),
+        url_contains: external_exports.string().optional().describe("Keyword that the target tab URL must contain (case-insensitive)."),
+        tab_index: external_exports.number().int().nonnegative().optional().describe("Zero-based index of the tab in the current window.")
+      }),
+      [TOOL_NAMES.READ_PAGE]: external_exports.object({
+        selector: external_exports.string().optional().describe("Optional CSS selector to focus extraction on a specific section."),
+        max_chars: external_exports.number().int().min(1).max(8e3).default(4e3).optional().describe("Max characters to return (default 4000, max 8000).")
+      }),
+      [TOOL_NAMES.GET_PAGE_METADATA]: external_exports.object({}).describe("Returns structured metadata about the current page."),
+      [TOOL_NAMES.GET_LINKS]: external_exports.object({
+        filter: external_exports.string().default("").optional().describe("Optional keyword \u2014 only return links matching this string."),
+        max: external_exports.number().int().min(1).max(100).default(25).optional().describe("Maximum number of links to return (default 25).")
+      }),
+      [TOOL_NAMES.FIND_ON_PAGE]: external_exports.object({
+        text: external_exports.string().min(1, "Search text cannot be empty").describe("The text or keyword to search for on the page."),
+        case_sensitive: external_exports.boolean().default(false).optional().describe("Whether the search is case-sensitive (default false).")
+      }),
+      [TOOL_NAMES.EXTRACT_STRUCTURED]: external_exports.object({
+        fields: external_exports.array(external_exports.object({
+          name: external_exports.string().min(1, "Field name is required").describe("Field name"),
+          selector: external_exports.string().min(1, "CSS selector is required").describe("CSS selector"),
+          attribute: external_exports.string().optional().describe("Optional attribute (e.g. href, src)")
+        })).min(1, "At least one field is required for structured extraction").describe("List of fields to extract."),
+        root_selector: external_exports.string().optional().describe("Optional CSS selector to scope extraction to a specific container.")
+      }),
+      [TOOL_NAMES.CLICK_ELEMENT]: external_exports.object({
+        target_id: external_exports.union([external_exports.number().int(), external_exports.string().regex(/^\d+$/)]).optional().describe("Numeric [ID] from the DOM elements table."),
+        semantic_hint: external_exports.string().optional().describe("Fallback: describe the element.")
+      }).refine((data) => data.target_id !== void 0 || !!data.semantic_hint, {
+        message: "click_element requires either target_id or semantic_hint"
+      }),
+      [TOOL_NAMES.TYPE_INTO_ELEMENT]: external_exports.object({
+        target_id: external_exports.union([external_exports.number().int(), external_exports.string().regex(/^\d+$/)]).optional().describe("Numeric [ID] from the DOM elements table."),
+        semantic_hint: external_exports.string().optional().describe("Fallback: describe the field."),
+        text: external_exports.string().describe("The exact text to type."),
+        clear_first: external_exports.boolean().default(false).optional().describe("Clear existing content before typing (default false)."),
+        press_enter: external_exports.boolean().default(false).optional().describe("Press Enter after typing (for search bars and forms).")
+      }).refine((data) => data.target_id !== void 0 || !!data.semantic_hint, {
+        message: "type_into_element requires either target_id or semantic_hint"
+      }),
+      [TOOL_NAMES.EXECUTE_JS]: external_exports.object({
+        code: external_exports.string().min(1, "JavaScript code cannot be empty").describe("JavaScript expression or statement to execute in page context."),
+        description: external_exports.string().optional().describe("What this JS is intended to do.")
+      }),
+      [TOOL_NAMES.INSPECT_DOM]: external_exports.object({
+        target_id: external_exports.union([external_exports.number().int(), external_exports.string().regex(/^\d+$/)]).optional().describe("Numeric [ID] from the DOM elements table."),
+        selector: external_exports.string().optional().describe("CSS selector to inspect an element not in the table."),
+        semantic_hint: external_exports.string().optional().describe("Describe the element if selector/id unavailable.")
+      }),
+      [TOOL_NAMES.SCREENSHOT]: external_exports.object({}).describe("Captures a screenshot of the current visible viewport."),
+      [TOOL_NAMES.SCROLL_PAGE]: external_exports.object({
+        direction: external_exports.enum(["down", "up", "top", "bottom"]).describe("Scroll direction."),
+        pixels: external_exports.number().min(1).max(5e3).default(600).optional().describe('Pixels to scroll (for "down"/"up"). Default 600.')
+      }),
+      [TOOL_NAMES.WAIT_FOR]: external_exports.object({
+        selector: external_exports.string().optional().describe("CSS selector to wait for."),
+        text_contains: external_exports.string().optional().describe("Text that must appear on the page."),
+        timeout_seconds: external_exports.number().min(1).max(30).default(8).optional().describe("Max seconds to wait (default 8, max 30).")
+      }).refine((data) => !!data.selector || !!data.text_contains, {
+        message: "wait_for requires either selector or text_contains"
+      }),
+      [TOOL_NAMES.WAIT_SECONDS]: external_exports.object({
+        seconds: external_exports.number().min(0.5).max(10).describe("Seconds to wait (0.5\u201310)."),
+        reason: external_exports.string().optional().describe("Why you are waiting.")
+      }),
+      [TOOL_NAMES.FINISH_TASK]: external_exports.object({
+        summary: external_exports.string().min(1, "Summary is required").describe("Detailed summary of what was accomplished."),
+        success: external_exports.boolean().describe("true if goal achieved, false only if impossible after exhausting all options.")
+      })
+    };
+    BROWSER_TOOL_SPECS = [
+      {
+        name: TOOL_NAMES.SEARCH_WEB,
+        description: "Searches the web for fresh information using a query string. Navigates to Google/Bing/DDG, waits for results, and returns the extracted result text.",
+        category: TOOL_CATEGORIES.NAVIGATION,
+        defaultRisk: RISK_TIERS.READ_ONLY,
+        parameters: {
+          type: "OBJECT",
+          properties: {
+            query: { type: "STRING", description: "The search query to look up on the web." },
+            engine: { type: "STRING", enum: ["google", "bing", "duckduckgo"], description: "Search engine to use (default: google)." }
+          },
+          required: ["query"]
+        }
+      },
+      {
+        name: TOOL_NAMES.OPEN_URL,
+        description: "Opens an exact URL in the current tab. Use this when you already know the destination URL. For searches use search_web instead.",
+        category: TOOL_CATEGORIES.NAVIGATION,
+        defaultRisk: RISK_TIERS.REVERSIBLE,
+        parameters: {
+          type: "OBJECT",
+          properties: {
+            url: { type: "STRING", description: 'The full URL to open (e.g. "https://example.com/page").' },
+            rationale: { type: "STRING", description: "Why you are navigating here." }
+          },
+          required: ["url"]
+        }
+      },
+      {
+        name: TOOL_NAMES.GO_BACK,
+        description: "Navigates the current tab back one page in browser history. Use for recovery or to return to a previous state.",
+        category: TOOL_CATEGORIES.NAVIGATION,
+        defaultRisk: RISK_TIERS.REVERSIBLE,
+        parameters: { type: "OBJECT", properties: {}, required: [] }
+      },
+      {
+        name: TOOL_NAMES.GO_FORWARD,
+        description: "Navigates the current tab forward one page in browser history.",
+        category: TOOL_CATEGORIES.NAVIGATION,
+        defaultRisk: RISK_TIERS.REVERSIBLE,
+        parameters: { type: "OBJECT", properties: {}, required: [] }
+      },
+      {
+        name: TOOL_NAMES.SWITCH_TAB,
+        description: "Switches the active browser tab by matching a title keyword or URL keyword. Use for multi-tab research workflows.",
+        category: TOOL_CATEGORIES.NAVIGATION,
+        defaultRisk: RISK_TIERS.REVERSIBLE,
+        parameters: {
+          type: "OBJECT",
+          properties: {
+            title_contains: { type: "STRING", description: "Keyword that the target tab title must contain (case-insensitive)." },
+            url_contains: { type: "STRING", description: "Keyword that the target tab URL must contain (case-insensitive)." },
+            tab_index: { type: "NUMBER", description: "Zero-based index of the tab in the current window." }
+          },
+          required: []
+        }
+      },
+      {
+        name: TOOL_NAMES.READ_PAGE,
+        description: "Reads and extracts the visible text content of the current page. Optionally focus on a specific CSS region.",
+        category: TOOL_CATEGORIES.READING,
+        defaultRisk: RISK_TIERS.READ_ONLY,
+        parameters: {
+          type: "OBJECT",
+          properties: {
+            selector: { type: "STRING", description: "Optional CSS selector to focus extraction on a specific section." },
+            max_chars: { type: "NUMBER", description: "Max characters to return (default 4000, max 8000)." }
+          },
+          required: []
+        }
+      },
+      {
+        name: TOOL_NAMES.GET_PAGE_METADATA,
+        description: "Returns structured metadata about the current page: title, URL, canonical, meta description, Open Graph tags.",
+        category: TOOL_CATEGORIES.READING,
+        defaultRisk: RISK_TIERS.READ_ONLY,
+        parameters: { type: "OBJECT", properties: {}, required: [] }
+      },
+      {
+        name: TOOL_NAMES.GET_LINKS,
+        description: "Returns all hyperlinks on the page as a list of {text, url} pairs. Optionally filter by keyword.",
+        category: TOOL_CATEGORIES.READING,
+        defaultRisk: RISK_TIERS.READ_ONLY,
+        parameters: {
+          type: "OBJECT",
+          properties: {
+            filter: { type: "STRING", description: "Optional keyword \u2014 only return links whose text or URL contain this string." },
+            max: { type: "NUMBER", description: "Maximum number of links to return (default 25)." }
+          },
+          required: []
+        }
+      },
+      {
+        name: TOOL_NAMES.FIND_ON_PAGE,
+        description: "Searches for a text string on the current page. Returns whether it was found, match count, context, and scrolls to first match.",
+        category: TOOL_CATEGORIES.READING,
+        defaultRisk: RISK_TIERS.READ_ONLY,
+        parameters: {
+          type: "OBJECT",
+          properties: {
+            text: { type: "STRING", description: "The text or keyword to search for on the page." },
+            case_sensitive: { type: "BOOLEAN", description: "Whether the search is case-sensitive (default false)." }
+          },
+          required: ["text"]
+        }
+      },
+      {
+        name: TOOL_NAMES.EXTRACT_STRUCTURED,
+        description: "Extracts structured data from the page into a JSON object based on a list of field selectors.",
+        category: TOOL_CATEGORIES.READING,
+        defaultRisk: RISK_TIERS.READ_ONLY,
+        parameters: {
+          type: "OBJECT",
+          properties: {
+            fields: {
+              type: "ARRAY",
+              description: "List of fields to extract.",
+              items: {
+                type: "OBJECT",
+                properties: {
+                  name: { type: "STRING", description: "Field name" },
+                  selector: { type: "STRING", description: "CSS selector" },
+                  attribute: { type: "STRING", description: "Optional attribute (e.g. href, src)" }
+                },
+                required: ["name", "selector"]
+              }
+            },
+            root_selector: { type: "STRING", description: "Optional CSS selector to scope extraction to a specific container." }
+          },
+          required: ["fields"]
+        }
+      },
+      {
+        name: TOOL_NAMES.CLICK_ELEMENT,
+        description: "Clicks an interactive element \u2014 buttons, links, tabs, checkboxes. Use target_id from the DOM table for accuracy.",
+        category: TOOL_CATEGORIES.INTERACTION,
+        defaultRisk: RISK_TIERS.REVERSIBLE,
+        parameters: {
+          type: "OBJECT",
+          properties: {
+            target_id: { type: "NUMBER", description: "Numeric [ID] from the DOM elements table. Preferred for guaranteed accuracy." },
+            semantic_hint: { type: "STRING", description: 'Fallback: describe the element (e.g. "Compose button").' }
+          },
+          required: []
+        }
+      },
+      {
+        name: TOOL_NAMES.TYPE_INTO_ELEMENT,
+        description: "Types text into any input, search bar, textarea, or rich-text editor. Use target_id from the DOM table.",
+        category: TOOL_CATEGORIES.INTERACTION,
+        defaultRisk: RISK_TIERS.SENSITIVE,
+        parameters: {
+          type: "OBJECT",
+          properties: {
+            target_id: { type: "NUMBER", description: "Numeric [ID] from the DOM elements table." },
+            semantic_hint: { type: "STRING", description: "Fallback: describe the field." },
+            text: { type: "STRING", description: "The exact text to type." },
+            clear_first: { type: "BOOLEAN", description: "Clear existing content before typing (default false)." },
+            press_enter: { type: "BOOLEAN", description: "Press Enter after typing." }
+          },
+          required: ["text"]
+        }
+      },
+      {
+        name: TOOL_NAMES.EXECUTE_JS,
+        description: "Executes arbitrary JavaScript in the context of the current page and returns the result. Privileged operation.",
+        category: TOOL_CATEGORIES.INTERACTION,
+        defaultRisk: RISK_TIERS.RESTRICTED,
+        parameters: {
+          type: "OBJECT",
+          properties: {
+            code: { type: "STRING", description: "JavaScript expression or statement to execute in the page context." },
+            description: { type: "STRING", description: "What this JS is intended to do." }
+          },
+          required: ["code"]
+        }
+      },
+      {
+        name: TOOL_NAMES.INSPECT_DOM,
+        description: "Inspects a specific DOM element and returns its accessibility info, attributes, role, and nearby children.",
+        category: TOOL_CATEGORIES.OBSERVATION,
+        defaultRisk: RISK_TIERS.READ_ONLY,
+        parameters: {
+          type: "OBJECT",
+          properties: {
+            target_id: { type: "NUMBER", description: "Numeric [ID] from the DOM elements table." },
+            selector: { type: "STRING", description: "CSS selector to inspect an element not in the table." },
+            semantic_hint: { type: "STRING", description: "Describe the element if selector/id unavailable." }
+          },
+          required: []
+        }
+      },
+      {
+        name: TOOL_NAMES.SCREENSHOT,
+        description: "Captures a screenshot of the current visible viewport. Returns page title and dimensions.",
+        category: TOOL_CATEGORIES.OBSERVATION,
+        defaultRisk: RISK_TIERS.READ_ONLY,
+        parameters: { type: "OBJECT", properties: {}, required: [] }
+      },
+      {
+        name: TOOL_NAMES.SCROLL_PAGE,
+        description: "Scrolls the viewport to reveal more content, load lazy elements, or navigate to a specific position.",
+        category: TOOL_CATEGORIES.OBSERVATION,
+        defaultRisk: RISK_TIERS.READ_ONLY,
+        parameters: {
+          type: "OBJECT",
+          properties: {
+            direction: { type: "STRING", enum: ["down", "up", "top", "bottom"], description: "Direction to scroll." },
+            pixels: { type: "NUMBER", description: 'Pixels to scroll (for "down"/"up"). Default 600.' }
+          },
+          required: ["direction"]
+        }
+      },
+      {
+        name: TOOL_NAMES.WAIT_FOR,
+        description: "Waits until a specific element appears in the DOM or specific text becomes visible on the page.",
+        category: TOOL_CATEGORIES.WAITING,
+        defaultRisk: RISK_TIERS.READ_ONLY,
+        parameters: {
+          type: "OBJECT",
+          properties: {
+            selector: { type: "STRING", description: "CSS selector to wait for." },
+            text_contains: { type: "STRING", description: "Text that must appear on the page." },
+            timeout_seconds: { type: "NUMBER", description: "Max seconds to wait (default 8, max 30)." }
+          },
+          required: []
+        }
+      },
+      {
+        name: TOOL_NAMES.WAIT_SECONDS,
+        description: "Pauses for N seconds to let animations, modals, AJAX requests, or page transitions finish.",
+        category: TOOL_CATEGORIES.WAITING,
+        defaultRisk: RISK_TIERS.READ_ONLY,
+        parameters: {
+          type: "OBJECT",
+          properties: {
+            seconds: { type: "NUMBER", description: "Seconds to wait (0.5\u201310)." },
+            reason: { type: "STRING", description: "Why you are waiting." }
+          },
+          required: ["seconds"]
+        }
+      },
+      {
+        name: TOOL_NAMES.FINISH_TASK,
+        description: "Marks the task complete with a detailed summary. Call ONLY when the user goal is fully achieved and verified.",
+        category: TOOL_CATEGORIES.COMPLETION,
+        defaultRisk: RISK_TIERS.READ_ONLY,
+        parameters: {
+          type: "OBJECT",
+          properties: {
+            summary: { type: "STRING", description: "Detailed summary of what was accomplished." },
+            success: { type: "BOOLEAN", description: "true if goal achieved, false only if impossible after exhausting all options." }
+          },
+          required: ["summary", "success"]
+        }
+      }
+    ];
+  }
+});
+
+// src/browser/browser-tools.js
+function isForbiddenUrl(url2) {
+  if (!url2 || typeof url2 !== "string") return true;
+  try {
+    const parsed = new URL(url2);
+    return FORBIDDEN_URL_PROTOCOLS.includes(parsed.protocol);
+  } catch {
+    return false;
+  }
+}
+async function executeBrowserTool(toolName, rawArgs = {}, activeTab, options = {}) {
+  const normalized = normalizeToolInvocation(toolName, rawArgs);
+  toolName = normalized.toolName;
+  rawArgs = normalized.args;
+  const chromeApi = options.chromeApi || (typeof chrome !== "undefined" ? chrome : null);
+  const signal = options.signal;
+  const vault = options.vault;
+  if (signal?.aborted) {
+    throw new PratyakshaError("Operation aborted by user", { code: "CANCELLED", recoverable: false });
+  }
+  if (!activeTab?.id) {
+    return createToolError({
+      toolName,
+      error: new ToolExecutionError("No active browser tab connected", { toolName }),
+      page: activeTab || {},
+      recoverable: false
+    });
+  }
+  const tabId = activeTab.id;
+  let args;
+  try {
+    args = validateToolArgs(toolName, rawArgs);
+  } catch (err) {
+    return createToolError({
+      toolName,
+      error: new ToolExecutionError(`Invalid tool arguments: ${err.message}`, { toolName, details: err }),
+      page: activeTab,
+      recoverable: true
+    });
+  }
+  try {
+    switch (toolName) {
+      // ── search_web ──────────────────────────────────────────────────────────
+      case TOOL_NAMES.SEARCH_WEB: {
+        const q = args.query.trim();
+        const engines = {
+          google: `https://www.google.com/search?q=${encodeURIComponent(q)}`,
+          bing: `https://www.bing.com/search?q=${encodeURIComponent(q)}`,
+          duckduckgo: `https://duckduckgo.com/?q=${encodeURIComponent(q)}`
+        };
+        const url2 = engines[args.engine] || engines.google;
+        await chromeApi.tabs.update(tabId, { url: url2 });
+        await waitForTabLoad(tabId, 15e3, chromeApi, signal);
+        await sleepMs(150, signal);
+        await ensureContentScript(tabId, chromeApi);
+        const textResp = await sendToTab(tabId, {
+          type: "EXECUTE_ACTION",
+          payload: { action: "READ_PAGE", selector: null, maxChars: 5e3 }
+        }, 1e4, chromeApi);
+        const currentTab = await getTabSafe(tabId, chromeApi);
+        const text = textResp?.result || "(empty)";
+        return createToolResult({
+          toolName,
+          observation: `Search results for "${q}" on ${args.engine || "google"}:
+${text}`,
+          page: currentTab,
+          metadata: { query: q, engine: args.engine || "google" }
+        });
+      }
+      // ── open_url ────────────────────────────────────────────────────────────
+      case TOOL_NAMES.OPEN_URL: {
+        let url2 = args.url.trim();
+        if (!/^[a-zA-Z][a-zA-Z0-9+.-]*:/i.test(url2)) {
+          url2 = `https://${url2}`;
+        }
+        if (isForbiddenUrl(url2)) {
+          throw new PolicyViolationError(`Navigation to internal/restricted URL "${url2}" is blocked.`, { policy: "URL_POLICY" });
+        }
+        await chromeApi.tabs.update(tabId, { url: url2 });
+        await waitForTabLoad(tabId, 15e3, chromeApi, signal);
+        await sleepMs(150, signal);
+        await ensureContentScript(tabId, chromeApi);
+        const currentTab = await getTabSafe(tabId, chromeApi);
+        return createToolResult({
+          toolName,
+          observation: `Opened: ${url2}${args.rationale ? ` (${args.rationale})` : ""}`,
+          page: currentTab,
+          metadata: { requestedUrl: url2 }
+        });
+      }
+      // ── go_back ─────────────────────────────────────────────────────────────
+      case TOOL_NAMES.GO_BACK: {
+        await chromeApi.tabs.goBack(tabId).catch(() => {
+        });
+        await waitForTabLoad(tabId, 1e4, chromeApi, signal);
+        await sleepMs(100, signal);
+        await ensureContentScript(tabId, chromeApi);
+        const currentTab = await getTabSafe(tabId, chromeApi);
+        return createToolResult({
+          toolName,
+          observation: `Navigated back. Now on: ${currentTab.url || "previous page"}`,
+          page: currentTab
+        });
+      }
+      // ── go_forward ──────────────────────────────────────────────────────────
+      case TOOL_NAMES.GO_FORWARD: {
+        await chromeApi.tabs.goForward(tabId).catch(() => {
+        });
+        await waitForTabLoad(tabId, 1e4, chromeApi, signal);
+        await sleepMs(100, signal);
+        await ensureContentScript(tabId, chromeApi);
+        const currentTab = await getTabSafe(tabId, chromeApi);
+        return createToolResult({
+          toolName,
+          observation: `Navigated forward. Now on: ${currentTab.url || "next page"}`,
+          page: currentTab
+        });
+      }
+      // ── switch_tab ──────────────────────────────────────────────────────────
+      case TOOL_NAMES.SWITCH_TAB: {
+        const win = await chromeApi.windows.getCurrent();
+        const tabs = await chromeApi.tabs.query({ windowId: win.id });
+        let target = null;
+        if (args.tab_index !== void 0 && tabs[args.tab_index]) {
+          target = tabs[args.tab_index];
+        } else if (args.title_contains) {
+          const kw = args.title_contains.toLowerCase();
+          target = tabs.find((t) => (t.title || "").toLowerCase().includes(kw));
+        } else if (args.url_contains) {
+          const kw = args.url_contains.toLowerCase();
+          target = tabs.find((t) => (t.url || "").toLowerCase().includes(kw));
+        }
+        if (!target) {
+          throw new ToolExecutionError(`No matching tab found for criteria: ${JSON.stringify(args)}`, { toolName });
+        }
+        await chromeApi.tabs.update(target.id, { active: true });
+        await sleepMs(100, signal);
+        await ensureContentScript(target.id, chromeApi);
+        const newTab = await getTabSafe(target.id, chromeApi);
+        return createToolResult({
+          toolName,
+          observation: `Switched to tab: "${newTab.title}" \u2014 ${newTab.url}`,
+          page: newTab,
+          newTabId: newTab.id
+        });
+      }
+      // ── read_page ───────────────────────────────────────────────────────────
+      case TOOL_NAMES.READ_PAGE: {
+        const maxChars = Math.min(args.max_chars || 4e3, 8e3);
+        const resp = await sendToTab(tabId, {
+          type: "EXECUTE_ACTION",
+          payload: { action: "READ_PAGE", selector: args.selector || null, maxChars }
+        }, 8e3, chromeApi);
+        const currentTab = await getTabSafe(tabId, chromeApi);
+        const text = resp?.result || "(no content)";
+        return createToolResult({
+          toolName,
+          observation: `URL: ${currentTab.url}
+Title: ${currentTab.title}
+
+${text}`,
+          page: currentTab,
+          metadata: { length: text.length, truncated: text.length >= maxChars }
+        });
+      }
+      // ── get_page_metadata ───────────────────────────────────────────────────
+      case TOOL_NAMES.GET_PAGE_METADATA: {
+        const resp = await sendToTab(tabId, {
+          type: "EXECUTE_ACTION",
+          payload: { action: "GET_METADATA" }
+        }, 8e3, chromeApi);
+        const currentTab = await getTabSafe(tabId, chromeApi);
+        const meta3 = resp?.result || {};
+        return createToolResult({
+          toolName,
+          observation: `Page Metadata:
+${JSON.stringify(meta3, null, 2)}`,
+          page: currentTab,
+          metadata: meta3
+        });
+      }
+      // ── get_links ───────────────────────────────────────────────────────────
+      case TOOL_NAMES.GET_LINKS: {
+        const resp = await sendToTab(tabId, {
+          type: "EXECUTE_ACTION",
+          payload: { action: "GET_LINKS", filter: args.filter || "", max: args.max || 25 }
+        }, 8e3, chromeApi);
+        const currentTab = await getTabSafe(tabId, chromeApi);
+        const links = resp?.result || [];
+        if (!links.length) {
+          return createToolResult({
+            toolName,
+            observation: "No links found matching filter.",
+            page: currentTab,
+            metadata: { count: 0 }
+          });
+        }
+        const formatted = links.map((l, i) => `[${i + 1}] "${l.text}" \u2192 ${l.url}`).join("\n");
+        return createToolResult({
+          toolName,
+          observation: `Found ${links.length} link(s):
+${formatted}`,
+          page: currentTab,
+          metadata: { count: links.length }
+        });
+      }
+      // ── find_on_page ────────────────────────────────────────────────────────
+      case TOOL_NAMES.FIND_ON_PAGE: {
+        const resp = await sendToTab(tabId, {
+          type: "EXECUTE_ACTION",
+          payload: { action: "FIND_ON_PAGE", text: args.text, caseSensitive: !!args.case_sensitive }
+        }, 8e3, chromeApi);
+        const currentTab = await getTabSafe(tabId, chromeApi);
+        const r = resp?.result || {};
+        if (!r.found) {
+          return createToolResult({
+            toolName,
+            observation: `"${args.text}" was NOT found on this page.`,
+            page: currentTab,
+            metadata: { found: false, count: 0 }
+          });
+        }
+        return createToolResult({
+          toolName,
+          observation: `Found ${r.count} match(es) for "${args.text}". Scrolled to first match.
+Context: ...${r.context}...`,
+          page: currentTab,
+          metadata: { found: true, count: r.count }
+        });
+      }
+      // ── extract_structured ──────────────────────────────────────────────────
+      case TOOL_NAMES.EXTRACT_STRUCTURED: {
+        const resp = await sendToTab(tabId, {
+          type: "EXECUTE_ACTION",
+          payload: {
+            action: "EXTRACT_STRUCTURED",
+            fields: args.fields,
+            rootSelector: args.root_selector || null
+          }
+        }, 8e3, chromeApi);
+        const currentTab = await getTabSafe(tabId, chromeApi);
+        const data = resp?.result || {};
+        return createToolResult({
+          toolName,
+          observation: `Extracted structured data:
+${JSON.stringify(data, null, 2)}`,
+          page: currentTab,
+          metadata: { fields: Object.keys(data) }
+        });
+      }
+      // ── click_element ───────────────────────────────────────────────────────
+      case TOOL_NAMES.CLICK_ELEMENT: {
+        const targetId = args.target_id;
+        const hint = args.semantic_hint || "";
+        const initialTab = await getTabSafe(tabId, chromeApi);
+        let resp;
+        try {
+          resp = await sendToTab(tabId, {
+            type: "EXECUTE_ACTION",
+            payload: { action: "CLICK", target_id: targetId, semantic_hint: hint }
+          }, 8e3, chromeApi);
+        } catch (err) {
+          if (err instanceof ChannelClosedError || err.message?.includes("message channel closed")) {
+            await waitForTabLoad(tabId, 12e3, chromeApi, signal);
+            await sleepMs(200, signal);
+            await ensureContentScript(tabId, chromeApi);
+            const afterTab = await getTabSafe(tabId, chromeApi);
+            const navigated = afterTab.url !== initialTab.url;
+            return createToolResult({
+              toolName,
+              observation: navigated ? `Clicked [#${targetId || "?"}] "${hint}" \u2014 page navigated to ${afterTab.url}.` : `Clicked [#${targetId || "?"}] "${hint}" \u2014 channel closed, page refreshed.`,
+              page: afterTab,
+              metadata: { navigated, previousUrl: initialTab.url }
+            });
+          }
+          throw err;
+        }
+        if (!resp?.success) {
+          throw new ToolExecutionError(resp?.error || `Could not click [#${targetId || "?"}] "${hint}"`, { toolName });
+        }
+        await sleepMs(100, signal);
+        const currentTab = await getTabSafe(tabId, chromeApi);
+        return createToolResult({
+          toolName,
+          observation: `Clicked [#${targetId || "?"}] "${hint}" \u2014 DOM settled.`,
+          page: currentTab
+        });
+      }
+      // ── type_into_element ───────────────────────────────────────────────────
+      case TOOL_NAMES.TYPE_INTO_ELEMENT: {
+        const targetId = args.target_id;
+        const hint = args.semantic_hint || "";
+        let text = args.text;
+        if (vault?.rehydrate) {
+          text = vault.rehydrate(text) ?? text;
+        }
+        const resp = await sendToTab(tabId, {
+          type: "EXECUTE_ACTION",
+          payload: {
+            action: "TYPE",
+            target_id: targetId,
+            semantic_hint: hint,
+            value: text,
+            clear_first: !!args.clear_first
+          }
+        }, 8e3, chromeApi);
+        if (!resp?.success) {
+          throw new ToolExecutionError(resp?.error || `Could not type into [#${targetId || "?"}] "${hint}"`, { toolName });
+        }
+        if (args.press_enter) {
+          await sleepMs(150, signal);
+          await sendToTab(tabId, {
+            type: "EXECUTE_ACTION",
+            payload: { action: "PRESS_ENTER", target_id: targetId, semantic_hint: hint }
+          }, 3e3, chromeApi).catch(() => {
+          });
+          await sleepMs(150, signal);
+        }
+        const currentTab = await getTabSafe(tabId, chromeApi);
+        const desc = targetId ? `[#${targetId}]` : `"${hint}"`;
+        return createToolResult({
+          toolName,
+          observation: `Typed into ${desc}${args.press_enter ? " + Enter" : ""}.`,
+          page: currentTab,
+          metadata: { pressEnter: !!args.press_enter }
+        });
+      }
+      // ── execute_js ──────────────────────────────────────────────────────────
+      case TOOL_NAMES.EXECUTE_JS: {
+        const currentTab = await getTabSafe(tabId, chromeApi);
+        if (isForbiddenUrl(currentTab.url)) {
+          throw new PolicyViolationError("Arbitrary execute_js is prohibited on internal browser pages.", { policy: "ACTION_POLICY" });
+        }
+        const resp = await sendToTab(tabId, {
+          type: "EXECUTE_ACTION",
+          payload: { action: "EXECUTE_JS", code: args.code }
+        }, 1e4, chromeApi);
+        const result = resp?.result;
+        return createToolResult({
+          toolName,
+          observation: `JS executed${args.description ? ` (${args.description})` : ""}.
+Result: ${result === void 0 ? "(no return value)" : JSON.stringify(result)}`,
+          page: currentTab,
+          metadata: { hasReturnValue: result !== void 0 }
+        });
+      }
+      // ── inspect_dom ─────────────────────────────────────────────────────────
+      case TOOL_NAMES.INSPECT_DOM: {
+        const resp = await sendToTab(tabId, {
+          type: "EXECUTE_ACTION",
+          payload: {
+            action: "INSPECT_DOM",
+            target_id: args.target_id,
+            selector: args.selector,
+            semantic_hint: args.semantic_hint
+          }
+        }, 8e3, chromeApi);
+        const currentTab = await getTabSafe(tabId, chromeApi);
+        const info = resp?.result;
+        return createToolResult({
+          toolName,
+          observation: info ? `DOM Inspection:
+${JSON.stringify(info, null, 2)}` : "Element not found for inspection.",
+          page: currentTab,
+          metadata: info || {}
+        });
+      }
+      // ── screenshot ──────────────────────────────────────────────────────────
+      case TOOL_NAMES.SCREENSHOT: {
+        const win = await chromeApi.windows.getCurrent();
+        const dataUrl = await chromeApi.tabs.captureVisibleTab(win.id, { format: "png" });
+        const currentTab = await getTabSafe(tabId, chromeApi);
+        _lastScreenshot = { dataUrl, url: currentTab.url, title: currentTab.title, timestamp: Date.now() };
+        const sizeKB = Math.round(dataUrl.length * 0.75 / 1024);
+        return createToolResult({
+          toolName,
+          observation: `Screenshot captured (\u2248${sizeKB}KB PNG).
+Page: "${currentTab.title}"
+URL: ${currentTab.url}`,
+          page: currentTab,
+          screenshotDataUrl: dataUrl,
+          metadata: { sizeKB }
+        });
+      }
+      // ── scroll_page ─────────────────────────────────────────────────────────
+      case TOOL_NAMES.SCROLL_PAGE: {
+        const dir = args.direction;
+        let deltaY;
+        if (dir === "top") deltaY = -999999;
+        else if (dir === "bottom") deltaY = 999999;
+        else deltaY = (dir === "up" ? -1 : 1) * (args.pixels || 600);
+        await sendToTab(tabId, {
+          type: "EXECUTE_ACTION",
+          payload: { action: "SCROLL", deltaY }
+        }, 5e3, chromeApi);
+        await sleepMs(100, signal);
+        const currentTab = await getTabSafe(tabId, chromeApi);
+        return createToolResult({
+          toolName,
+          observation: dir === "top" || dir === "bottom" ? `Scrolled to ${dir} of page.` : `Scrolled ${dir} ${Math.abs(deltaY)}px.`,
+          page: currentTab
+        });
+      }
+      // ── wait_for ─────────────────────────────────────────────────────────────
+      case TOOL_NAMES.WAIT_FOR: {
+        const timeoutMs = Math.min((args.timeout_seconds || 8) * 1e3, 3e4);
+        const resp = await sendToTab(tabId, {
+          type: "EXECUTE_ACTION",
+          payload: {
+            action: "WAIT_FOR",
+            selector: args.selector || null,
+            textContains: args.text_contains || null,
+            timeoutMs
+          }
+        }, timeoutMs + 2e3, chromeApi);
+        const currentTab = await getTabSafe(tabId, chromeApi);
+        if (!resp?.result?.found) {
+          return createToolResult({
+            toolName,
+            observation: `wait_for timed out after ${timeoutMs / 1e3}s \u2014 condition not met.`,
+            page: currentTab,
+            metadata: { met: false }
+          });
+        }
+        return createToolResult({
+          toolName,
+          observation: `Condition met: ${resp.result.detail || "element appeared."}`,
+          page: currentTab,
+          metadata: { met: true }
+        });
+      }
+      // ── wait_seconds ─────────────────────────────────────────────────────────
+      case TOOL_NAMES.WAIT_SECONDS: {
+        const ms = Math.min(Math.max(args.seconds * 1e3, 500), 1e4);
+        await sleepMs(ms, signal);
+        const currentTab = await getTabSafe(tabId, chromeApi);
+        return createToolResult({
+          toolName,
+          observation: `Waited ${ms / 1e3}s${args.reason ? ` (${args.reason})` : ""}.`,
+          page: currentTab
+        });
+      }
+      // ── finish_task ──────────────────────────────────────────────────────────
+      case TOOL_NAMES.FINISH_TASK: {
+        try {
+          await sendToTab(tabId, { type: "CLEAR_HIGHLIGHT" }, 2e3, chromeApi);
+        } catch (_) {
+        }
+        const currentTab = await getTabSafe(tabId, chromeApi);
+        return createToolResult({
+          toolName,
+          observation: `Task finished: ${args.summary}`,
+          page: currentTab,
+          isFinished: true,
+          success: args.success,
+          summary: args.summary
+        });
+      }
+      default:
+        throw new ToolExecutionError(`Unknown tool: "${toolName}"`, { toolName });
+    }
+  } catch (err) {
+    if (signal?.aborted) {
+      throw new PratyakshaError("Operation aborted by user", { code: "CANCELLED", recoverable: false });
+    }
+    const currentTab = await getTabSafe(tabId, chromeApi);
+    return createToolError({
+      toolName,
+      error: err,
+      page: currentTab,
+      recoverable: !(err instanceof PolicyViolationError)
+    });
+  }
+}
+function sleepMs(ms, signal) {
+  if (signal?.aborted) return Promise.reject(new PratyakshaError("Aborted", { code: "CANCELLED", recoverable: false }));
+  return new Promise((resolve, reject) => {
+    let timer = null;
+    const onAbort = () => {
+      if (timer) clearTimeout(timer);
+      reject(new PratyakshaError("Aborted", { code: "CANCELLED", recoverable: false }));
+    };
+    if (signal) {
+      signal.addEventListener("abort", onAbort, { once: true });
+    }
+    timer = setTimeout(() => {
+      if (signal) signal.removeEventListener("abort", onAbort);
+      resolve();
+    }, ms);
+  });
+}
+async function getTabSafe(tabId, chromeApi) {
+  if (!chromeApi?.tabs?.get) return { id: tabId, url: "", title: "" };
+  try {
+    const tab = await chromeApi.tabs.get(tabId);
+    return { id: tab.id, url: tab.url || "", title: tab.title || "" };
+  } catch {
+    return { id: tabId, url: "", title: "" };
+  }
+}
+function waitForTabLoad(tabId, timeoutMs = 15e3, chromeApi, signal) {
+  if (!chromeApi?.tabs?.onUpdated) return Promise.resolve();
+  return new Promise((resolve, reject) => {
+    let done = false;
+    let timer = null;
+    const onAbort = () => {
+      if (!done) {
+        done = true;
+        if (timer) clearTimeout(timer);
+        try {
+          chromeApi.tabs.onUpdated.removeListener(onUpd);
+        } catch (_) {
+        }
+        reject(new PratyakshaError("Navigation aborted", { code: "CANCELLED", recoverable: false }));
+      }
+    };
+    const finish = () => {
+      if (!done) {
+        done = true;
+        if (timer) clearTimeout(timer);
+        if (signal) signal.removeEventListener("abort", onAbort);
+        try {
+          chromeApi.tabs.onUpdated.removeListener(onUpd);
+        } catch (_) {
+        }
+        resolve();
+      }
+    };
+    const onUpd = (id, info) => {
+      if (id === tabId && info.status === "complete") finish();
+    };
+    if (signal) {
+      signal.addEventListener("abort", onAbort, { once: true });
+    }
+    chromeApi.tabs.onUpdated.addListener(onUpd);
+    timer = setTimeout(finish, timeoutMs);
+  });
+}
+async function sendToTab(tabId, message, timeoutMs = 8e3, chromeApi) {
+  if (!chromeApi?.tabs?.sendMessage) throw new Error("chrome.tabs.sendMessage unavailable");
+  const send = () => new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error("Content script response timed out")), timeoutMs);
+    try {
+      chromeApi.tabs.sendMessage(tabId, message, (resp) => {
+        clearTimeout(timer);
+        if (chromeApi.runtime?.lastError) {
+          const msg = chromeApi.runtime.lastError.message || "";
+          msg.includes("message channel closed") ? reject(new ChannelClosedError()) : reject(new Error(msg));
+        } else {
+          resolve(resp);
+        }
+      });
+    } catch (e) {
+      clearTimeout(timer);
+      reject(e);
+    }
+  });
+  try {
+    return await send();
+  } catch (e) {
+    if (e instanceof ChannelClosedError) throw e;
+    await ensureContentScript(tabId, chromeApi);
+    await sleepMs(300);
+    return await send();
+  }
+}
+async function ensureContentScript(tabId, chromeApi) {
+  if (!chromeApi?.scripting) return;
+  try {
+    const pong = await new Promise((res, rej) => {
+      const t = setTimeout(() => rej(new Error("ping timeout")), 1500);
+      chromeApi.tabs.sendMessage(tabId, { type: "PING" }, (r) => {
+        clearTimeout(t);
+        chromeApi.runtime?.lastError ? rej() : res(r);
+      });
+    });
+    if (pong?.ready) return;
+  } catch {
+  }
+  try {
+    await chromeApi.scripting.insertCSS({ target: { tabId }, files: ["content/highlighter.css"] });
+    await chromeApi.scripting.executeScript({ target: { tabId }, files: ["content/dom-actions.js", "content/content-main.js"] });
+  } catch (err) {
+  }
+}
+var _lastScreenshot;
+var init_browser_tools = __esm({
+  "src/browser/browser-tools.js"() {
+    init_constants();
+    init_errors6();
+    init_schemas4();
+    _lastScreenshot = null;
+  }
+});
+
+// src/browser/page-context.js
+function detectTargetService(task2 = "") {
+  for (const s of CANONICAL_SERVICES) {
+    if (s.pattern.test(task2)) return s;
+  }
+  const urlMatch = task2.match(/https?:\/\/[^\s]+/i);
+  if (urlMatch) {
+    try {
+      const u = new URL(urlMatch[0]);
+      return {
+        pattern: null,
+        url: u.href,
+        name: u.hostname,
+        hostMatch: new RegExp(u.hostname.replace(/\./g, "\\."), "i")
+      };
+    } catch (_) {
+    }
+  }
+  return null;
+}
+function buildDOMTable(elements = [], max = 35, blacklistedTargets = /* @__PURE__ */ new Set()) {
+  if (!elements.length) return "No interactive elements detected.";
+  const header = "[ID]  TAG            TYPE/ROLE     LABEL / PLACEHOLDER / TEXT                     STATUS/VAL";
+  const sep = "\u2500".repeat(header.length);
+  const sorted = [...elements].sort((a, b) => {
+    const isBlA = blacklistedTargets.has(Number(a.id));
+    const isBlB = blacklistedTargets.has(Number(b.id));
+    if (isBlA && !isBlB) return 1;
+    if (!isBlA && isBlB) return -1;
+    const isInputA = /input|textarea|textbox|combobox/i.test(`${a.tag} ${a.type} ${a.role}`);
+    const isInputB = /input|textarea|textbox|combobox/i.test(`${b.tag} ${b.type} ${b.role}`);
+    if (isInputA && !isInputB) return -1;
+    if (!isInputA && isInputB) return 1;
+    return 0;
+  });
+  const rows = sorted.slice(0, max).map((el) => {
+    const isBl = blacklistedTargets.has(Number(el.id));
+    const id = String(el.id || "").padStart(4, " ");
+    const tag = `<${el.tag || "?"}>`.padEnd(14, " ");
+    const type = (el.type || el.role || "").padEnd(13, " ");
+    let label = (el.label || el.text || "").replace(/\s+/g, " ").slice(0, 46);
+    if (isBl) {
+      label = `[FAILED/DO-NOT-USE] ${label}`.slice(0, 46);
+    }
+    label = label.padEnd(46, " ");
+    const val = isBl ? "\u26A0\uFE0F BLACKLISTED" : el.value ? `"${el.value.slice(0, 20)}"` : "";
+    return `[${id}]  ${tag} ${type} ${label} ${val}`;
+  });
+  return [header, sep, ...rows].join("\n");
+}
+async function getPageContext(tabId, options = {}) {
+  const chromeApi = options.chromeApi || (typeof chrome !== "undefined" ? chrome : null);
+  const signal = options.signal;
+  if (!tabId || !chromeApi?.tabs) return { url: "", title: "", elements: [] };
+  const tab = await getTabSafe(tabId, chromeApi);
+  for (let attempt = 0; attempt < 2; attempt++) {
+    if (signal?.aborted) break;
+    try {
+      const resp = await new Promise((resolve, reject) => {
+        const timer = setTimeout(() => reject(new Error("GET_PAGE_CONTEXT timeout")), 4e3);
+        chromeApi.tabs.sendMessage(tabId, { type: "GET_PAGE_CONTEXT" }, (r) => {
+          clearTimeout(timer);
+          chromeApi.runtime?.lastError ? reject(new Error(chromeApi.runtime.lastError.message)) : resolve(r);
+        });
+      });
+      if (resp?.elements) {
+        return {
+          url: resp.url || tab.url,
+          title: resp.title || tab.title,
+          elements: resp.elements
+        };
+      }
+    } catch {
+      await ensureContentScript(tabId, chromeApi);
+      await new Promise((r) => setTimeout(r, 400));
+    }
+  }
+  return { url: tab.url, title: tab.title, elements: [] };
+}
+var init_page_context = __esm({
+  "src/browser/page-context.js"() {
+    init_constants();
+    init_browser_tools();
+  }
+});
+
+// src/agent/planner.js
+function generateDeterministicPlan(task2 = "", pageContext = {}) {
+  let targetService = detectTargetService(task2);
+  const subgoals = [];
+  const verificationCriteria = [];
+  const missingInformation = [];
+  const lower = task2.toLowerCase();
+  if (/\b(mail|email|send\s+email)\b/i.test(task2)) {
+    if (!targetService) {
+      targetService = { name: "Gmail", url: "https://mail.google.com" };
+    }
+    const serviceUrl = targetService.url;
+    subgoals.push({
+      id: 1,
+      description: `Navigate to email portal (${serviceUrl})`,
+      expectedAction: "open_url",
+      riskTier: RISK_TIERS.REVERSIBLE,
+      completionEvidence: "Current page URL contains mail.google.com"
+    });
+    subgoals.push({
+      id: 2,
+      description: "Open compose dialog if not open",
+      expectedAction: "click_element",
+      riskTier: RISK_TIERS.REVERSIBLE,
+      completionEvidence: "Compose dialog or recipient field present in DOM"
+    });
+    subgoals.push({
+      id: 3,
+      description: "Type recipient, subject, and message content",
+      expectedAction: "type_into_element",
+      riskTier: RISK_TIERS.REVERSIBLE,
+      completionEvidence: "Email fields contain entered values"
+    });
+    subgoals.push({
+      id: 4,
+      description: "Click Send button to dispatch email",
+      expectedAction: "click_element",
+      riskTier: RISK_TIERS.IRREVERSIBLE,
+      completionEvidence: "Send button clicked and message sent toast appears"
+    });
+    verificationCriteria.push("Email service mail.google.com was visited");
+    verificationCriteria.push("Recipient and message fields were typed");
+    verificationCriteria.push("Send button was successfully triggered");
+    if (!/@/.test(task2) && !/\[EMAIL_/i.test(task2)) {
+      missingInformation.push("Recipient email address was not specified");
+    }
+  } else if (/\b(search|find|lookup|who|what|score|price)\b/i.test(task2)) {
+    subgoals.push({
+      id: 1,
+      description: `Search web for query: "${task2}"`,
+      expectedAction: "search_web",
+      riskTier: RISK_TIERS.READ_ONLY,
+      completionEvidence: "Search results displayed on search engine page"
+    });
+    subgoals.push({
+      id: 2,
+      description: "Extract relevant answer text from search results",
+      expectedAction: "read_page",
+      riskTier: RISK_TIERS.READ_ONLY,
+      completionEvidence: "Fact or relevant content extracted"
+    });
+    verificationCriteria.push("Search results retrieved from search engine");
+    verificationCriteria.push("Direct answer or fact identified in page text");
+  } else if (targetService) {
+    subgoals.push({
+      id: 1,
+      description: `Navigate to target destination (${targetService.name})`,
+      expectedAction: "open_url",
+      riskTier: RISK_TIERS.REVERSIBLE,
+      completionEvidence: `Browser URL matches ${targetService.url}`
+    });
+    subgoals.push({
+      id: 2,
+      description: `Locate interactive elements on ${targetService.name}`,
+      expectedAction: "read_page",
+      riskTier: RISK_TIERS.READ_ONLY,
+      completionEvidence: "Target elements identified in DOM table"
+    });
+    verificationCriteria.push(`Destination ${targetService.name} opened`);
+  } else if (/^\s*(hi|hello|hey|greetings|howdy|good\s+(morning|afternoon|evening)|who\s+are\s+you|what\s+can\s+you\s+do)\b/i.test(task2)) {
+    subgoals.push({
+      id: 1,
+      description: "Acknowledge greeting and present autonomous browser capabilities",
+      expectedAction: "finish_task",
+      riskTier: RISK_TIERS.READ_ONLY,
+      completionEvidence: "Greeting answered"
+    });
+    verificationCriteria.push("User query acknowledged");
+  } else {
+    subgoals.push({
+      id: 1,
+      description: "Inspect current page context and interactive controls",
+      expectedAction: "read_page",
+      riskTier: RISK_TIERS.READ_ONLY,
+      completionEvidence: "Current page DOM table inspected"
+    });
+    subgoals.push({
+      id: 2,
+      description: "Perform requested action on target element",
+      expectedAction: "click_element",
+      riskTier: RISK_TIERS.REVERSIBLE,
+      completionEvidence: "Element action completed"
+    });
+    verificationCriteria.push("Action executed without error");
+  }
+  return {
+    objective: task2,
+    targetService: targetService ? { name: targetService.name, url: targetService.url } : null,
+    subgoals,
+    verificationCriteria,
+    missingInformation
+  };
+}
+var StructuredPlanSchema;
+var init_planner = __esm({
+  "src/agent/planner.js"() {
+    init_zod();
+    init_page_context();
+    init_constants();
+    StructuredPlanSchema = external_exports.object({
+      objective: external_exports.string().describe("Preserved user objective."),
+      targetService: external_exports.object({
+        name: external_exports.string(),
+        url: external_exports.string()
+      }).nullable().optional().describe("Detected canonical target service or URL."),
+      subgoals: external_exports.array(external_exports.object({
+        id: external_exports.number().int(),
+        description: external_exports.string(),
+        expectedAction: external_exports.string(),
+        riskTier: external_exports.enum([
+          RISK_TIERS.READ_ONLY,
+          RISK_TIERS.REVERSIBLE,
+          RISK_TIERS.SENSITIVE,
+          RISK_TIERS.IRREVERSIBLE,
+          RISK_TIERS.RESTRICTED
+        ]).default(RISK_TIERS.REVERSIBLE),
+        completionEvidence: external_exports.string().describe("What browser evidence proves this subgoal is complete.")
+      })).describe("Step-by-step subgoal breakdown."),
+      verificationCriteria: external_exports.array(external_exports.string()).default([]).describe("Checklist of factual evidence required to verify final completion."),
+      missingInformation: external_exports.array(external_exports.string()).default([]).describe(
+        "BLOCKING missing parameters that make execution strictly impossible (e.g. sending an email with no recipient). Do NOT include optional preferences, formatting options, or clarifying questions where autonomous defaults exist. For search, research, lookup, or general browsing, this MUST be an empty array []."
+      )
+    });
+  }
+});
+
+// src/agent/planner-agent.js
+async function plannerAgentNode(state2, options = {}) {
+  const task2 = state2.sanitizedTask || state2.originalTask || "";
+  const pageContext = state2.browserSession || {};
+  const model = options.model;
+  const events = options.events;
+  events?.emit?.("THINKING", {
+    phase: "plan",
+    text: "Formulating structured execution plan\u2026",
+    step: 0,
+    maxSteps: options.maxSteps || 100
+  });
+  let plan = generateDeterministicPlan(task2, pageContext);
+  if (options.useModelPlanner && model && typeof model.withStructuredOutput === "function") {
+    try {
+      const structuredModel = model.withStructuredOutput(StructuredPlanSchema);
+      const prompt = `${PLANNER_SYSTEM_PROMPT}
+
+User Objective: "${task2}"
+Current Browser State:
+URL: ${pageContext.url || "None"}
+Title: ${pageContext.title || "None"}
+
+Return a structured plan with subgoals and verification criteria.`;
+      const response = await structuredModel.invoke(prompt);
+      if (response && Array.isArray(response.subgoals) && response.subgoals.length > 0) {
+        if (!Array.isArray(response.verificationCriteria) || response.verificationCriteria.length === 0) {
+          response.verificationCriteria = ["Task acknowledged"];
+        }
+        plan = response;
+      }
+    } catch (err) {
+      console.warn("[PRATYAKSHA Planner Agent] Model planning error, using deterministic plan:", err.message);
+    }
+  }
+  const hasBlockingMissingInfo = Array.isArray(plan.missingInformation) && plan.missingInformation.length > 0 && plan.missingInformation.some((info) => /recipient|password|secret|account\s+number|destination/i.test(info) || !plan.subgoals?.length);
+  if (plan.subgoals?.length) {
+    events?.emit?.("THINKING", {
+      phase: "plan",
+      text: `Execution plan formulated with ${plan.subgoals.length} subgoal(s).`,
+      step: 0,
+      maxSteps: options.maxSteps || 100
+    });
+  }
+  return {
+    plan,
+    currentSubgoalIndex: 0,
+    status: hasBlockingMissingInfo ? "AWAITING_USER_INPUT" : "PLANNING_COMPLETE"
+  };
+}
+var PLANNER_SYSTEM_PROMPT;
+var init_planner_agent = __esm({
+  "src/agent/planner-agent.js"() {
+    init_planner();
+    PLANNER_SYSTEM_PROMPT = `You are PRATYAKSHA Planner Agent \u2014 an autonomous web task strategist.
+Your role is to formulate a clean, minimal, executable plan for the browser execution agent.
+1. Break down the user objective into sequential subgoals.
+2. Assign expected browser actions: open_url, click_element, type_into_element, search_web, read_page, finish_task.
+3. Only flag missing information if strictly blocking (e.g. sending an email with no recipient specified).
+4. For general search, lookup, or navigation, proceed autonomously without asking clarifying questions.`;
+  }
+});
+
 // node_modules/@langchain/core/dist/_virtual/_rolldown/runtime.js
 var __defProp2 = Object.defineProperty;
 var __exportAll = (all, no_symbols) => {
@@ -125661,88 +127217,15 @@ var ApplyPatchOperationSchema = external_exports.union([
   ApplyPatchDeleteFileOperationSchema
 ]);
 
-// node_modules/faultkit/dist/esm/index.js
-init_types2();
-init_AppError();
-init_errors5();
-init_coerce2();
-init_format();
-
-// src/shared/errors.js
-function toErrorResponse2(err, options = {}) {
-  const appError = coerceToAppError(err, options?.errorCoercer);
-  const customOpts = {
-    isProduction: false,
-    genericServerErrorMessage: appError.message || err?.message || (typeof err === "string" ? err : "Internal error"),
-    ...options
-  };
-  const response = toErrorResponse(appError, customOpts);
-  if (response?.error?.message === "An unexpected error occurred. Our team has been notified." || response?.error?.message === "An unexpected error occurred." || response?.error?.message === "An unexpected internal server error occurred.") {
-    const rawMsg = err?.message || (typeof err === "string" ? err : null);
-    if (rawMsg) {
-      response.error.message = rawMsg;
-    }
-  }
-  if (!response?.error?.details && (err?.details || err?.cause || err?.response)) {
-    response.error.details = err.details || err.cause || err.response;
-  }
-  return response;
-}
-var formatError3 = toErrorResponse2;
-if (typeof AppError._registerFormatter === "function") {
-  AppError._registerFormatter(toErrorResponse2);
-}
-var PratyakshaError = class extends AppError {
-  constructor(message, options = {}) {
-    const statusCode = options.statusCode || 400;
-    const errorCode = options.code || "PRATYAKSHA_ERROR";
-    const details = options.details || null;
-    const isOperational = options.recoverable !== void 0 ? options.recoverable : true;
-    super(message, statusCode, errorCode, details, isOperational);
-    this.name = this.constructor.name;
-    this.code = errorCode;
-    this.recoverable = isOperational;
-    this.details = details || {};
-  }
-};
-var ToolExecutionError = class extends PratyakshaError {
-  constructor(message, options = {}) {
-    super(message, { statusCode: 422, code: "TOOL_EXECUTION_ERROR", recoverable: true, ...options });
-    this.toolName = options.toolName || "unknown";
-  }
-};
-var ChannelClosedError = class extends PratyakshaError {
-  constructor(message = "Message channel closed before a response was received", options = {}) {
-    super(message, { statusCode: 503, code: "CHANNEL_CLOSED", recoverable: true, ...options });
-  }
-};
-var PolicyViolationError = class extends PratyakshaError {
-  constructor(message = "Action rejected by safety policy", options = {}) {
-    super(message, { statusCode: 403, code: "POLICY_VIOLATION", recoverable: false, ...options });
-    this.policy = options.policy || "ACTION_POLICY";
-  }
-};
-var BudgetExhaustedError = class extends PratyakshaError {
-  constructor(message = "Execution step budget exhausted", options = {}) {
-    super(message, { statusCode: 429, code: "BUDGET_EXHAUSTED", recoverable: false, ...options });
-    this.budgetType = options.budgetType || "STEPS";
-  }
-};
-var VerificationFailureError = class extends PratyakshaError {
-  constructor(message = "Task verification failed against live browser state", options = {}) {
-    super(message, { statusCode: 422, code: "VERIFICATION_FAILURE", recoverable: true, ...options });
-    this.criteria = options.criteria || [];
-  }
-};
-
 // src/agent/models.js
+init_errors6();
 var SUPPORTED_PROVIDERS = Object.freeze({
   MISTRAL: "mistral",
   GEMINI: "gemini",
   OPENROUTER: "openrouter"
 });
 var DEFAULT_MODELS = Object.freeze({
-  [SUPPORTED_PROVIDERS.MISTRAL]: "ministral-8b-latest",
+  [SUPPORTED_PROVIDERS.MISTRAL]: "codestral-latest",
   [SUPPORTED_PROVIDERS.GEMINI]: "gemini-3.5-flash",
   [SUPPORTED_PROVIDERS.OPENROUTER]: "deepseek/deepseek-v4.1-flash"
 });
@@ -125750,10 +127233,11 @@ function normalizeModelName(provider, model) {
   const p = (provider || "").toLowerCase();
   let m = (model || "").trim();
   if (!m) {
-    return DEFAULT_MODELS[p] || "ministral-8b-latest";
+    return DEFAULT_MODELS[p] || "codestral-latest";
   }
   if (p === SUPPORTED_PROVIDERS.MISTRAL) {
-    return "ministral-8b-latest";
+    if (!m || m === "mistral-large-latest") return "codestral-latest";
+    return m;
   }
   if (p === SUPPORTED_PROVIDERS.GEMINI) {
     return "gemini-3.5-flash";
@@ -125798,7 +127282,7 @@ function makeModel(config2 = {}) {
           apiKey: valid.apiKey,
           model: valid.model,
           temperature: valid.temperature,
-          maxRetries: valid.maxRetries
+          maxRetries: Math.max(3, valid.maxRetries)
         });
       case SUPPORTED_PROVIDERS.GEMINI:
         return new ChatGoogleGenerativeAI({
@@ -125812,7 +127296,7 @@ function makeModel(config2 = {}) {
           apiKey: valid.apiKey,
           model: valid.model,
           temperature: valid.temperature,
-          maxRetries: valid.maxRetries,
+          maxRetries: Math.max(3, valid.maxRetries),
           // CRITICAL: OpenRouter requires an upfront credit reservation equal to maxTokens * price.
           // By default, ChatOpenAI requests up to 131,072 tokens which triggers HTTP 402 Payment Required
           // if key credits < ~$0.15. Setting maxTokens to 4096 keeps reservation down to ~$0.002.
@@ -125831,6 +127315,109 @@ function makeModel(config2 = {}) {
   } catch (err) {
     throw coerceToAppError(err);
   }
+}
+function makeModelWithFallbacks(primaryConfig, fallbackConfigs = []) {
+  const primaryModel = makeModel(primaryConfig);
+  if (!Array.isArray(fallbackConfigs) || fallbackConfigs.length === 0) {
+    return primaryModel;
+  }
+  const fallbackModels = [];
+  for (const fbConfig of fallbackConfigs) {
+    try {
+      const fbModel = makeModel(fbConfig);
+      fallbackModels.push(fbModel);
+    } catch (err) {
+      console.warn(`[PRATYAKSHA Models] Skipping invalid fallback configuration: ${err.message}`);
+    }
+  }
+  if (fallbackModels.length === 0) {
+    return primaryModel;
+  }
+  const underlyingRunnable = primaryModel.withFallbacks(fallbackModels);
+  return {
+    primaryModel,
+    fallbackModels,
+    runnable: underlyingRunnable,
+    bindTools(tools2, options) {
+      const boundPrimary = primaryModel.bindTools(tools2, options);
+      const boundFallbacks = fallbackModels.map((fb) => fb.bindTools(tools2, options));
+      return boundPrimary.withFallbacks(boundFallbacks);
+    },
+    withStructuredOutput(schema, options) {
+      if (typeof primaryModel.withStructuredOutput === "function") {
+        const boundPrimary = primaryModel.withStructuredOutput(schema, options);
+        const boundFallbacks = fallbackModels.filter((fb) => typeof fb.withStructuredOutput === "function").map((fb) => fb.withStructuredOutput(schema, options));
+        return boundFallbacks.length > 0 ? boundPrimary.withFallbacks(boundFallbacks) : boundPrimary;
+      }
+      return underlyingRunnable;
+    },
+    async invoke(input2, options) {
+      return underlyingRunnable.invoke(input2, options);
+    },
+    async batch(inputs, options) {
+      return underlyingRunnable.batch(inputs, options);
+    },
+    async stream(input2, options) {
+      return underlyingRunnable.stream(input2, options);
+    }
+  };
+}
+function buildAutomaticFallbacks(primaryConfig = {}, options = {}) {
+  const fallbacks = [];
+  const provider = (primaryConfig.provider || "").toLowerCase();
+  const currentModel = normalizeModelName(provider, primaryConfig.model);
+  if (provider === SUPPORTED_PROVIDERS.MISTRAL && primaryConfig.apiKey) {
+    const mistralFallbacks = ["open-mistral-nemo", "codestral-latest", "ministral-8b-latest"];
+    for (const cand of mistralFallbacks) {
+      if (cand !== currentModel) {
+        fallbacks.push({
+          provider: SUPPORTED_PROVIDERS.MISTRAL,
+          apiKey: primaryConfig.apiKey,
+          model: cand,
+          temperature: primaryConfig.temperature
+        });
+      }
+    }
+  } else if (provider === SUPPORTED_PROVIDERS.OPENROUTER && primaryConfig.apiKey) {
+    const orFallbacks = ["deepseek/deepseek-chat", "deepseek/deepseek-chat:free", "deepseek/deepseek-v4.1-flash"];
+    for (const cand of orFallbacks) {
+      if (cand !== currentModel) {
+        fallbacks.push({
+          provider: SUPPORTED_PROVIDERS.OPENROUTER,
+          apiKey: primaryConfig.apiKey,
+          model: cand,
+          maxTokens: 4096,
+          temperature: primaryConfig.temperature
+        });
+      }
+    }
+  }
+  if (options.geminiApiKey && provider !== SUPPORTED_PROVIDERS.GEMINI) {
+    fallbacks.push({
+      provider: SUPPORTED_PROVIDERS.GEMINI,
+      apiKey: options.geminiApiKey,
+      model: "gemini-3.5-flash",
+      temperature: primaryConfig.temperature
+    });
+  }
+  if (options.openrouterApiKey && provider !== SUPPORTED_PROVIDERS.OPENROUTER) {
+    fallbacks.push({
+      provider: SUPPORTED_PROVIDERS.OPENROUTER,
+      apiKey: options.openrouterApiKey,
+      model: "deepseek/deepseek-chat",
+      maxTokens: 4096,
+      temperature: primaryConfig.temperature
+    });
+  }
+  if (options.mistralApiKey && provider !== SUPPORTED_PROVIDERS.MISTRAL) {
+    fallbacks.push({
+      provider: SUPPORTED_PROVIDERS.MISTRAL,
+      apiKey: options.mistralApiKey,
+      model: "open-mistral-nemo",
+      temperature: primaryConfig.temperature
+    });
+  }
+  return fallbacks;
 }
 
 // node_modules/@langchain/langgraph/dist/pregel/utils/timeout.js
@@ -142226,1337 +143813,431 @@ function cleanStateForCheckpoint(state2 = {}) {
   return clean;
 }
 
-// node_modules/zod/index.js
-init_external();
-init_external();
+// src/agent/graph.js
+init_planner_agent();
 
-// src/shared/constants.js
-var RISK_TIERS = Object.freeze({
-  READ_ONLY: "READ_ONLY",
-  // Safe page extraction, inspection, search
-  REVERSIBLE: "REVERSIBLE",
-  // Navigation, scrolling, clicking normal links
-  SENSITIVE: "SENSITIVE",
-  // Form typing, logins, settings toggles
-  IRREVERSIBLE: "IRREVERSIBLE",
-  // Sending messages, transactions, deletes
-  RESTRICTED: "RESTRICTED"
-  // Privileged operations (e.g. arbitrary execute_js, dangerous protocols)
-});
-var TOOL_CATEGORIES = Object.freeze({
-  NAVIGATION: "NAVIGATION",
-  READING: "READING",
-  INTERACTION: "INTERACTION",
-  OBSERVATION: "OBSERVATION",
-  WAITING: "WAITING",
-  COMPLETION: "COMPLETION"
-});
-var TOOL_NAMES = Object.freeze({
-  SEARCH_WEB: "search_web",
-  OPEN_URL: "open_url",
-  GO_BACK: "go_back",
-  GO_FORWARD: "go_forward",
-  SWITCH_TAB: "switch_tab",
-  READ_PAGE: "read_page",
-  GET_PAGE_METADATA: "get_page_metadata",
-  GET_LINKS: "get_links",
-  FIND_ON_PAGE: "find_on_page",
-  EXTRACT_STRUCTURED: "extract_structured",
-  CLICK_ELEMENT: "click_element",
-  TYPE_INTO_ELEMENT: "type_into_element",
-  EXECUTE_JS: "execute_js",
-  INSPECT_DOM: "inspect_dom",
-  SCREENSHOT: "screenshot",
-  SCROLL_PAGE: "scroll_page",
-  WAIT_FOR: "wait_for",
-  WAIT_SECONDS: "wait_seconds",
-  FINISH_TASK: "finish_task"
-});
-var CANONICAL_SERVICES = Object.freeze([
-  { pattern: /\bgmail\b/i, url: "https://mail.google.com", name: "Gmail", hostMatch: /mail\.google\.com/i },
-  { pattern: /\byoutube\b/i, url: "https://www.youtube.com", name: "YouTube", hostMatch: /youtube\.com/i },
-  { pattern: /\bgithub\b/i, url: "https://github.com", name: "GitHub", hostMatch: /github\.com/i },
-  { pattern: /\b(cricbuzz|cricket score)\b/i, url: "https://www.cricbuzz.com", name: "Cricbuzz", hostMatch: /cricbuzz\.com/i },
-  { pattern: /\bwikipedia\b/i, url: "https://www.wikipedia.org", name: "Wikipedia", hostMatch: /wikipedia\.org/i },
-  { pattern: /\b(twitter|x\.com)\b/i, url: "https://x.com", name: "Twitter/X", hostMatch: /x\.com|twitter\.com/i },
-  { pattern: /\breddit\b/i, url: "https://www.reddit.com", name: "Reddit", hostMatch: /reddit\.com/i },
-  { pattern: /\b(google search|google\.com)\b/i, url: "https://www.google.com", name: "Google", hostMatch: /google\.com/i }
-]);
-var FORBIDDEN_URL_PROTOCOLS = Object.freeze([
-  "chrome:",
-  "chrome-extension:",
-  "edge:",
-  "about:",
-  "data:",
-  "javascript:",
-  "vbscript:",
-  "devtools:"
-]);
+// src/agent/browser-actor-agent.js
+init_page_context();
 
-// src/shared/schemas.js
-var TOOL_ZOD_SCHEMAS = {
-  [TOOL_NAMES.SEARCH_WEB]: external_exports.object({
-    query: external_exports.string().min(1, "Search query cannot be empty").describe("The search query to look up on the web."),
-    engine: external_exports.enum(["google", "bing", "duckduckgo"]).default("google").describe("Search engine to use (default: google).")
-  }),
-  [TOOL_NAMES.OPEN_URL]: external_exports.object({
-    url: external_exports.string().min(1, "URL cannot be empty").describe('The full URL to open (e.g. "https://example.com/page").'),
-    rationale: external_exports.string().optional().describe("Why you are navigating here.")
-  }),
-  [TOOL_NAMES.GO_BACK]: external_exports.object({}).describe("Navigates the current tab back one page in browser history."),
-  [TOOL_NAMES.GO_FORWARD]: external_exports.object({}).describe("Navigates the current tab forward one page in browser history."),
-  [TOOL_NAMES.SWITCH_TAB]: external_exports.object({
-    title_contains: external_exports.string().optional().describe("Keyword that the target tab title must contain (case-insensitive)."),
-    url_contains: external_exports.string().optional().describe("Keyword that the target tab URL must contain (case-insensitive)."),
-    tab_index: external_exports.number().int().nonnegative().optional().describe("Zero-based index of the tab in the current window.")
-  }),
-  [TOOL_NAMES.READ_PAGE]: external_exports.object({
-    selector: external_exports.string().optional().describe("Optional CSS selector to focus extraction on a specific section."),
-    max_chars: external_exports.number().int().min(1).max(8e3).default(4e3).optional().describe("Max characters to return (default 4000, max 8000).")
-  }),
-  [TOOL_NAMES.GET_PAGE_METADATA]: external_exports.object({}).describe("Returns structured metadata about the current page."),
-  [TOOL_NAMES.GET_LINKS]: external_exports.object({
-    filter: external_exports.string().default("").optional().describe("Optional keyword \u2014 only return links matching this string."),
-    max: external_exports.number().int().min(1).max(100).default(25).optional().describe("Maximum number of links to return (default 25).")
-  }),
-  [TOOL_NAMES.FIND_ON_PAGE]: external_exports.object({
-    text: external_exports.string().min(1, "Search text cannot be empty").describe("The text or keyword to search for on the page."),
-    case_sensitive: external_exports.boolean().default(false).optional().describe("Whether the search is case-sensitive (default false).")
-  }),
-  [TOOL_NAMES.EXTRACT_STRUCTURED]: external_exports.object({
-    fields: external_exports.array(external_exports.object({
-      name: external_exports.string().min(1, "Field name is required").describe("Field name"),
-      selector: external_exports.string().min(1, "CSS selector is required").describe("CSS selector"),
-      attribute: external_exports.string().optional().describe("Optional attribute (e.g. href, src)")
-    })).min(1, "At least one field is required for structured extraction").describe("List of fields to extract."),
-    root_selector: external_exports.string().optional().describe("Optional CSS selector to scope extraction to a specific container.")
-  }),
-  [TOOL_NAMES.CLICK_ELEMENT]: external_exports.object({
-    target_id: external_exports.union([external_exports.number().int(), external_exports.string().regex(/^\d+$/)]).optional().describe("Numeric [ID] from the DOM elements table."),
-    semantic_hint: external_exports.string().optional().describe("Fallback: describe the element.")
-  }).refine((data) => data.target_id !== void 0 || !!data.semantic_hint, {
-    message: "click_element requires either target_id or semantic_hint"
-  }),
-  [TOOL_NAMES.TYPE_INTO_ELEMENT]: external_exports.object({
-    target_id: external_exports.union([external_exports.number().int(), external_exports.string().regex(/^\d+$/)]).optional().describe("Numeric [ID] from the DOM elements table."),
-    semantic_hint: external_exports.string().optional().describe("Fallback: describe the field."),
-    text: external_exports.string().describe("The exact text to type."),
-    clear_first: external_exports.boolean().default(false).optional().describe("Clear existing content before typing (default false)."),
-    press_enter: external_exports.boolean().default(false).optional().describe("Press Enter after typing (for search bars and forms).")
-  }).refine((data) => data.target_id !== void 0 || !!data.semantic_hint, {
-    message: "type_into_element requires either target_id or semantic_hint"
-  }),
-  [TOOL_NAMES.EXECUTE_JS]: external_exports.object({
-    code: external_exports.string().min(1, "JavaScript code cannot be empty").describe("JavaScript expression or statement to execute in page context."),
-    description: external_exports.string().optional().describe("What this JS is intended to do.")
-  }),
-  [TOOL_NAMES.INSPECT_DOM]: external_exports.object({
-    target_id: external_exports.union([external_exports.number().int(), external_exports.string().regex(/^\d+$/)]).optional().describe("Numeric [ID] from the DOM elements table."),
-    selector: external_exports.string().optional().describe("CSS selector to inspect an element not in the table."),
-    semantic_hint: external_exports.string().optional().describe("Describe the element if selector/id unavailable.")
-  }),
-  [TOOL_NAMES.SCREENSHOT]: external_exports.object({}).describe("Captures a screenshot of the current visible viewport."),
-  [TOOL_NAMES.SCROLL_PAGE]: external_exports.object({
-    direction: external_exports.enum(["down", "up", "top", "bottom"]).describe("Scroll direction."),
-    pixels: external_exports.number().min(1).max(5e3).default(600).optional().describe('Pixels to scroll (for "down"/"up"). Default 600.')
-  }),
-  [TOOL_NAMES.WAIT_FOR]: external_exports.object({
-    selector: external_exports.string().optional().describe("CSS selector to wait for."),
-    text_contains: external_exports.string().optional().describe("Text that must appear on the page."),
-    timeout_seconds: external_exports.number().min(1).max(30).default(8).optional().describe("Max seconds to wait (default 8, max 30).")
-  }).refine((data) => !!data.selector || !!data.text_contains, {
-    message: "wait_for requires either selector or text_contains"
-  }),
-  [TOOL_NAMES.WAIT_SECONDS]: external_exports.object({
-    seconds: external_exports.number().min(0.5).max(10).describe("Seconds to wait (0.5\u201310)."),
-    reason: external_exports.string().optional().describe("Why you are waiting.")
-  }),
-  [TOOL_NAMES.FINISH_TASK]: external_exports.object({
-    summary: external_exports.string().min(1, "Summary is required").describe("Detailed summary of what was accomplished."),
-    success: external_exports.boolean().describe("true if goal achieved, false only if impossible after exhausting all options.")
-  })
-};
-var BROWSER_TOOL_SPECS = [
-  {
-    name: TOOL_NAMES.SEARCH_WEB,
-    description: "Searches the web for fresh information using a query string. Navigates to Google/Bing/DDG, waits for results, and returns the extracted result text.",
-    category: TOOL_CATEGORIES.NAVIGATION,
-    defaultRisk: RISK_TIERS.READ_ONLY,
-    parameters: {
-      type: "OBJECT",
-      properties: {
-        query: { type: "STRING", description: "The search query to look up on the web." },
-        engine: { type: "STRING", enum: ["google", "bing", "duckduckgo"], description: "Search engine to use (default: google)." }
-      },
-      required: ["query"]
+// src/agent/browser-tools.js
+init_schemas4();
+init_browser_tools();
+init_constants();
+function createLangChainBrowserTools(getSessionContext, options = {}) {
+  const includeFinish = options.includeFinishTask !== false;
+  const tools2 = [];
+  for (const spec of BROWSER_TOOL_SPECS) {
+    if (spec.name === TOOL_NAMES.FINISH_TASK && !includeFinish) {
+      continue;
     }
-  },
-  {
-    name: TOOL_NAMES.OPEN_URL,
-    description: "Opens an exact URL in the current tab. Use this when you already know the destination URL. For searches use search_web instead.",
-    category: TOOL_CATEGORIES.NAVIGATION,
-    defaultRisk: RISK_TIERS.REVERSIBLE,
-    parameters: {
-      type: "OBJECT",
-      properties: {
-        url: { type: "STRING", description: 'The full URL to open (e.g. "https://example.com/page").' },
-        rationale: { type: "STRING", description: "Why you are navigating here." }
-      },
-      required: ["url"]
+    const schema = TOOL_ZOD_SCHEMAS[spec.name];
+    if (!schema) {
+      console.warn(`[PRATYAKSHA] No Zod schema found for tool "${spec.name}", skipping.`);
+      continue;
     }
-  },
-  {
-    name: TOOL_NAMES.GO_BACK,
-    description: "Navigates the current tab back one page in browser history. Use for recovery or to return to a previous state.",
-    category: TOOL_CATEGORIES.NAVIGATION,
-    defaultRisk: RISK_TIERS.REVERSIBLE,
-    parameters: { type: "OBJECT", properties: {}, required: [] }
-  },
-  {
-    name: TOOL_NAMES.GO_FORWARD,
-    description: "Navigates the current tab forward one page in browser history.",
-    category: TOOL_CATEGORIES.NAVIGATION,
-    defaultRisk: RISK_TIERS.REVERSIBLE,
-    parameters: { type: "OBJECT", properties: {}, required: [] }
-  },
-  {
-    name: TOOL_NAMES.SWITCH_TAB,
-    description: "Switches the active browser tab by matching a title keyword or URL keyword. Use for multi-tab research workflows.",
-    category: TOOL_CATEGORIES.NAVIGATION,
-    defaultRisk: RISK_TIERS.REVERSIBLE,
-    parameters: {
-      type: "OBJECT",
-      properties: {
-        title_contains: { type: "STRING", description: "Keyword that the target tab title must contain (case-insensitive)." },
-        url_contains: { type: "STRING", description: "Keyword that the target tab URL must contain (case-insensitive)." },
-        tab_index: { type: "NUMBER", description: "Zero-based index of the tab in the current window." }
-      },
-      required: []
-    }
-  },
-  {
-    name: TOOL_NAMES.READ_PAGE,
-    description: "Reads and extracts the visible text content of the current page. Optionally focus on a specific CSS region.",
-    category: TOOL_CATEGORIES.READING,
-    defaultRisk: RISK_TIERS.READ_ONLY,
-    parameters: {
-      type: "OBJECT",
-      properties: {
-        selector: { type: "STRING", description: "Optional CSS selector to focus extraction on a specific section." },
-        max_chars: { type: "NUMBER", description: "Max characters to return (default 4000, max 8000)." }
-      },
-      required: []
-    }
-  },
-  {
-    name: TOOL_NAMES.GET_PAGE_METADATA,
-    description: "Returns structured metadata about the current page: title, URL, canonical, meta description, Open Graph tags.",
-    category: TOOL_CATEGORIES.READING,
-    defaultRisk: RISK_TIERS.READ_ONLY,
-    parameters: { type: "OBJECT", properties: {}, required: [] }
-  },
-  {
-    name: TOOL_NAMES.GET_LINKS,
-    description: "Returns all hyperlinks on the page as a list of {text, url} pairs. Optionally filter by keyword.",
-    category: TOOL_CATEGORIES.READING,
-    defaultRisk: RISK_TIERS.READ_ONLY,
-    parameters: {
-      type: "OBJECT",
-      properties: {
-        filter: { type: "STRING", description: "Optional keyword \u2014 only return links whose text or URL contain this string." },
-        max: { type: "NUMBER", description: "Maximum number of links to return (default 25)." }
-      },
-      required: []
-    }
-  },
-  {
-    name: TOOL_NAMES.FIND_ON_PAGE,
-    description: "Searches for a text string on the current page. Returns whether it was found, match count, context, and scrolls to first match.",
-    category: TOOL_CATEGORIES.READING,
-    defaultRisk: RISK_TIERS.READ_ONLY,
-    parameters: {
-      type: "OBJECT",
-      properties: {
-        text: { type: "STRING", description: "The text or keyword to search for on the page." },
-        case_sensitive: { type: "BOOLEAN", description: "Whether the search is case-sensitive (default false)." }
-      },
-      required: ["text"]
-    }
-  },
-  {
-    name: TOOL_NAMES.EXTRACT_STRUCTURED,
-    description: "Extracts structured data from the page into a JSON object based on a list of field selectors.",
-    category: TOOL_CATEGORIES.READING,
-    defaultRisk: RISK_TIERS.READ_ONLY,
-    parameters: {
-      type: "OBJECT",
-      properties: {
-        fields: {
-          type: "ARRAY",
-          description: "List of fields to extract.",
-          items: {
-            type: "OBJECT",
-            properties: {
-              name: { type: "STRING", description: "Field name" },
-              selector: { type: "STRING", description: "CSS selector" },
-              attribute: { type: "STRING", description: "Optional attribute (e.g. href, src)" }
-            },
-            required: ["name", "selector"]
-          }
-        },
-        root_selector: { type: "STRING", description: "Optional CSS selector to scope extraction to a specific container." }
-      },
-      required: ["fields"]
-    }
-  },
-  {
-    name: TOOL_NAMES.CLICK_ELEMENT,
-    description: "Clicks an interactive element \u2014 buttons, links, tabs, checkboxes. Use target_id from the DOM table for accuracy.",
-    category: TOOL_CATEGORIES.INTERACTION,
-    defaultRisk: RISK_TIERS.REVERSIBLE,
-    parameters: {
-      type: "OBJECT",
-      properties: {
-        target_id: { type: "NUMBER", description: "Numeric [ID] from the DOM elements table. Preferred for guaranteed accuracy." },
-        semantic_hint: { type: "STRING", description: 'Fallback: describe the element (e.g. "Compose button").' }
-      },
-      required: []
-    }
-  },
-  {
-    name: TOOL_NAMES.TYPE_INTO_ELEMENT,
-    description: "Types text into any input, search bar, textarea, or rich-text editor. Use target_id from the DOM table.",
-    category: TOOL_CATEGORIES.INTERACTION,
-    defaultRisk: RISK_TIERS.SENSITIVE,
-    parameters: {
-      type: "OBJECT",
-      properties: {
-        target_id: { type: "NUMBER", description: "Numeric [ID] from the DOM elements table." },
-        semantic_hint: { type: "STRING", description: "Fallback: describe the field." },
-        text: { type: "STRING", description: "The exact text to type." },
-        clear_first: { type: "BOOLEAN", description: "Clear existing content before typing (default false)." },
-        press_enter: { type: "BOOLEAN", description: "Press Enter after typing." }
-      },
-      required: ["text"]
-    }
-  },
-  {
-    name: TOOL_NAMES.EXECUTE_JS,
-    description: "Executes arbitrary JavaScript in the context of the current page and returns the result. Privileged operation.",
-    category: TOOL_CATEGORIES.INTERACTION,
-    defaultRisk: RISK_TIERS.RESTRICTED,
-    parameters: {
-      type: "OBJECT",
-      properties: {
-        code: { type: "STRING", description: "JavaScript expression or statement to execute in the page context." },
-        description: { type: "STRING", description: "What this JS is intended to do." }
-      },
-      required: ["code"]
-    }
-  },
-  {
-    name: TOOL_NAMES.INSPECT_DOM,
-    description: "Inspects a specific DOM element and returns its accessibility info, attributes, role, and nearby children.",
-    category: TOOL_CATEGORIES.OBSERVATION,
-    defaultRisk: RISK_TIERS.READ_ONLY,
-    parameters: {
-      type: "OBJECT",
-      properties: {
-        target_id: { type: "NUMBER", description: "Numeric [ID] from the DOM elements table." },
-        selector: { type: "STRING", description: "CSS selector to inspect an element not in the table." },
-        semantic_hint: { type: "STRING", description: "Describe the element if selector/id unavailable." }
-      },
-      required: []
-    }
-  },
-  {
-    name: TOOL_NAMES.SCREENSHOT,
-    description: "Captures a screenshot of the current visible viewport. Returns page title and dimensions.",
-    category: TOOL_CATEGORIES.OBSERVATION,
-    defaultRisk: RISK_TIERS.READ_ONLY,
-    parameters: { type: "OBJECT", properties: {}, required: [] }
-  },
-  {
-    name: TOOL_NAMES.SCROLL_PAGE,
-    description: "Scrolls the viewport to reveal more content, load lazy elements, or navigate to a specific position.",
-    category: TOOL_CATEGORIES.OBSERVATION,
-    defaultRisk: RISK_TIERS.READ_ONLY,
-    parameters: {
-      type: "OBJECT",
-      properties: {
-        direction: { type: "STRING", enum: ["down", "up", "top", "bottom"], description: "Direction to scroll." },
-        pixels: { type: "NUMBER", description: 'Pixels to scroll (for "down"/"up"). Default 600.' }
-      },
-      required: ["direction"]
-    }
-  },
-  {
-    name: TOOL_NAMES.WAIT_FOR,
-    description: "Waits until a specific element appears in the DOM or specific text becomes visible on the page.",
-    category: TOOL_CATEGORIES.WAITING,
-    defaultRisk: RISK_TIERS.READ_ONLY,
-    parameters: {
-      type: "OBJECT",
-      properties: {
-        selector: { type: "STRING", description: "CSS selector to wait for." },
-        text_contains: { type: "STRING", description: "Text that must appear on the page." },
-        timeout_seconds: { type: "NUMBER", description: "Max seconds to wait (default 8, max 30)." }
-      },
-      required: []
-    }
-  },
-  {
-    name: TOOL_NAMES.WAIT_SECONDS,
-    description: "Pauses for N seconds to let animations, modals, AJAX requests, or page transitions finish.",
-    category: TOOL_CATEGORIES.WAITING,
-    defaultRisk: RISK_TIERS.READ_ONLY,
-    parameters: {
-      type: "OBJECT",
-      properties: {
-        seconds: { type: "NUMBER", description: "Seconds to wait (0.5\u201310)." },
-        reason: { type: "STRING", description: "Why you are waiting." }
-      },
-      required: ["seconds"]
-    }
-  },
-  {
-    name: TOOL_NAMES.FINISH_TASK,
-    description: "Marks the task complete with a detailed summary. Call ONLY when the user goal is fully achieved and verified.",
-    category: TOOL_CATEGORIES.COMPLETION,
-    defaultRisk: RISK_TIERS.READ_ONLY,
-    parameters: {
-      type: "OBJECT",
-      properties: {
-        summary: { type: "STRING", description: "Detailed summary of what was accomplished." },
-        success: { type: "BOOLEAN", description: "true if goal achieved, false only if impossible after exhausting all options." }
-      },
-      required: ["summary", "success"]
-    }
+    const toolName = spec.name;
+    const toolDescription = spec.description;
+    const lcTool = tool(async (inputArgs) => {
+      const session = typeof getSessionContext === "function" ? getSessionContext() : getSessionContext;
+      const activeTab = session?.activeTab;
+      const vault = session?.vault;
+      const signal = session?.signal;
+      const chromeApi = session?.chromeApi;
+      const result = await executeBrowserTool(toolName, inputArgs, activeTab, {
+        vault,
+        signal,
+        chromeApi
+      });
+      if (result.newTabId && activeTab) {
+        activeTab.id = result.newTabId;
+      }
+      if (session?.onToolResult) {
+        session.onToolResult(result);
+      }
+      return result.observation;
+    }, {
+      name: toolName,
+      description: toolDescription,
+      schema
+    });
+    tools2.push(lcTool);
   }
-];
-function createToolResult({
-  ok = true,
-  toolName,
-  observation = "",
-  page = {},
-  metadata = {},
-  newTabId = null,
-  screenshotDataUrl = null,
-  isFinished = false,
-  success: success2 = true,
-  summary = null
+  return tools2;
+}
+
+// src/agent/middleware.js
+function pruneContext(messages = [], options = {}) {
+  if (!Array.isArray(messages) || messages.length <= 4) {
+    return messages;
+  }
+  const maxRecent = options.maxRecentMessages || 12;
+  const maxObsLen = options.maxObservationLength || 500;
+  const cutoffIndex = Math.max(0, messages.length - maxRecent);
+  const olderMessages = messages.slice(0, cutoffIndex);
+  const recentMessages = messages.slice(cutoffIndex);
+  const compactedOlder = olderMessages.map((msg) => {
+    if (msg instanceof ToolMessage || msg?._getType?.() === "tool") {
+      const content = typeof msg.content === "string" ? msg.content : JSON.stringify(msg.content);
+      if (content.length > maxObsLen) {
+        const truncated = content.slice(0, maxObsLen) + "\u2026 [observation pruned for context]";
+        return new ToolMessage({
+          tool_call_id: msg.tool_call_id,
+          name: msg.name,
+          content: truncated
+        });
+      }
+    }
+    return msg;
+  });
+  return [...compactedOlder, ...recentMessages];
+}
+function validateToolCall(toolCall, blacklistedTargets = []) {
+  if (!toolCall || !toolCall.name) {
+    return { valid: false, reason: "Invalid or missing tool call specification" };
+  }
+  const blacklistSet = new Set((blacklistedTargets || []).map(String));
+  const args = toolCall.args || {};
+  if (args.index !== void 0 && blacklistSet.has(String(args.index))) {
+    return {
+      valid: false,
+      reason: `Target element index [${args.index}] is currently blacklisted due to prior failures.`
+    };
+  }
+  if (args.selector && blacklistSet.has(String(args.selector))) {
+    return {
+      valid: false,
+      reason: `Target selector "${args.selector}" is currently blacklisted due to prior failures.`
+    };
+  }
+  return { valid: true };
+}
+
+// src/agent/browser-actor-agent.js
+init_schemas4();
+init_errors6();
+var BROWSER_ACTOR_SYSTEM_PROMPT = `You are PRATYAKSHA Core Browser Agent \u2014 an autonomous browser execution actor.
+You control real web pages to accomplish user objectives.
+You perceive live page interactive elements, select precise targets, and execute actions using your tools.
+
+EXECUTION RULES:
+1. Target elements by numeric [ID] from the provided interactive elements table for maximum accuracy.
+2. For form filling (such as search, email, or input), type required values before triggering buttons.
+3. NEVER ask conversational confirmation questions like "Shall I proceed?", "Would you like me to continue?", or "Shall I proceed with sending?". You are an autonomous agent\u2014execute the full sequence to completion.
+4. Once an email is sent, form is submitted, or the objective is fulfilled, call finish_task immediately with success: true and a clear summary. Do NOT keep clicking around.
+5. Never claim completion without executing real browser operations.`;
+function buildBrowserActorPrompt({
+  taskObjective = "",
+  currentPlan = null,
+  domTable = "",
+  currentUrl = "",
+  currentTitle = "",
+  stepCount = 1,
+  maxSteps = 100,
+  blacklistedTargets = []
 }) {
-  return {
-    ok: !!ok,
-    toolName: String(toolName || "unknown"),
-    observation: String(observation || ""),
-    page: {
-      url: page.url || "",
-      title: page.title || "",
-      id: page.id || null
-    },
-    metadata: { ...metadata },
-    newTabId: newTabId !== null ? Number(newTabId) : null,
-    screenshotDataUrl: screenshotDataUrl || null,
-    isFinished: !!isFinished,
-    success: !!success2,
-    summary: summary || null,
-    error: null,
-    timestamp: Date.now()
-  };
-}
-function createToolError({
-  toolName,
-  error: error62,
-  page = {},
-  metadata = {},
-  recoverable = true
-}) {
-  const message = error62 instanceof Error ? error62.message : String(error62 || "Unknown error");
-  const code = error62?.code || "TOOL_EXECUTION_ERROR";
-  return {
-    ok: false,
-    toolName: String(toolName || "unknown"),
-    observation: `ERROR [${toolName}]: ${message}`,
-    page: {
-      url: page.url || "",
-      title: page.title || "",
-      id: page.id || null
-    },
-    metadata: { ...metadata },
-    newTabId: null,
-    screenshotDataUrl: null,
-    isFinished: false,
-    success: false,
-    summary: null,
-    error: {
-      message,
-      code,
-      recoverable: recoverable !== false,
-      details: error62?.details || {}
-    },
-    timestamp: Date.now()
-  };
-}
-function validateToolArgs(toolName, rawArgs = {}) {
-  const schema = TOOL_ZOD_SCHEMAS[toolName];
-  if (!schema) {
-    throw new Error(`Unregistered tool: "${toolName}"`);
+  let planSection = "";
+  if (currentPlan?.subgoals?.length) {
+    const items = currentPlan.subgoals.map((s) => `  ${s.id}. ${s.description} [${s.riskTier}] \u2192 Evidence: ${s.completionEvidence}`).join("\n");
+    planSection = `
+STRUCTURED EXECUTION PLAN:
+${items}
+`;
   }
-  return schema.parse(rawArgs);
-}
+  let blacklistSection = "";
+  if (blacklistedTargets.length > 0) {
+    blacklistSection = `
+\u26A0\uFE0F AVOID ELEMENTS: [${blacklistedTargets.join(", ")}] (Previously failed/dead ends)
+`;
+  }
+  return `${BROWSER_ACTOR_SYSTEM_PROMPT}
 
-// src/browser/browser-tools.js
-var _lastScreenshot = null;
-function isForbiddenUrl(url2) {
-  if (!url2 || typeof url2 !== "string") return true;
-  try {
-    const parsed = new URL(url2);
-    return FORBIDDEN_URL_PROTOCOLS.includes(parsed.protocol);
-  } catch {
-    return false;
-  }
+CURRENT OBJECTIVE: ${taskObjective}
+STEP: ${stepCount} of ${maxSteps}
+CURRENT PAGE:
+  URL  : ${currentUrl || "unknown"}
+  Title: ${currentTitle || "unknown"}
+
+INTERACTIVE ELEMENTS:
+${domTable}
+${planSection}${blacklistSection}`;
 }
-async function executeBrowserTool(toolName, rawArgs = {}, activeTab, options = {}) {
-  const chromeApi = options.chromeApi || (typeof chrome !== "undefined" ? chrome : null);
-  const signal = options.signal;
+function getMessageType(msg) {
+  if (!msg) return "unknown";
+  if (typeof msg._getType === "function") return msg._getType();
+  if (typeof msg.getType === "function") return msg.getType();
+  if (msg.type) return msg.type;
+  if (msg._type) return msg._type;
+  if (msg.role) {
+    if (msg.role === "assistant") return "ai";
+    if (msg.role === "user") return "human";
+    return msg.role;
+  }
+  if (msg.constructor && msg.constructor.name) {
+    if (msg.constructor.name === "AIMessage" || msg.constructor.name === "AIMessageChunk") return "ai";
+    if (msg.constructor.name === "HumanMessage" || msg.constructor.name === "HumanMessageChunk") return "human";
+    if (msg.constructor.name === "SystemMessage" || msg.constructor.name === "SystemMessageChunk") return "system";
+    if (msg.constructor.name === "ToolMessage") return "tool";
+  }
+  return "unknown";
+}
+function formatArgsSummary(args) {
+  if (!args || typeof args !== "object") return "";
+  const parts = [];
+  if (args.target_id !== void 0) parts.push(`target: #${args.target_id}`);
+  if (args.semantic_hint) parts.push(`"${args.semantic_hint}"`);
+  if (args.url) parts.push(`url: "${args.url}"`);
+  if (args.text) parts.push(`text: "${args.text.slice(0, 30)}${args.text.length > 30 ? "\u2026" : ""}"`);
+  if (args.summary) parts.push(`"${args.summary.slice(0, 40)}"`);
+  if (parts.length === 0) {
+    const json3 = JSON.stringify(args);
+    return json3.length > 40 ? json3.slice(0, 40) + "\u2026" : json3;
+  }
+  return parts.join(", ");
+}
+function truncateString(str, max = 120) {
+  if (!str || typeof str !== "string") return "";
+  const clean = str.replace(/\s+/g, " ").trim();
+  return clean.length > max ? clean.slice(0, max) + "\u2026" : clean;
+}
+async function browserActorAgentNode(state2, options = {}) {
+  const model = options.model;
+  const chromeApi = options.chromeApi;
   const vault = options.vault;
-  if (signal?.aborted) {
-    throw new PratyakshaError("Operation aborted by user", { code: "CANCELLED", recoverable: false });
-  }
-  if (!activeTab?.id) {
-    return createToolError({
-      toolName,
-      error: new ToolExecutionError("No active browser tab connected", { toolName }),
-      page: activeTab || {},
-      recoverable: false
-    });
-  }
-  const tabId = activeTab.id;
-  let args;
-  try {
-    args = validateToolArgs(toolName, rawArgs);
-  } catch (err) {
-    return createToolError({
-      toolName,
-      error: new ToolExecutionError(`Invalid tool arguments: ${err.message}`, { toolName, details: err }),
-      page: activeTab,
-      recoverable: true
-    });
-  }
-  try {
-    switch (toolName) {
-      // ── search_web ──────────────────────────────────────────────────────────
-      case TOOL_NAMES.SEARCH_WEB: {
-        const q = args.query.trim();
-        const engines = {
-          google: `https://www.google.com/search?q=${encodeURIComponent(q)}`,
-          bing: `https://www.bing.com/search?q=${encodeURIComponent(q)}`,
-          duckduckgo: `https://duckduckgo.com/?q=${encodeURIComponent(q)}`
-        };
-        const url2 = engines[args.engine] || engines.google;
-        await chromeApi.tabs.update(tabId, { url: url2 });
-        await waitForTabLoad(tabId, 15e3, chromeApi, signal);
-        await sleepMs(800, signal);
-        await ensureContentScript(tabId, chromeApi);
-        const textResp = await sendToTab(tabId, {
-          type: "EXECUTE_ACTION",
-          payload: { action: "READ_PAGE", selector: null, maxChars: 5e3 }
-        }, 1e4, chromeApi);
-        const currentTab = await getTabSafe(tabId, chromeApi);
-        const text = textResp?.result || "(empty)";
-        return createToolResult({
-          toolName,
-          observation: `Search results for "${q}" on ${args.engine || "google"}:
-${text}`,
-          page: currentTab,
-          metadata: { query: q, engine: args.engine || "google" }
-        });
-      }
-      // ── open_url ────────────────────────────────────────────────────────────
-      case TOOL_NAMES.OPEN_URL: {
-        let url2 = args.url.trim();
-        if (!/^[a-zA-Z][a-zA-Z0-9+.-]*:/i.test(url2)) {
-          url2 = `https://${url2}`;
-        }
-        if (isForbiddenUrl(url2)) {
-          throw new PolicyViolationError(`Navigation to internal/restricted URL "${url2}" is blocked.`, { policy: "URL_POLICY" });
-        }
-        await chromeApi.tabs.update(tabId, { url: url2 });
-        await waitForTabLoad(tabId, 15e3, chromeApi, signal);
-        await sleepMs(600, signal);
-        await ensureContentScript(tabId, chromeApi);
-        const currentTab = await getTabSafe(tabId, chromeApi);
-        return createToolResult({
-          toolName,
-          observation: `Opened: ${url2}${args.rationale ? ` (${args.rationale})` : ""}`,
-          page: currentTab,
-          metadata: { requestedUrl: url2 }
-        });
-      }
-      // ── go_back ─────────────────────────────────────────────────────────────
-      case TOOL_NAMES.GO_BACK: {
-        await chromeApi.tabs.goBack(tabId).catch(() => {
-        });
-        await waitForTabLoad(tabId, 1e4, chromeApi, signal);
-        await sleepMs(500, signal);
-        await ensureContentScript(tabId, chromeApi);
-        const currentTab = await getTabSafe(tabId, chromeApi);
-        return createToolResult({
-          toolName,
-          observation: `Navigated back. Now on: ${currentTab.url || "previous page"}`,
-          page: currentTab
-        });
-      }
-      // ── go_forward ──────────────────────────────────────────────────────────
-      case TOOL_NAMES.GO_FORWARD: {
-        await chromeApi.tabs.goForward(tabId).catch(() => {
-        });
-        await waitForTabLoad(tabId, 1e4, chromeApi, signal);
-        await sleepMs(500, signal);
-        await ensureContentScript(tabId, chromeApi);
-        const currentTab = await getTabSafe(tabId, chromeApi);
-        return createToolResult({
-          toolName,
-          observation: `Navigated forward. Now on: ${currentTab.url || "next page"}`,
-          page: currentTab
-        });
-      }
-      // ── switch_tab ──────────────────────────────────────────────────────────
-      case TOOL_NAMES.SWITCH_TAB: {
-        const win = await chromeApi.windows.getCurrent();
-        const tabs = await chromeApi.tabs.query({ windowId: win.id });
-        let target = null;
-        if (args.tab_index !== void 0 && tabs[args.tab_index]) {
-          target = tabs[args.tab_index];
-        } else if (args.title_contains) {
-          const kw = args.title_contains.toLowerCase();
-          target = tabs.find((t) => (t.title || "").toLowerCase().includes(kw));
-        } else if (args.url_contains) {
-          const kw = args.url_contains.toLowerCase();
-          target = tabs.find((t) => (t.url || "").toLowerCase().includes(kw));
-        }
-        if (!target) {
-          throw new ToolExecutionError(`No matching tab found for criteria: ${JSON.stringify(args)}`, { toolName });
-        }
-        await chromeApi.tabs.update(target.id, { active: true });
-        await sleepMs(400, signal);
-        await ensureContentScript(target.id, chromeApi);
-        const newTab = await getTabSafe(target.id, chromeApi);
-        return createToolResult({
-          toolName,
-          observation: `Switched to tab: "${newTab.title}" \u2014 ${newTab.url}`,
-          page: newTab,
-          newTabId: newTab.id
-        });
-      }
-      // ── read_page ───────────────────────────────────────────────────────────
-      case TOOL_NAMES.READ_PAGE: {
-        const maxChars = Math.min(args.max_chars || 4e3, 8e3);
-        const resp = await sendToTab(tabId, {
-          type: "EXECUTE_ACTION",
-          payload: { action: "READ_PAGE", selector: args.selector || null, maxChars }
-        }, 8e3, chromeApi);
-        const currentTab = await getTabSafe(tabId, chromeApi);
-        const text = resp?.result || "(no content)";
-        return createToolResult({
-          toolName,
-          observation: `URL: ${currentTab.url}
-Title: ${currentTab.title}
-
-${text}`,
-          page: currentTab,
-          metadata: { length: text.length, truncated: text.length >= maxChars }
-        });
-      }
-      // ── get_page_metadata ───────────────────────────────────────────────────
-      case TOOL_NAMES.GET_PAGE_METADATA: {
-        const resp = await sendToTab(tabId, {
-          type: "EXECUTE_ACTION",
-          payload: { action: "GET_METADATA" }
-        }, 8e3, chromeApi);
-        const currentTab = await getTabSafe(tabId, chromeApi);
-        const meta3 = resp?.result || {};
-        return createToolResult({
-          toolName,
-          observation: `Page Metadata:
-${JSON.stringify(meta3, null, 2)}`,
-          page: currentTab,
-          metadata: meta3
-        });
-      }
-      // ── get_links ───────────────────────────────────────────────────────────
-      case TOOL_NAMES.GET_LINKS: {
-        const resp = await sendToTab(tabId, {
-          type: "EXECUTE_ACTION",
-          payload: { action: "GET_LINKS", filter: args.filter || "", max: args.max || 25 }
-        }, 8e3, chromeApi);
-        const currentTab = await getTabSafe(tabId, chromeApi);
-        const links = resp?.result || [];
-        if (!links.length) {
-          return createToolResult({
-            toolName,
-            observation: "No links found matching filter.",
-            page: currentTab,
-            metadata: { count: 0 }
-          });
-        }
-        const formatted = links.map((l, i) => `[${i + 1}] "${l.text}" \u2192 ${l.url}`).join("\n");
-        return createToolResult({
-          toolName,
-          observation: `Found ${links.length} link(s):
-${formatted}`,
-          page: currentTab,
-          metadata: { count: links.length }
-        });
-      }
-      // ── find_on_page ────────────────────────────────────────────────────────
-      case TOOL_NAMES.FIND_ON_PAGE: {
-        const resp = await sendToTab(tabId, {
-          type: "EXECUTE_ACTION",
-          payload: { action: "FIND_ON_PAGE", text: args.text, caseSensitive: !!args.case_sensitive }
-        }, 8e3, chromeApi);
-        const currentTab = await getTabSafe(tabId, chromeApi);
-        const r = resp?.result || {};
-        if (!r.found) {
-          return createToolResult({
-            toolName,
-            observation: `"${args.text}" was NOT found on this page.`,
-            page: currentTab,
-            metadata: { found: false, count: 0 }
-          });
-        }
-        return createToolResult({
-          toolName,
-          observation: `Found ${r.count} match(es) for "${args.text}". Scrolled to first match.
-Context: ...${r.context}...`,
-          page: currentTab,
-          metadata: { found: true, count: r.count }
-        });
-      }
-      // ── extract_structured ──────────────────────────────────────────────────
-      case TOOL_NAMES.EXTRACT_STRUCTURED: {
-        const resp = await sendToTab(tabId, {
-          type: "EXECUTE_ACTION",
-          payload: {
-            action: "EXTRACT_STRUCTURED",
-            fields: args.fields,
-            rootSelector: args.root_selector || null
-          }
-        }, 8e3, chromeApi);
-        const currentTab = await getTabSafe(tabId, chromeApi);
-        const data = resp?.result || {};
-        return createToolResult({
-          toolName,
-          observation: `Extracted structured data:
-${JSON.stringify(data, null, 2)}`,
-          page: currentTab,
-          metadata: { fields: Object.keys(data) }
-        });
-      }
-      // ── click_element ───────────────────────────────────────────────────────
-      case TOOL_NAMES.CLICK_ELEMENT: {
-        const targetId = args.target_id;
-        const hint = args.semantic_hint || "";
-        const initialTab = await getTabSafe(tabId, chromeApi);
-        let resp;
-        try {
-          resp = await sendToTab(tabId, {
-            type: "EXECUTE_ACTION",
-            payload: { action: "CLICK", target_id: targetId, semantic_hint: hint }
-          }, 8e3, chromeApi);
-        } catch (err) {
-          if (err instanceof ChannelClosedError || err.message?.includes("message channel closed")) {
-            await waitForTabLoad(tabId, 12e3, chromeApi, signal);
-            await sleepMs(800, signal);
-            await ensureContentScript(tabId, chromeApi);
-            const afterTab = await getTabSafe(tabId, chromeApi);
-            const navigated = afterTab.url !== initialTab.url;
-            return createToolResult({
-              toolName,
-              observation: navigated ? `Clicked [#${targetId || "?"}] "${hint}" \u2014 page navigated to ${afterTab.url}.` : `Clicked [#${targetId || "?"}] "${hint}" \u2014 channel closed, page refreshed.`,
-              page: afterTab,
-              metadata: { navigated, previousUrl: initialTab.url }
-            });
-          }
-          throw err;
-        }
-        if (!resp?.success) {
-          throw new ToolExecutionError(resp?.error || `Could not click [#${targetId || "?"}] "${hint}"`, { toolName });
-        }
-        await sleepMs(500, signal);
-        const currentTab = await getTabSafe(tabId, chromeApi);
-        return createToolResult({
-          toolName,
-          observation: `Clicked [#${targetId || "?"}] "${hint}" \u2014 DOM settled.`,
-          page: currentTab
-        });
-      }
-      // ── type_into_element ───────────────────────────────────────────────────
-      case TOOL_NAMES.TYPE_INTO_ELEMENT: {
-        const targetId = args.target_id;
-        const hint = args.semantic_hint || "";
-        let text = args.text;
-        if (vault?.rehydrate) {
-          text = vault.rehydrate(text) ?? text;
-        }
-        const resp = await sendToTab(tabId, {
-          type: "EXECUTE_ACTION",
-          payload: {
-            action: "TYPE",
-            target_id: targetId,
-            semantic_hint: hint,
-            value: text,
-            clear_first: !!args.clear_first
-          }
-        }, 8e3, chromeApi);
-        if (!resp?.success) {
-          throw new ToolExecutionError(resp?.error || `Could not type into [#${targetId || "?"}] "${hint}"`, { toolName });
-        }
-        if (args.press_enter) {
-          await sleepMs(150, signal);
-          await sendToTab(tabId, {
-            type: "EXECUTE_ACTION",
-            payload: { action: "PRESS_ENTER", target_id: targetId, semantic_hint: hint }
-          }, 3e3, chromeApi).catch(() => {
-          });
-          await sleepMs(600, signal);
-        }
-        const currentTab = await getTabSafe(tabId, chromeApi);
-        const desc = targetId ? `[#${targetId}]` : `"${hint}"`;
-        return createToolResult({
-          toolName,
-          observation: `Typed into ${desc}${args.press_enter ? " + Enter" : ""}.`,
-          page: currentTab,
-          metadata: { pressEnter: !!args.press_enter }
-        });
-      }
-      // ── execute_js ──────────────────────────────────────────────────────────
-      case TOOL_NAMES.EXECUTE_JS: {
-        const currentTab = await getTabSafe(tabId, chromeApi);
-        if (isForbiddenUrl(currentTab.url)) {
-          throw new PolicyViolationError("Arbitrary execute_js is prohibited on internal browser pages.", { policy: "ACTION_POLICY" });
-        }
-        const resp = await sendToTab(tabId, {
-          type: "EXECUTE_ACTION",
-          payload: { action: "EXECUTE_JS", code: args.code }
-        }, 1e4, chromeApi);
-        const result = resp?.result;
-        return createToolResult({
-          toolName,
-          observation: `JS executed${args.description ? ` (${args.description})` : ""}.
-Result: ${result === void 0 ? "(no return value)" : JSON.stringify(result)}`,
-          page: currentTab,
-          metadata: { hasReturnValue: result !== void 0 }
-        });
-      }
-      // ── inspect_dom ─────────────────────────────────────────────────────────
-      case TOOL_NAMES.INSPECT_DOM: {
-        const resp = await sendToTab(tabId, {
-          type: "EXECUTE_ACTION",
-          payload: {
-            action: "INSPECT_DOM",
-            target_id: args.target_id,
-            selector: args.selector,
-            semantic_hint: args.semantic_hint
-          }
-        }, 8e3, chromeApi);
-        const currentTab = await getTabSafe(tabId, chromeApi);
-        const info = resp?.result;
-        return createToolResult({
-          toolName,
-          observation: info ? `DOM Inspection:
-${JSON.stringify(info, null, 2)}` : "Element not found for inspection.",
-          page: currentTab,
-          metadata: info || {}
-        });
-      }
-      // ── screenshot ──────────────────────────────────────────────────────────
-      case TOOL_NAMES.SCREENSHOT: {
-        const win = await chromeApi.windows.getCurrent();
-        const dataUrl = await chromeApi.tabs.captureVisibleTab(win.id, { format: "png" });
-        const currentTab = await getTabSafe(tabId, chromeApi);
-        _lastScreenshot = { dataUrl, url: currentTab.url, title: currentTab.title, timestamp: Date.now() };
-        const sizeKB = Math.round(dataUrl.length * 0.75 / 1024);
-        return createToolResult({
-          toolName,
-          observation: `Screenshot captured (\u2248${sizeKB}KB PNG).
-Page: "${currentTab.title}"
-URL: ${currentTab.url}`,
-          page: currentTab,
-          screenshotDataUrl: dataUrl,
-          metadata: { sizeKB }
-        });
-      }
-      // ── scroll_page ─────────────────────────────────────────────────────────
-      case TOOL_NAMES.SCROLL_PAGE: {
-        const dir = args.direction;
-        let deltaY;
-        if (dir === "top") deltaY = -999999;
-        else if (dir === "bottom") deltaY = 999999;
-        else deltaY = (dir === "up" ? -1 : 1) * (args.pixels || 600);
-        await sendToTab(tabId, {
-          type: "EXECUTE_ACTION",
-          payload: { action: "SCROLL", deltaY }
-        }, 5e3, chromeApi);
-        await sleepMs(300, signal);
-        const currentTab = await getTabSafe(tabId, chromeApi);
-        return createToolResult({
-          toolName,
-          observation: dir === "top" || dir === "bottom" ? `Scrolled to ${dir} of page.` : `Scrolled ${dir} ${Math.abs(deltaY)}px.`,
-          page: currentTab
-        });
-      }
-      // ── wait_for ─────────────────────────────────────────────────────────────
-      case TOOL_NAMES.WAIT_FOR: {
-        const timeoutMs = Math.min((args.timeout_seconds || 8) * 1e3, 3e4);
-        const resp = await sendToTab(tabId, {
-          type: "EXECUTE_ACTION",
-          payload: {
-            action: "WAIT_FOR",
-            selector: args.selector || null,
-            textContains: args.text_contains || null,
-            timeoutMs
-          }
-        }, timeoutMs + 2e3, chromeApi);
-        const currentTab = await getTabSafe(tabId, chromeApi);
-        if (!resp?.result?.found) {
-          return createToolResult({
-            toolName,
-            observation: `wait_for timed out after ${timeoutMs / 1e3}s \u2014 condition not met.`,
-            page: currentTab,
-            metadata: { met: false }
-          });
-        }
-        return createToolResult({
-          toolName,
-          observation: `Condition met: ${resp.result.detail || "element appeared."}`,
-          page: currentTab,
-          metadata: { met: true }
-        });
-      }
-      // ── wait_seconds ─────────────────────────────────────────────────────────
-      case TOOL_NAMES.WAIT_SECONDS: {
-        const ms = Math.min(Math.max(args.seconds * 1e3, 500), 1e4);
-        await sleepMs(ms, signal);
-        const currentTab = await getTabSafe(tabId, chromeApi);
-        return createToolResult({
-          toolName,
-          observation: `Waited ${ms / 1e3}s${args.reason ? ` (${args.reason})` : ""}.`,
-          page: currentTab
-        });
-      }
-      // ── finish_task ──────────────────────────────────────────────────────────
-      case TOOL_NAMES.FINISH_TASK: {
-        try {
-          await sendToTab(tabId, { type: "CLEAR_HIGHLIGHT" }, 2e3, chromeApi);
-        } catch (_) {
-        }
-        const currentTab = await getTabSafe(tabId, chromeApi);
-        return createToolResult({
-          toolName,
-          observation: `Task finished: ${args.summary}`,
-          page: currentTab,
-          isFinished: true,
-          success: args.success,
-          summary: args.summary
-        });
-      }
-      default:
-        throw new ToolExecutionError(`Unknown tool: "${toolName}"`, { toolName });
-    }
-  } catch (err) {
-    if (signal?.aborted) {
-      throw new PratyakshaError("Operation aborted by user", { code: "CANCELLED", recoverable: false });
-    }
-    const currentTab = await getTabSafe(tabId, chromeApi);
-    return createToolError({
-      toolName,
-      error: err,
-      page: currentTab,
-      recoverable: !(err instanceof PolicyViolationError)
-    });
-  }
-}
-function sleepMs(ms, signal) {
-  if (signal?.aborted) return Promise.reject(new PratyakshaError("Aborted", { code: "CANCELLED", recoverable: false }));
-  return new Promise((resolve, reject) => {
-    let timer = null;
-    const onAbort = () => {
-      if (timer) clearTimeout(timer);
-      reject(new PratyakshaError("Aborted", { code: "CANCELLED", recoverable: false }));
+  const signal = options.signal;
+  const events = options.events;
+  const maxSteps = options.maxSteps || 100;
+  if (!model) {
+    return {
+      stepCount: (state2.stepCount || 0) + 1,
+      status: "TERMINATED",
+      error: { code: "MODEL_UNAVAILABLE", message: "No LLM model configured for browser agent." }
     };
-    if (signal) {
-      signal.addEventListener("abort", onAbort, { once: true });
-    }
-    timer = setTimeout(() => {
-      if (signal) signal.removeEventListener("abort", onAbort);
-      resolve();
-    }, ms);
-  });
-}
-async function getTabSafe(tabId, chromeApi) {
-  if (!chromeApi?.tabs?.get) return { id: tabId, url: "", title: "" };
-  try {
-    const tab = await chromeApi.tabs.get(tabId);
-    return { id: tab.id, url: tab.url || "", title: tab.title || "" };
-  } catch {
-    return { id: tabId, url: "", title: "" };
   }
-}
-function waitForTabLoad(tabId, timeoutMs = 15e3, chromeApi, signal) {
-  if (!chromeApi?.tabs?.onUpdated) return Promise.resolve();
-  return new Promise((resolve, reject) => {
-    let done = false;
-    let timer = null;
-    const onAbort = () => {
-      if (!done) {
-        done = true;
-        if (timer) clearTimeout(timer);
-        try {
-          chromeApi.tabs.onUpdated.removeListener(onUpd);
-        } catch (_) {
-        }
-        reject(new PratyakshaError("Navigation aborted", { code: "CANCELLED", recoverable: false }));
-      }
-    };
-    const finish = () => {
-      if (!done) {
-        done = true;
-        if (timer) clearTimeout(timer);
-        if (signal) signal.removeEventListener("abort", onAbort);
-        try {
-          chromeApi.tabs.onUpdated.removeListener(onUpd);
-        } catch (_) {
-        }
-        resolve();
-      }
-    };
-    const onUpd = (id, info) => {
-      if (id === tabId && info.status === "complete") finish();
-    };
-    if (signal) {
-      signal.addEventListener("abort", onAbort, { once: true });
-    }
-    chromeApi.tabs.onUpdated.addListener(onUpd);
-    timer = setTimeout(finish, timeoutMs);
-  });
-}
-async function sendToTab(tabId, message, timeoutMs = 8e3, chromeApi) {
-  if (!chromeApi?.tabs?.sendMessage) throw new Error("chrome.tabs.sendMessage unavailable");
-  const send = () => new Promise((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error("Content script response timed out")), timeoutMs);
+  const tabId = state2.browserSession?.tabId;
+  const task2 = state2.sanitizedTask || state2.originalTask || "";
+  const stepCount = (state2.stepCount || 0) + 1;
+  const blacklistedTargets = state2.blacklistedTargets || [];
+  let pageCtx = { url: state2.browserSession?.url || "", title: state2.browserSession?.title || "", elements: [] };
+  if (tabId) {
     try {
-      chromeApi.tabs.sendMessage(tabId, message, (resp) => {
-        clearTimeout(timer);
-        if (chromeApi.runtime?.lastError) {
-          const msg = chromeApi.runtime.lastError.message || "";
-          msg.includes("message channel closed") ? reject(new ChannelClosedError()) : reject(new Error(msg));
-        } else {
-          resolve(resp);
-        }
-      });
-    } catch (e) {
-      clearTimeout(timer);
-      reject(e);
-    }
-  });
-  try {
-    return await send();
-  } catch (e) {
-    if (e instanceof ChannelClosedError) throw e;
-    await ensureContentScript(tabId, chromeApi);
-    await sleepMs(300);
-    return await send();
-  }
-}
-async function ensureContentScript(tabId, chromeApi) {
-  if (!chromeApi?.scripting) return;
-  try {
-    const pong = await new Promise((res, rej) => {
-      const t = setTimeout(() => rej(new Error("ping timeout")), 1500);
-      chromeApi.tabs.sendMessage(tabId, { type: "PING" }, (r) => {
-        clearTimeout(t);
-        chromeApi.runtime?.lastError ? rej() : res(r);
-      });
-    });
-    if (pong?.ready) return;
-  } catch {
-  }
-  try {
-    await chromeApi.scripting.insertCSS({ target: { tabId }, files: ["content/highlighter.css"] });
-    await chromeApi.scripting.executeScript({ target: { tabId }, files: ["content/dom-actions.js", "content/content-main.js"] });
-  } catch (err) {
-  }
-}
-
-// src/browser/page-context.js
-function detectTargetService(task2 = "") {
-  for (const s of CANONICAL_SERVICES) {
-    if (s.pattern.test(task2)) return s;
-  }
-  const urlMatch = task2.match(/https?:\/\/[^\s]+/i);
-  if (urlMatch) {
-    try {
-      const u = new URL(urlMatch[0]);
-      return {
-        pattern: null,
-        url: u.href,
-        name: u.hostname,
-        hostMatch: new RegExp(u.hostname.replace(/\./g, "\\."), "i")
-      };
+      pageCtx = await getPageContext(tabId, { chromeApi, signal });
     } catch (_) {
     }
   }
-  return null;
-}
-function buildDOMTable(elements = [], max = 75, blacklistedTargets = /* @__PURE__ */ new Set()) {
-  if (!elements.length) return "No interactive elements detected.";
-  const header = "[ID]  TAG            TYPE/ROLE     LABEL / PLACEHOLDER / TEXT                     STATUS/VAL";
-  const sep = "\u2500".repeat(header.length);
-  const sorted = [...elements].sort((a, b) => {
-    const isBlA = blacklistedTargets.has(Number(a.id));
-    const isBlB = blacklistedTargets.has(Number(b.id));
-    if (isBlA && !isBlB) return 1;
-    if (!isBlA && isBlB) return -1;
-    const isInputA = /input|textarea|textbox|combobox/i.test(`${a.tag} ${a.type} ${a.role}`);
-    const isInputB = /input|textarea|textbox|combobox/i.test(`${b.tag} ${b.type} ${b.role}`);
-    if (isInputA && !isInputB) return -1;
-    if (!isInputA && isInputB) return 1;
-    return 0;
+  events?.emit?.("THINKING", {
+    phase: "perceive",
+    text: `Scanning DOM on ${pageCtx.url ? new URL(pageCtx.url).hostname : "page"} (${pageCtx.elements?.length || 0} interactive elements discovered)`,
+    step: stepCount,
+    maxSteps
   });
-  const rows = sorted.slice(0, max).map((el) => {
-    const isBl = blacklistedTargets.has(Number(el.id));
-    const id = String(el.id || "").padStart(4, " ");
-    const tag = `<${el.tag || "?"}>`.padEnd(14, " ");
-    const type = (el.type || el.role || "").padEnd(13, " ");
-    let label = (el.label || el.text || "").replace(/\s+/g, " ").slice(0, 46);
-    if (isBl) {
-      label = `[FAILED/DO-NOT-USE] ${label}`.slice(0, 46);
-    }
-    label = label.padEnd(46, " ");
-    const val = isBl ? "\u26A0\uFE0F BLACKLISTED" : el.value ? `"${el.value.slice(0, 20)}"` : "";
-    return `[${id}]  ${tag} ${type} ${label} ${val}`;
+  const domTable = buildDOMTable(pageCtx.elements, 35, new Set(blacklistedTargets));
+  const systemPrompt = buildBrowserActorPrompt({
+    taskObjective: task2,
+    currentPlan: state2.plan,
+    domTable,
+    currentUrl: pageCtx.url,
+    currentTitle: pageCtx.title,
+    stepCount,
+    maxSteps,
+    blacklistedTargets
   });
-  return [header, sep, ...rows].join("\n");
-}
-async function getPageContext(tabId, options = {}) {
-  const chromeApi = options.chromeApi || (typeof chrome !== "undefined" ? chrome : null);
-  const signal = options.signal;
-  if (!tabId || !chromeApi?.tabs) return { url: "", title: "", elements: [] };
-  const tab = await getTabSafe(tabId, chromeApi);
-  for (let attempt = 0; attempt < 2; attempt++) {
-    if (signal?.aborted) break;
-    try {
-      const resp = await new Promise((resolve, reject) => {
-        const timer = setTimeout(() => reject(new Error("GET_PAGE_CONTEXT timeout")), 4e3);
-        chromeApi.tabs.sendMessage(tabId, { type: "GET_PAGE_CONTEXT" }, (r) => {
-          clearTimeout(timer);
-          chromeApi.runtime?.lastError ? reject(new Error(chromeApi.runtime.lastError.message)) : resolve(r);
-        });
-      });
-      if (resp?.elements) {
-        return {
-          url: resp.url || tab.url,
-          title: resp.title || tab.title,
-          elements: resp.elements
-        };
-      }
-    } catch {
-      await ensureContentScript(tabId, chromeApi);
-      await new Promise((r) => setTimeout(r, 400));
-    }
-  }
-  return { url: tab.url, title: tab.title, elements: [] };
-}
-
-// src/agent/planner.js
-var StructuredPlanSchema = external_exports.object({
-  objective: external_exports.string().describe("Preserved user objective."),
-  targetService: external_exports.object({
-    name: external_exports.string(),
-    url: external_exports.string()
-  }).nullable().optional().describe("Detected canonical target service or URL."),
-  subgoals: external_exports.array(external_exports.object({
-    id: external_exports.number().int(),
-    description: external_exports.string(),
-    expectedAction: external_exports.string(),
-    riskTier: external_exports.enum([
-      RISK_TIERS.READ_ONLY,
-      RISK_TIERS.REVERSIBLE,
-      RISK_TIERS.SENSITIVE,
-      RISK_TIERS.IRREVERSIBLE,
-      RISK_TIERS.RESTRICTED
-    ]).default(RISK_TIERS.REVERSIBLE),
-    completionEvidence: external_exports.string().describe("What browser evidence proves this subgoal is complete.")
-  })).describe("Step-by-step subgoal breakdown."),
-  verificationCriteria: external_exports.array(external_exports.string()).default([]).describe("Checklist of factual evidence required to verify final completion."),
-  missingInformation: external_exports.array(external_exports.string()).default([]).describe(
-    "BLOCKING missing parameters that make execution strictly impossible (e.g. sending an email with no recipient). Do NOT include optional preferences, formatting options, or clarifying questions where autonomous defaults exist. For search, research, lookup, or general browsing, this MUST be an empty array []."
-  )
-});
-function generateDeterministicPlan(task2 = "", pageContext = {}) {
-  let targetService = detectTargetService(task2);
-  const subgoals = [];
-  const verificationCriteria = [];
-  const missingInformation = [];
-  const lower = task2.toLowerCase();
-  if (/\b(mail|email|send\s+email)\b/i.test(task2)) {
-    if (!targetService) {
-      targetService = { name: "Gmail", url: "https://mail.google.com" };
-    }
-    const serviceUrl = targetService.url;
-    subgoals.push({
-      id: 1,
-      description: `Navigate to email portal (${serviceUrl})`,
-      expectedAction: "open_url",
-      riskTier: RISK_TIERS.REVERSIBLE,
-      completionEvidence: "Current page URL contains mail.google.com"
-    });
-    subgoals.push({
-      id: 2,
-      description: "Open compose dialog if not open",
-      expectedAction: "click_element",
-      riskTier: RISK_TIERS.REVERSIBLE,
-      completionEvidence: "Compose dialog or recipient field present in DOM"
-    });
-    subgoals.push({
-      id: 3,
-      description: "Type recipient, subject, and message content",
-      expectedAction: "type_into_element",
-      riskTier: RISK_TIERS.REVERSIBLE,
-      completionEvidence: "Email fields contain entered values"
-    });
-    subgoals.push({
-      id: 4,
-      description: "Click Send button to dispatch email",
-      expectedAction: "click_element",
-      riskTier: RISK_TIERS.IRREVERSIBLE,
-      completionEvidence: "Send button clicked and message sent toast appears"
-    });
-    verificationCriteria.push("Email service mail.google.com was visited");
-    verificationCriteria.push("Recipient and message fields were typed");
-    verificationCriteria.push("Send button was successfully triggered");
-    if (!/@/.test(task2) && !/\[EMAIL_/i.test(task2)) {
-      missingInformation.push("Recipient email address was not specified");
-    }
-  } else if (/\b(search|find|lookup|who|what|score|price)\b/i.test(task2)) {
-    subgoals.push({
-      id: 1,
-      description: `Search web for query: "${task2}"`,
-      expectedAction: "search_web",
-      riskTier: RISK_TIERS.READ_ONLY,
-      completionEvidence: "Search results displayed on search engine page"
-    });
-    subgoals.push({
-      id: 2,
-      description: "Extract relevant answer text from search results",
-      expectedAction: "read_page",
-      riskTier: RISK_TIERS.READ_ONLY,
-      completionEvidence: "Fact or relevant content extracted"
-    });
-    verificationCriteria.push("Search results retrieved from search engine");
-    verificationCriteria.push("Direct answer or fact identified in page text");
-  } else if (targetService) {
-    subgoals.push({
-      id: 1,
-      description: `Navigate to target destination (${targetService.name})`,
-      expectedAction: "open_url",
-      riskTier: RISK_TIERS.REVERSIBLE,
-      completionEvidence: `Browser URL matches ${targetService.url}`
-    });
-    subgoals.push({
-      id: 2,
-      description: `Locate interactive elements on ${targetService.name}`,
-      expectedAction: "read_page",
-      riskTier: RISK_TIERS.READ_ONLY,
-      completionEvidence: "Target elements identified in DOM table"
-    });
-    verificationCriteria.push(`Destination ${targetService.name} opened`);
-  } else if (/^\s*(hi|hello|hey|greetings|howdy|good\s+(morning|afternoon|evening)|who\s+are\s+you|what\s+can\s+you\s+do)\b/i.test(task2)) {
-    subgoals.push({
-      id: 1,
-      description: "Acknowledge greeting and present autonomous browser capabilities",
-      expectedAction: "finish_task",
-      riskTier: RISK_TIERS.READ_ONLY,
-      completionEvidence: "Greeting answered"
-    });
-    verificationCriteria.push("User query acknowledged");
-  } else {
-    subgoals.push({
-      id: 1,
-      description: "Inspect current page context and interactive controls",
-      expectedAction: "read_page",
-      riskTier: RISK_TIERS.READ_ONLY,
-      completionEvidence: "Current page DOM table inspected"
-    });
-    subgoals.push({
-      id: 2,
-      description: "Perform requested action on target element",
-      expectedAction: "click_element",
-      riskTier: RISK_TIERS.REVERSIBLE,
-      completionEvidence: "Element action completed"
-    });
-    verificationCriteria.push("Action executed without error");
-  }
-  return {
-    objective: task2,
-    targetService: targetService ? { name: targetService.name, url: targetService.url } : null,
-    subgoals,
-    verificationCriteria,
-    missingInformation
+  const sessionContext = {
+    activeTab: { id: tabId, url: pageCtx.url, title: pageCtx.title },
+    vault,
+    signal,
+    chromeApi
   };
-}
-async function plannerNode(state2, options = {}) {
-  const task2 = state2.sanitizedTask || state2.originalTask || "";
-  const pageContext = state2.browserSession || {};
-  const model = options.model;
-  let plan = null;
-  if (model && typeof model.withStructuredOutput === "function") {
-    try {
-      const structuredModel = model.withStructuredOutput(StructuredPlanSchema);
-      const prompt = `You are the master planner for the PRATYAKSHA autonomous browser agent.
-User Objective: "${task2}"
-Current Browser State:
-URL: ${pageContext.url || "None"}
-Title: ${pageContext.title || "None"}
-
-Create a structured, step-by-step verifiable plan. Mark irreversible operations (Send, Pay, Delete).
-Define concrete verification criteria that must be verified against actual DOM evidence.
-
-CRITICAL DIRECTIVE ON MISSING INFORMATION:
-You are an autonomous browser agent. Only list an item in missingInformation if the task is strictly impossible to begin execution without human clarification (e.g. "send an email" with zero recipient or contact provided). For any general search, information retrieval, form interaction, navigation, or lookup task, DO NOT ask clarifying questions\u2014leave missingInformation as an empty array [] and execute the plan autonomously.`;
-      const response = await structuredModel.invoke(prompt);
-      if (response) {
-        if (!Array.isArray(response.subgoals) || response.subgoals.length === 0) {
-          response.subgoals = [{
-            id: 1,
-            description: `Execute request: "${task2}"`,
-            expectedAction: "read_page",
-            riskTier: RISK_TIERS.READ_ONLY,
-            completionEvidence: "Request processed"
-          }];
+  const tools2 = createLangChainBrowserTools(() => sessionContext);
+  let latestObservation = null;
+  sessionContext.onToolResult = (res) => {
+    latestObservation = res;
+  };
+  let modelWithTools;
+  if (typeof model.bindTools === "function") {
+    modelWithTools = model.bindTools(tools2);
+  } else if (model.primaryModel && typeof model.primaryModel.bindTools === "function") {
+    modelWithTools = model.primaryModel.bindTools(tools2);
+  } else if (model.runnable && typeof model.runnable.bindTools === "function") {
+    modelWithTools = model.runnable.bindTools(tools2);
+  } else {
+    modelWithTools = model;
+  }
+  const prunedHistory = pruneContext(state2.messages || []);
+  const cleanHistory = prunedHistory.filter((msg) => getMessageType(msg) !== "system");
+  const pairedHistory = [];
+  for (let i = 0; i < cleanHistory.length; i++) {
+    const msg = cleanHistory[i];
+    pairedHistory.push(msg);
+    const tcList = msg?.tool_calls || msg?.additional_kwargs?.tool_calls;
+    if (Array.isArray(tcList) && tcList.length > 0) {
+      const neededIds = new Set(tcList.map((tc) => tc.id).filter(Boolean));
+      let j = i + 1;
+      while (j < cleanHistory.length) {
+        const next = cleanHistory[j];
+        if (getMessageType(next) === "tool") {
+          neededIds.delete(next.tool_call_id);
+          j++;
+        } else {
+          break;
         }
-        if (!Array.isArray(response.verificationCriteria) || response.verificationCriteria.length === 0) {
-          response.verificationCriteria = ["Task acknowledged"];
-        }
-        plan = response;
       }
-    } catch (err) {
-      console.warn("[PRATYAKSHA Planner] Structured planning failed, using deterministic planner:", err.message);
+      for (const missingId of neededIds) {
+        pairedHistory.push(new ToolMessage({
+          tool_call_id: missingId,
+          name: "tool_execution",
+          content: "Observation recorded."
+        }));
+      }
     }
   }
-  if (!plan) {
-    plan = generateDeterministicPlan(task2, pageContext);
+  const messages = [
+    new SystemMessage(systemPrompt),
+    ...pairedHistory
+  ];
+  if (pairedHistory.length === 0) {
+    messages.push(new HumanMessage(`Complete this task: ${task2}`));
+  } else {
+    const lastMsg = messages[messages.length - 1];
+    const lastType = getMessageType(lastMsg);
+    if (lastType === "ai" || lastType === "assistant" || lastType !== "human" && lastType !== "user" && lastType !== "tool") {
+      messages.push(new HumanMessage(
+        `Proceed with the objective: "${task2}". Review the live DOM elements table above and execute the next browser tool (e.g. click_element, type_into_element, or finish_task). DO NOT ask conversational questions ("Shall I proceed?")\u2014execute the action autonomously or call finish_task if the objective is fulfilled.`
+      ));
+    }
   }
-  const hasBlockingMissingInfo = Array.isArray(plan.missingInformation) && plan.missingInformation.length > 0 && plan.missingInformation.some((info) => /recipient|password|secret|account\s+number|destination/i.test(info) || !plan.subgoals?.length);
+  events?.emit?.("THINKING", {
+    phase: "reason",
+    text: `Evaluating page state & choosing action for step ${stepCount}/${maxSteps}\u2026`,
+    step: stepCount,
+    maxSteps
+  });
+  const aiResponse = await modelWithTools.invoke(messages);
+  const newMessages = [aiResponse];
+  if (typeof aiResponse.content === "string" && aiResponse.content.trim()) {
+    events?.emit?.("THINKING", {
+      phase: "thought",
+      text: aiResponse.content.trim(),
+      step: stepCount,
+      maxSteps
+    });
+  }
+  let hasToolError = false;
+  if (Array.isArray(aiResponse.tool_calls) && aiResponse.tool_calls.length > 0) {
+    for (const rawToolCall of aiResponse.tool_calls) {
+      if (signal?.aborted) {
+        newMessages.push(new ToolMessage({
+          tool_call_id: rawToolCall.id || `call_${Date.now()}`,
+          name: rawToolCall.name,
+          content: "ABORTED: Operation cancelled by user."
+        }));
+        continue;
+      }
+      const { toolName: normalizedName, args: normalizedArgs } = normalizeToolInvocation(rawToolCall.name, rawToolCall.args);
+      const toolCall = {
+        ...rawToolCall,
+        name: normalizedName,
+        args: normalizedArgs
+      };
+      events?.emit?.("THINKING", {
+        phase: "action",
+        text: `Executing ${toolCall.name}(${formatArgsSummary(toolCall.args)})`,
+        toolName: toolCall.name,
+        args: toolCall.args,
+        step: stepCount,
+        maxSteps
+      });
+      events?.emit?.("TOOL_CALL", {
+        toolName: toolCall.name,
+        args: toolCall.args,
+        step: stepCount
+      });
+      const validation = validateToolCall(toolCall, blacklistedTargets);
+      let observationText = "";
+      if (!validation.valid) {
+        hasToolError = true;
+        const polErr = new PolicyViolationError(validation.reason, { toolName: toolCall.name });
+        const envelope = formatError3(polErr);
+        const errInfo = envelope.error || envelope;
+        const exactMsg = errInfo.message && !errInfo.message.includes("Our team has been notified") ? errInfo.message : validation.reason;
+        observationText = `BLOCKED [${toolCall.name} - ${errInfo.code || "POLICY_VIOLATION"}]: ${exactMsg}`;
+      } else {
+        const matchingTool = tools2.find((t) => t.name === toolCall.name) || tools2.find((t) => t.name === rawToolCall.name);
+        if (matchingTool) {
+          try {
+            observationText = await matchingTool.invoke(toolCall.args);
+          } catch (err) {
+            hasToolError = true;
+            const envelope = formatError3(err);
+            const errInfo = envelope.error || envelope;
+            const exactMsg = errInfo.message && !errInfo.message.includes("Our team has been notified") ? errInfo.message : err?.message || String(err);
+            observationText = `ERROR [${toolCall.name} - ${errInfo.code || "TOOL_ERROR"}]: ${exactMsg}`;
+          }
+        } else {
+          hasToolError = true;
+          const nfErr = new NotFoundError3(`Tool "${toolCall.name}" is not registered in the browser suite`);
+          const envelope = formatError3(nfErr);
+          const errInfo = envelope.error || envelope;
+          const exactMsg = errInfo.message && !errInfo.message.includes("Our team has been notified") ? errInfo.message : `Tool "${toolCall.name}" is not registered in the browser suite`;
+          observationText = `ERROR [${toolCall.name} - ${errInfo.code || "NOT_FOUND"}]: ${exactMsg}`;
+        }
+      }
+      if (observationText.startsWith("ERROR") || observationText.startsWith("BLOCKED")) {
+        hasToolError = true;
+      }
+      events?.emit?.("THINKING", {
+        phase: "observation",
+        text: `Observation: ${truncateString(observationText, 140)}`,
+        toolName: toolCall.name,
+        step: stepCount,
+        maxSteps
+      });
+      events?.emit?.("OBSERVATION", {
+        observation: observationText,
+        toolName: toolCall.name,
+        step: stepCount
+      });
+      const scrubbedObservation = sanitizeObservationForModel(observationText, vault);
+      newMessages.push(new ToolMessage({
+        tool_call_id: rawToolCall.id || `call_${Date.now()}`,
+        name: rawToolCall.name,
+        content: scrubbedObservation
+      }));
+    }
+  } else {
+    const text = (typeof aiResponse.content === "string" ? aiResponse.content : "").toLowerCase();
+    const isDone = text.includes("task complete") || text.includes("completed the task") || text.includes("finished the task") || text.includes("email has been sent") || text.includes("message has been sent") || text.includes("email was successfully sent") || text.includes("successfully sent");
+    if (isDone) {
+      latestObservation = {
+        isFinished: true,
+        success: true,
+        summary: aiResponse.content || "Task completed.",
+        steps: stepCount
+      };
+      events?.emit?.("THINKING", {
+        phase: "finish",
+        text: `Model signaled completion: ${latestObservation.summary}`,
+        step: stepCount,
+        maxSteps
+      });
+    }
+  }
   return {
-    plan,
-    status: hasBlockingMissingInfo ? "AWAITING_USER_INPUT" : "PLANNING_COMPLETE"
+    messages: newMessages,
+    stepCount,
+    browserSession: {
+      tabId: sessionContext.activeTab.id,
+      url: sessionContext.activeTab.url,
+      title: sessionContext.activeTab.title
+    },
+    domTable,
+    latestObservation,
+    recoveryCount: hasToolError ? state2.recoveryCount || 0 : 0,
+    status: latestObservation?.isFinished ? "TASK_FINISHED_SIGNAL" : hasToolError ? "TOOL_ERROR" : "ACTING"
   };
 }
 
 // src/safety/action-policy.js
+init_constants();
 var IRREVERSIBLE_SEMANTIC_REGEX = /\b(send|submit\s+order|pay|checkout|confirm\s+payment|buy|purchase|delete|destroy|terminate|transfer|publish)\b/i;
 function classifyAction(toolName, args = {}, pageContext = {}) {
   if (toolName === TOOL_NAMES.EXECUTE_JS) {
@@ -143647,6 +144328,7 @@ function classifyAction(toolName, args = {}, pageContext = {}) {
 }
 
 // src/safety/approval.js
+init_errors6();
 var _activeApprovals = /* @__PURE__ */ new Map();
 var _consumedTokens = /* @__PURE__ */ new Set();
 function computeActionFingerprint(action = {}, pageUrl = "") {
@@ -143720,407 +144402,8 @@ function consumeApproval(token) {
   _consumedTokens.add(token);
 }
 
-// src/agent/browser-tools.js
-function createLangChainBrowserTools(getSessionContext, options = {}) {
-  const includeFinish = options.includeFinishTask !== false;
-  const tools2 = [];
-  for (const spec of BROWSER_TOOL_SPECS) {
-    if (spec.name === TOOL_NAMES.FINISH_TASK && !includeFinish) {
-      continue;
-    }
-    const schema = TOOL_ZOD_SCHEMAS[spec.name];
-    if (!schema) {
-      console.warn(`[PRATYAKSHA] No Zod schema found for tool "${spec.name}", skipping.`);
-      continue;
-    }
-    const toolName = spec.name;
-    const toolDescription = spec.description;
-    const lcTool = tool(async (inputArgs) => {
-      const session = typeof getSessionContext === "function" ? getSessionContext() : getSessionContext;
-      const activeTab = session?.activeTab;
-      const vault = session?.vault;
-      const signal = session?.signal;
-      const chromeApi = session?.chromeApi;
-      const result = await executeBrowserTool(toolName, inputArgs, activeTab, {
-        vault,
-        signal,
-        chromeApi
-      });
-      if (result.newTabId && activeTab) {
-        activeTab.id = result.newTabId;
-      }
-      if (session?.onToolResult) {
-        session.onToolResult(result);
-      }
-      return result.observation;
-    }, {
-      name: toolName,
-      description: toolDescription,
-      schema
-    });
-    tools2.push(lcTool);
-  }
-  return tools2;
-}
-
-// src/agent/middleware.js
-function pruneContext(messages = [], options = {}) {
-  if (!Array.isArray(messages) || messages.length <= 4) {
-    return messages;
-  }
-  const maxRecent = options.maxRecentMessages || 12;
-  const maxObsLen = options.maxObservationLength || 500;
-  const cutoffIndex = Math.max(0, messages.length - maxRecent);
-  const olderMessages = messages.slice(0, cutoffIndex);
-  const recentMessages = messages.slice(cutoffIndex);
-  const compactedOlder = olderMessages.map((msg) => {
-    if (msg instanceof ToolMessage || msg?._getType?.() === "tool") {
-      const content = typeof msg.content === "string" ? msg.content : JSON.stringify(msg.content);
-      if (content.length > maxObsLen) {
-        const truncated = content.slice(0, maxObsLen) + "\u2026 [observation pruned for context]";
-        return new ToolMessage({
-          tool_call_id: msg.tool_call_id,
-          name: msg.name,
-          content: truncated
-        });
-      }
-    }
-    return msg;
-  });
-  return [...compactedOlder, ...recentMessages];
-}
-function validateToolCall(toolCall, blacklistedTargets = []) {
-  if (!toolCall || !toolCall.name) {
-    return { valid: false, reason: "Invalid or missing tool call specification" };
-  }
-  const blacklistSet = new Set((blacklistedTargets || []).map(String));
-  const args = toolCall.args || {};
-  if (args.index !== void 0 && blacklistSet.has(String(args.index))) {
-    return {
-      valid: false,
-      reason: `Target element index [${args.index}] is currently blacklisted due to prior failures.`
-    };
-  }
-  if (args.selector && blacklistSet.has(String(args.selector))) {
-    return {
-      valid: false,
-      reason: `Target selector "${args.selector}" is currently blacklisted due to prior failures.`
-    };
-  }
-  return { valid: true };
-}
-
-// src/agent/agent.js
-function buildAgentSystemPrompt({
-  taskObjective = "",
-  currentPlan = null,
-  domTable = "",
-  currentUrl = "",
-  currentTitle = "",
-  stepCount = 1,
-  maxSteps = 100,
-  blacklistedTargets = []
-}) {
-  let planGuidance = "";
-  if (currentPlan?.subgoals?.length) {
-    const list = currentPlan.subgoals.map((s) => `  ${s.id}. ${s.description} [${s.riskTier}] \u2192 Evidence: ${s.completionEvidence}`).join("\n");
-    planGuidance = `
-STRUCTURED EXECUTION PLAN:
-${list}
-Verification criteria: ${currentPlan.verificationCriteria?.join("; ") || "Factual completion"}
-`;
-  }
-  let blacklistWarning = "";
-  if (blacklistedTargets.length > 0) {
-    blacklistWarning = `
-\u26A0\uFE0F ACTIVE BLACKLIST NOTICE:
-The following element IDs have failed or led to dead ends: [${blacklistedTargets.join(", ")}].
-DO NOT TARGET THESE ELEMENTS AGAIN.
-`;
-  }
-  return `You are PRATYAKSHA (\u092A\u094D\u0930\u0924\u094D\u092F\u0915\u094D\u0937) \u2014 an elite sovereign, privacy-first autonomous browser agent.
-You operate a real browser tab. You perceive the live page and invoke browser tools to complete the user's objective.
-
-CURRENT OBJECTIVE: ${taskObjective}
-STEP: ${stepCount} of ${maxSteps}
-CURRENT PAGE:
-  URL  : ${currentUrl || "unknown"}
-  Title: ${currentTitle || "unknown"}
-
-INTERACTIVE ELEMENTS (Inputs and buttons prioritized):
-${domTable}
-${planGuidance}
-${blacklistWarning}
-STRATEGY RULES:
-1. Target elements by numeric [ID] from the table for maximum precision.
-2. For form filling (such as emails), fill recipient and body fields before clicking Send.
-3. Once all required actions are executed and verified on the real page, call finish_task.
-4. Never hallucinate completion without performing the real browser operations.`;
-}
-function formatToolArgsSummary(args) {
-  if (!args || typeof args !== "object") return "";
-  const parts = [];
-  if (args.target_id !== void 0) parts.push(`target: #${args.target_id}`);
-  if (args.semantic_hint) parts.push(`"${args.semantic_hint}"`);
-  if (args.url) parts.push(`url: "${args.url}"`);
-  if (args.text) parts.push(`text: "${args.text.slice(0, 30)}${args.text.length > 30 ? "\u2026" : ""}"`);
-  if (args.summary) parts.push(`"${args.summary.slice(0, 40)}"`);
-  if (parts.length === 0) {
-    const json3 = JSON.stringify(args);
-    return json3.length > 40 ? json3.slice(0, 40) + "\u2026" : json3;
-  }
-  return parts.join(", ");
-}
-function truncateText(str, max = 120) {
-  if (!str || typeof str !== "string") return "";
-  const clean = str.replace(/\s+/g, " ").trim();
-  return clean.length > max ? clean.slice(0, max) + "\u2026" : clean;
-}
-async function browserAgentTurn(state2, options = {}) {
-  const model = options.model;
-  const chromeApi = options.chromeApi;
-  const vault = options.vault;
-  const signal = options.signal;
-  const events = options.events;
-  const maxSteps = options.maxSteps || 100;
-  if (!model) {
-    return {
-      stepCount: (state2.stepCount || 0) + 1,
-      status: "TERMINATED",
-      error: { code: "MODEL_UNAVAILABLE", message: "No LLM model configured for browser agent." }
-    };
-  }
-  const tabId = state2.browserSession?.tabId;
-  const task2 = state2.sanitizedTask || state2.originalTask;
-  const stepCount = (state2.stepCount || 0) + 1;
-  const blacklistedTargets = state2.blacklistedTargets || [];
-  let pageCtx = { url: state2.browserSession?.url || "", title: state2.browserSession?.title || "", elements: [] };
-  if (tabId) {
-    try {
-      pageCtx = await getPageContext(tabId, { chromeApi, signal });
-    } catch (_) {
-    }
-  }
-  events?.emit?.("THINKING", {
-    phase: "perceive",
-    text: `Scanning DOM on ${pageCtx.url ? new URL(pageCtx.url).hostname : "page"} (${pageCtx.elements?.length || 0} interactive elements discovered)`,
-    step: stepCount,
-    maxSteps
-  });
-  const domTable = buildDOMTable(pageCtx.elements, 75, new Set(blacklistedTargets));
-  const systemPrompt = buildAgentSystemPrompt({
-    taskObjective: task2,
-    currentPlan: state2.plan,
-    domTable,
-    currentUrl: pageCtx.url,
-    currentTitle: pageCtx.title,
-    stepCount,
-    maxSteps,
-    blacklistedTargets
-  });
-  const sessionContext = {
-    activeTab: { id: tabId, url: pageCtx.url, title: pageCtx.title },
-    vault,
-    signal,
-    chromeApi
-  };
-  const tools2 = createLangChainBrowserTools(() => sessionContext);
-  let latestObservation = null;
-  sessionContext.onToolResult = (res) => {
-    latestObservation = res;
-  };
-  const modelWithTools = model.bindTools(tools2);
-  function getMessageType(msg) {
-    if (!msg) return "unknown";
-    if (typeof msg._getType === "function") return msg._getType();
-    if (typeof msg.getType === "function") return msg.getType();
-    if (msg.type) return msg.type;
-    if (msg._type) return msg._type;
-    if (msg.role) {
-      if (msg.role === "assistant") return "ai";
-      if (msg.role === "user") return "human";
-      return msg.role;
-    }
-    if (msg.constructor && msg.constructor.name) {
-      if (msg.constructor.name === "AIMessage" || msg.constructor.name === "AIMessageChunk") return "ai";
-      if (msg.constructor.name === "HumanMessage" || msg.constructor.name === "HumanMessageChunk") return "human";
-      if (msg.constructor.name === "SystemMessage" || msg.constructor.name === "SystemMessageChunk") return "system";
-      if (msg.constructor.name === "ToolMessage") return "tool";
-    }
-    return "unknown";
-  }
-  const prunedHistory = pruneContext(state2.messages || []);
-  const cleanHistory = prunedHistory.filter((msg) => {
-    const type = getMessageType(msg);
-    return type !== "system";
-  });
-  const pairedHistory = [];
-  for (let i = 0; i < cleanHistory.length; i++) {
-    const msg = cleanHistory[i];
-    pairedHistory.push(msg);
-    const tcList = msg?.tool_calls || msg?.additional_kwargs?.tool_calls;
-    if (Array.isArray(tcList) && tcList.length > 0) {
-      const neededIds = new Set(tcList.map((tc) => tc.id).filter(Boolean));
-      let j = i + 1;
-      while (j < cleanHistory.length) {
-        const next = cleanHistory[j];
-        const nextType = getMessageType(next);
-        if (nextType === "tool") {
-          neededIds.delete(next.tool_call_id);
-          j++;
-        } else {
-          break;
-        }
-      }
-      for (const missingId of neededIds) {
-        pairedHistory.push(new ToolMessage({
-          tool_call_id: missingId,
-          name: "tool_execution",
-          content: "Observation recorded."
-        }));
-      }
-    }
-  }
-  const messages = [
-    new SystemMessage(systemPrompt),
-    ...pairedHistory
-  ];
-  if (pairedHistory.length === 0) {
-    messages.push(new HumanMessage(`Complete this task: ${task2}`));
-  } else {
-    const lastMsg = messages[messages.length - 1];
-    const lastType = getMessageType(lastMsg);
-    if (lastType === "ai" || lastType === "assistant" || lastType !== "human" && lastType !== "user" && lastType !== "tool") {
-      messages.push(new HumanMessage(
-        `Proceed with the objective: "${task2}". Review the live DOM elements table above and execute the next browser tool (e.g. click_element, type_into_element, or finish_task).`
-      ));
-    }
-  }
-  events?.emit?.("THINKING", {
-    phase: "reason",
-    text: `Evaluating page state & choosing action for step ${stepCount}/${maxSteps}\u2026`,
-    step: stepCount,
-    maxSteps
-  });
-  const aiResponse = await modelWithTools.invoke(messages);
-  const newMessages = [aiResponse];
-  if (typeof aiResponse.content === "string" && aiResponse.content.trim()) {
-    events?.emit?.("THINKING", {
-      phase: "thought",
-      text: aiResponse.content.trim(),
-      step: stepCount,
-      maxSteps
-    });
-  }
-  let hasToolError = false;
-  if (Array.isArray(aiResponse.tool_calls) && aiResponse.tool_calls.length > 0) {
-    for (const toolCall of aiResponse.tool_calls) {
-      if (signal?.aborted) {
-        newMessages.push(new ToolMessage({
-          tool_call_id: toolCall.id || `call_${Date.now()}`,
-          name: toolCall.name,
-          content: "ABORTED: Operation cancelled by user."
-        }));
-        continue;
-      }
-      events?.emit?.("THINKING", {
-        phase: "action",
-        text: `Executing ${toolCall.name}(${formatToolArgsSummary(toolCall.args)})`,
-        toolName: toolCall.name,
-        args: toolCall.args,
-        step: stepCount,
-        maxSteps
-      });
-      events?.emit?.("TOOL_CALL", {
-        toolName: toolCall.name,
-        args: toolCall.args,
-        step: stepCount
-      });
-      const validation = validateToolCall(toolCall, blacklistedTargets);
-      let observationText = "";
-      if (!validation.valid) {
-        hasToolError = true;
-        const polErr = new PolicyViolationError(validation.reason, { toolName: toolCall.name });
-        const envelope = formatError3(polErr);
-        const errInfo = envelope.error || envelope;
-        const exactMsg = errInfo.message && !errInfo.message.includes("Our team has been notified") ? errInfo.message : validation.reason;
-        observationText = `BLOCKED [${toolCall.name} - ${errInfo.code || "POLICY_VIOLATION"}]: ${exactMsg}`;
-      } else {
-        const matchingTool = tools2.find((t) => t.name === toolCall.name);
-        if (matchingTool) {
-          try {
-            observationText = await matchingTool.invoke(toolCall.args);
-          } catch (err) {
-            hasToolError = true;
-            const envelope = formatError3(err);
-            const errInfo = envelope.error || envelope;
-            const exactMsg = errInfo.message && !errInfo.message.includes("Our team has been notified") ? errInfo.message : err?.message || String(err);
-            observationText = `ERROR [${toolCall.name} - ${errInfo.code || "TOOL_ERROR"}]: ${exactMsg}`;
-          }
-        } else {
-          hasToolError = true;
-          const nfErr = new NotFoundError3(`Tool "${toolCall.name}" is not registered in the browser suite`);
-          const envelope = formatError3(nfErr);
-          const errInfo = envelope.error || envelope;
-          const exactMsg = errInfo.message && !errInfo.message.includes("Our team has been notified") ? errInfo.message : `Tool "${toolCall.name}" is not registered in the browser suite`;
-          observationText = `ERROR [${toolCall.name} - ${errInfo.code || "NOT_FOUND"}]: ${exactMsg}`;
-        }
-      }
-      if (observationText.startsWith("ERROR") || observationText.startsWith("BLOCKED")) {
-        hasToolError = true;
-      }
-      events?.emit?.("THINKING", {
-        phase: "observation",
-        text: `Observation: ${truncateText(observationText, 140)}`,
-        toolName: toolCall.name,
-        step: stepCount,
-        maxSteps
-      });
-      events?.emit?.("OBSERVATION", {
-        observation: observationText,
-        toolName: toolCall.name,
-        step: stepCount
-      });
-      const scrubbedObservation = sanitizeObservationForModel(observationText, vault);
-      newMessages.push(new ToolMessage({
-        tool_call_id: toolCall.id || `call_${Date.now()}`,
-        name: toolCall.name,
-        content: scrubbedObservation
-      }));
-    }
-  } else {
-    const text = (typeof aiResponse.content === "string" ? aiResponse.content : "").toLowerCase();
-    const isDone = text.includes("task complete") || text.includes("completed the task") || text.includes("finished the task");
-    if (isDone) {
-      latestObservation = {
-        isFinished: true,
-        success: true,
-        summary: aiResponse.content || "Task completed.",
-        steps: stepCount
-      };
-      events?.emit?.("THINKING", {
-        phase: "finish",
-        text: `Model signaled completion: ${latestObservation.summary}`,
-        step: stepCount,
-        maxSteps
-      });
-    }
-  }
-  return {
-    messages: newMessages,
-    stepCount,
-    browserSession: {
-      tabId: sessionContext.activeTab.id,
-      url: sessionContext.activeTab.url,
-      title: sessionContext.activeTab.title
-    },
-    domTable,
-    latestObservation,
-    status: latestObservation?.isFinished ? "TASK_FINISHED_SIGNAL" : hasToolError ? "TOOL_ERROR" : "ACTING"
-  };
-}
-
 // src/agent/verifier.js
+init_errors6();
 var VERIFICATION_OUTCOMES = Object.freeze({
   VERIFIED_SUCCESS: "VERIFIED_SUCCESS",
   INCOMPLETE_RECOVERABLE: "INCOMPLETE_RECOVERABLE",
@@ -144257,6 +144540,9 @@ async function verifierNode(state2, options = {}) {
 }
 
 // src/agent/recovery.js
+init_browser_tools();
+init_constants();
+init_errors6();
 var RECOVERY_DECISIONS = Object.freeze({
   RETRY_ACTION: "RETRY_ACTION",
   BACKTRACK_HISTORY: "BACKTRACK_HISTORY",
@@ -144350,6 +144636,7 @@ async function recoveryNode(state2, options = {}) {
 }
 
 // src/agent/graph.js
+init_constants();
 function createAgentGraph(options = {}) {
   const model = options.model;
   const chromeApi = options.chromeApi;
@@ -144392,22 +144679,12 @@ function createAgentGraph(options = {}) {
       metadata: { piiDetectedCount: detected.length }
     };
   }).addNode("planner", async (state2) => {
-    events?.emit?.("THINKING", {
-      phase: "plan",
-      text: "Analyzing page context & formulating structured execution plan\u2026",
-      step: 0,
+    return plannerAgentNode(state2, {
+      model,
+      useModelPlanner: options.useModelPlanner,
+      events,
       maxSteps
     });
-    const planUpdate = await plannerNode(state2, { model });
-    if (planUpdate.plan?.subgoals?.length) {
-      events?.emit?.("THINKING", {
-        phase: "plan",
-        text: `Execution plan formulated with ${planUpdate.plan.subgoals.length} subgoal(s).`,
-        step: 0,
-        maxSteps
-      });
-    }
-    return planUpdate;
   }).addNode("policy", async (state2) => {
     const subgoals = state2.plan?.subgoals || [];
     const currentIdx = state2.currentSubgoalIndex || 0;
@@ -144457,7 +144734,7 @@ function createAgentGraph(options = {}) {
     }
     return { status: "POLICY_ALLOWED" };
   }).addNode("browser_agent", async (state2) => {
-    const update = await browserAgentTurn(state2, {
+    return browserActorAgentNode(state2, {
       model,
       chromeApi,
       vault,
@@ -144465,10 +144742,8 @@ function createAgentGraph(options = {}) {
       maxSteps,
       events
     });
-    return update;
   }).addNode("verification", async (state2) => {
-    const update = await verifierNode(state2, { events });
-    return update;
+    return verifierNode(state2, { events });
   }).addNode("recovery", async (state2) => {
     events?.emit?.("THINKING", {
       phase: "recovery",
@@ -144476,8 +144751,7 @@ function createAgentGraph(options = {}) {
       step: state2.stepCount,
       maxSteps
     });
-    const update = await recoveryNode(state2, { chromeApi });
-    return update;
+    return recoveryNode(state2, { chromeApi });
   }).addNode("finalize", async (state2) => {
     if (state2.status === "AWAITING_APPROVAL") {
       return {
@@ -144586,6 +144860,59 @@ function createAgentGraph(options = {}) {
     checkpointer
   });
 }
+function createTwoAgentGraph(options = {}) {
+  const model = options.model;
+  const chromeApi = options.chromeApi;
+  const vault = options.vault;
+  const checkpointer = options.checkpointer;
+  const maxSteps = options.maxSteps || 100;
+  const events = options.events;
+  const workflow = new StateGraph(AgentState).addNode("planner", async (state2) => {
+    return plannerAgentNode(state2, {
+      model,
+      useModelPlanner: options.useModelPlanner,
+      events,
+      maxSteps
+    });
+  }).addNode("browser_agent", async (state2) => {
+    return browserActorAgentNode(state2, {
+      model,
+      chromeApi,
+      vault,
+      signal: options.signal,
+      maxSteps,
+      events
+    });
+  }).addNode("finalize", async (state2) => {
+    const isSuccess = state2.latestObservation?.isFinished && state2.latestObservation?.success;
+    return {
+      status: isSuccess ? "COMPLETED" : "TERMINATED",
+      finalResult: {
+        success: !!isSuccess,
+        summary: state2.latestObservation?.summary || (isSuccess ? "Goal accomplished." : "Execution finished."),
+        steps: state2.stepCount || 1,
+        evidence: "Browser execution completed"
+      }
+    };
+  }).addEdge(START, "planner").addConditionalEdges("planner", (state2) => {
+    if (state2.status === "AWAITING_USER_INPUT") return "finalize";
+    return "browser_agent";
+  }, {
+    browser_agent: "browser_agent",
+    finalize: "finalize"
+  }).addConditionalEdges("browser_agent", (state2) => {
+    if ((state2.stepCount || 0) >= maxSteps || state2.latestObservation?.isFinished || state2.status === "TASK_FINISHED_SIGNAL") {
+      return "finalize";
+    }
+    return "browser_agent";
+  }, {
+    browser_agent: "browser_agent",
+    finalize: "finalize"
+  }).addEdge("finalize", END);
+  return workflow.compile({
+    checkpointer
+  });
+}
 
 // src/persistence/checkpointer.js
 function safeSerializeForChrome(obj) {
@@ -144646,6 +144973,8 @@ var ChromeStorageSaver = class extends MemorySaver {
     this.persistentStorage = options.storage || (typeof chrome !== "undefined" && chrome?.storage?.local ? chrome.storage.local : null);
     this.storageKey = options.storageKey || "pratyaksha_checkpoints";
     this.isHydrated = false;
+    this.asyncFlush = options.asyncFlush !== void 0 ? options.asyncFlush : true;
+    this._flushPromise = null;
   }
   /**
    * Loads existing persisted checkpoints from storage into memory.
@@ -144688,6 +145017,13 @@ var ChromeStorageSaver = class extends MemorySaver {
    */
   async flush() {
     if (!this.persistentStorage) return;
+    if (this.storage && typeof this.storage === "object") {
+      for (const [threadId, checkpoints] of Object.entries(this.storage)) {
+        if (Array.isArray(checkpoints) && checkpoints.length > 10) {
+          this.storage[threadId] = checkpoints.slice(-10);
+        }
+      }
+    }
     try {
       const safeStorage = safeSerializeForChrome(this.storage || {});
       const safeWrites = safeSerializeForChrome(this.writes || {});
@@ -144714,22 +145050,42 @@ var ChromeStorageSaver = class extends MemorySaver {
     }
   }
   /**
-   * Puts a checkpoint into memory and flushes to chrome.storage.local.
+   * Non-blocking background flush trigger.
+   */
+  flushAsync() {
+    if (!this.persistentStorage) return;
+    if (this._flushPromise) return this._flushPromise;
+    this._flushPromise = this.flush().catch(() => {
+    }).finally(() => {
+      this._flushPromise = null;
+    });
+    return this._flushPromise;
+  }
+  /**
+   * Puts a checkpoint into memory and queues storage flush.
    */
   async put(config2, checkpoint, metadata, newVersions) {
     if (checkpoint?.channel_values && typeof checkpoint.channel_values === "object") {
       checkpoint.channel_values = cleanStateForCheckpoint(checkpoint.channel_values);
     }
     const result = await super.put(config2, checkpoint, metadata, newVersions);
-    await this.flush();
+    if (this.asyncFlush) {
+      this.flushAsync();
+    } else {
+      await this.flush();
+    }
     return result;
   }
   /**
-   * Puts writes into memory and flushes to chrome.storage.local.
+   * Puts writes into memory and queues storage flush.
    */
   async putWrites(config2, writes, taskId) {
     const result = await super.putWrites(config2, writes, taskId);
-    await this.flush();
+    if (this.asyncFlush) {
+      this.flushAsync();
+    } else {
+      await this.flush();
+    }
     return result;
   }
   /**
@@ -144744,6 +145100,7 @@ var ChromeStorageSaver = class extends MemorySaver {
 };
 
 // src/persistence/thread-store.js
+init_browser_tools();
 var ThreadStore = class {
   /**
    * @param {Object} [options]
@@ -144898,13 +145255,20 @@ var AgentEventEmitter = class {
 };
 
 // src/runner.js
+init_errors6();
+init_constants();
+init_page_context();
 var PratyakshaAgentRunner = class {
   constructor(options = {}) {
     this.provider = options.provider || "mistral";
     this.apiKey = (options.apiKey || "").trim();
-    this.modelName = options.model || (this.provider === "mistral" ? "ministral-8b-latest" : this.provider === "openrouter" ? "deepseek/deepseek-v4.1-flash" : "gemini-3.5-flash");
+    this.modelName = options.model || (this.provider === "mistral" ? "codestral-latest" : this.provider === "openrouter" ? "deepseek/deepseek-v4.1-flash" : "gemini-3.5-flash");
+    this.geminiApiKey = (options.geminiApiKey || "").trim();
+    this.openrouterApiKey = (options.openrouterApiKey || "").trim();
+    this.mistralApiKey = (options.mistralApiKey || "").trim();
     this.vault = options.vault || globalVault;
     this.maxSteps = options.maxSteps || 100;
+    this.useTwoAgentGraph = options.useTwoAgentGraph ?? false;
     this.onEvent = options.onEvent || (() => {
     });
     this.chromeApi = options.chromeApi || (typeof chrome !== "undefined" ? chrome : null);
@@ -144968,11 +145332,17 @@ var PratyakshaAgentRunner = class {
     let model = null;
     try {
       if (this.apiKey) {
-        model = makeModel({
+        const primaryConfig = {
           provider: this.provider,
           apiKey: this.apiKey,
           model: this.modelName
+        };
+        const fallbacks = buildAutomaticFallbacks(primaryConfig, {
+          geminiApiKey: this.geminiApiKey,
+          openrouterApiKey: this.openrouterApiKey,
+          mistralApiKey: this.mistralApiKey
         });
+        model = makeModelWithFallbacks(primaryConfig, fallbacks);
       }
     } catch (err) {
       this.events.emit(AGENT_EVENT_TYPES.TOOL_ERROR, { error: `Model setup error: ${err.message}` });
@@ -144984,7 +145354,8 @@ var PratyakshaAgentRunner = class {
       model: this.modelName
     });
     this.events.emitStateChange("PERCEIVING", "Scanning DOM & evaluating task\u2026");
-    const app = createAgentGraph({
+    const graphFactory = this.useTwoAgentGraph ? createTwoAgentGraph : createAgentGraph;
+    const app = graphFactory({
       model,
       chromeApi: this.chromeApi,
       vault: this.vault,
@@ -145094,6 +145465,8 @@ var PratyakshaAgentRunner = class {
       status: final2.success ? "COMPLETED" : "TERMINATED",
       summary: final2.summary
     });
+    await this.checkpointer.flush().catch(() => {
+    });
     return {
       success: final2.success,
       summary: final2.summary,
@@ -145186,6 +145559,12 @@ function diagnoseExecutionError(err, rawMsg = "", rawCode = "EXECUTION_ERROR") {
     return {
       code: "UNAUTHORIZED",
       message: `Authentication error (401 Unauthorized): Invalid or expired API key. Configure a valid key in Settings (\u2699). Diagnostic: ${rawMsg}`
+    };
+  }
+  if (err?.status === 429 || err?.statusCode === 429 || err?.raw_status_code === 429 || rawCode === 429 || rawCode === "RATE_LIMIT_EXCEEDED" || combined.includes("429") || combined.includes("backend_out_of_capacity") || combined.includes("rate limit") || combined.includes("rate_limited") || combined.includes("not enough capacity") || combined.includes("3505")) {
+    return {
+      code: "RATE_LIMIT_EXCEEDED",
+      message: `AI Provider Overload (429 Capacity / Rate Limit): The model provider is temporarily out of capacity or rate-limited. (Hint: Switch to Google Gemini or select 'open-mistral-nemo' / 'codestral-latest' in Settings (\u2699) to continue immediately). Diagnostic: ${rawMsg}`
     };
   }
   return {

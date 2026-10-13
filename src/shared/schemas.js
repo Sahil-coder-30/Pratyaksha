@@ -530,12 +530,98 @@ export function createToolError({
 }
 
 /**
+ * Normalizes tool name aliases and argument variations produced by different LLMs.
+ */
+export function normalizeToolInvocation(toolName = '', rawArgs = {}) {
+  const TOOL_ALIASES = {
+    click: TOOL_NAMES.CLICK_ELEMENT,
+    click_button: TOOL_NAMES.CLICK_ELEMENT,
+    clickelement: TOOL_NAMES.CLICK_ELEMENT,
+    type: TOOL_NAMES.TYPE_INTO_ELEMENT,
+    type_text: TOOL_NAMES.TYPE_INTO_ELEMENT,
+    input: TOOL_NAMES.TYPE_INTO_ELEMENT,
+    input_text: TOOL_NAMES.TYPE_INTO_ELEMENT,
+    typeintoelement: TOOL_NAMES.TYPE_INTO_ELEMENT,
+    open: TOOL_NAMES.OPEN_URL,
+    goto: TOOL_NAMES.OPEN_URL,
+    navigate: TOOL_NAMES.OPEN_URL,
+    navigate_to: TOOL_NAMES.OPEN_URL,
+    openurl: TOOL_NAMES.OPEN_URL,
+    search: TOOL_NAMES.SEARCH_WEB,
+    web_search: TOOL_NAMES.SEARCH_WEB,
+    google_search: TOOL_NAMES.SEARCH_WEB,
+    searchweb: TOOL_NAMES.SEARCH_WEB,
+    read: TOOL_NAMES.READ_PAGE,
+    readpage: TOOL_NAMES.READ_PAGE,
+    extract: TOOL_NAMES.READ_PAGE,
+    scroll: TOOL_NAMES.SCROLL_PAGE,
+    scrollpage: TOOL_NAMES.SCROLL_PAGE,
+    finish: TOOL_NAMES.FINISH_TASK,
+    complete: TOOL_NAMES.FINISH_TASK,
+    done: TOOL_NAMES.FINISH_TASK,
+    finishtask: TOOL_NAMES.FINISH_TASK
+  };
+
+  const lower = String(toolName || '').toLowerCase().trim();
+  const canonicalName = TOOL_ALIASES[lower] || toolName;
+  const args = { ...rawArgs };
+
+  if (canonicalName === TOOL_NAMES.CLICK_ELEMENT) {
+    if (args.target_id === undefined) {
+      const rawTarget = args.id ?? args.target ?? args.element_id ?? args.targetId;
+      if (rawTarget !== undefined) {
+        const num = Number(rawTarget);
+        if (Number.isFinite(num) && num > 0) {
+          args.target_id = num;
+        } else {
+          args.semantic_hint = args.semantic_hint || String(rawTarget);
+        }
+      }
+    } else if (typeof args.target_id === 'string' && !/^\d+$/.test(args.target_id)) {
+      args.semantic_hint = args.semantic_hint || args.target_id;
+      delete args.target_id;
+    }
+  } else if (canonicalName === TOOL_NAMES.TYPE_INTO_ELEMENT) {
+    if (args.target_id === undefined) {
+      const rawTarget = args.id ?? args.target ?? args.element_id ?? args.targetId;
+      if (rawTarget !== undefined) {
+        const num = Number(rawTarget);
+        if (Number.isFinite(num) && num > 0) {
+          args.target_id = num;
+        } else {
+          args.semantic_hint = args.semantic_hint || String(rawTarget);
+        }
+      }
+    } else if (typeof args.target_id === 'string' && !/^\d+$/.test(args.target_id)) {
+      args.semantic_hint = args.semantic_hint || args.target_id;
+      delete args.target_id;
+    }
+    if (args.text === undefined && args.value !== undefined) {
+      args.text = String(args.value);
+    }
+  } else if (canonicalName === TOOL_NAMES.OPEN_URL) {
+    if (!args.url && args.link) args.url = args.link;
+    if (!args.url && args.destination) args.url = args.destination;
+  } else if (canonicalName === TOOL_NAMES.SEARCH_WEB) {
+    if (!args.query && args.q) args.query = args.q;
+    if (!args.query && args.text) args.query = args.text;
+  } else if (canonicalName === TOOL_NAMES.FINISH_TASK) {
+    if (!args.summary && args.message) args.summary = args.message;
+    if (!args.summary && args.result) args.summary = args.result;
+    if (!args.summary && args.output) args.summary = args.output;
+  }
+
+  return { toolName: canonicalName, args };
+}
+
+/**
  * Validates tool arguments against the authoritative Zod schema.
  */
 export function validateToolArgs(toolName, rawArgs = {}) {
-  const schema = TOOL_ZOD_SCHEMAS[toolName];
+  const { toolName: canonicalName, args } = normalizeToolInvocation(toolName, rawArgs);
+  const schema = TOOL_ZOD_SCHEMAS[canonicalName];
   if (!schema) {
     throw new Error(`Unregistered tool: "${toolName}"`);
   }
-  return schema.parse(rawArgs);
+  return schema.parse(args);
 }

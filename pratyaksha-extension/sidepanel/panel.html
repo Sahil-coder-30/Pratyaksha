@@ -195,12 +195,12 @@
         <div class="form-group">
           <label for="engineSelect">Planner Engine / AI Provider</label>
           <select id="engineSelect" class="form-input">
-            <option value="mistral" selected>Mistral AI (ministral-8b-latest)</option>
+            <option value="mistral" selected>Mistral AI (codestral-latest)</option>
             <option value="openrouter">OpenRouter (deepseek/deepseek-v4.1-flash)</option>
             <option value="gemini">Google Gemini (gemini-3.5-flash)</option>
             <option value="deterministic">Deterministic Semantic Planner (Offline / 0-Config)</option>
           </select>
-          <small class="form-hint">Supports verified production models: Mistral (ministral-8b-latest), OpenRouter (deepseek/deepseek-v4.1-flash), and Gemini (gemini-3.5-flash).</small>
+          <small class="form-hint">Supports verified production models: Mistral (codestral-latest), OpenRouter (deepseek/deepseek-v4.1-flash), and Gemini (gemini-3.5-flash).</small>
         </div>
 
         <div class="form-group" id="openrouterGroup" style="display:none;">
@@ -218,8 +218,11 @@
         <div class="form-group" id="mistralGroup">
           <label for="mistralModel">Mistral Model</label>
           <select id="mistralModel" class="form-input">
-            <option value="ministral-8b-latest" selected>ministral-8b-latest</option>
+            <option value="codestral-latest" selected>codestral-latest (Codestral Reasoning Agent)</option>
+            <option value="open-mistral-nemo">open-mistral-nemo (High Capacity)</option>
+            <option value="ministral-8b-latest">ministral-8b-latest (Lightweight)</option>
           </select>
+          <small class="form-hint">Codestral provides state-of-the-art tool calling and DOM action accuracy.</small>
         </div>
 
         <!-- Container retained for safe display toggling in panel.js -->

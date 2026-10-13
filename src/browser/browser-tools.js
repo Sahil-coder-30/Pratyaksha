@@ -17,6 +17,7 @@ import {
 } from '../shared/errors.js';
 import {
   validateToolArgs,
+  normalizeToolInvocation,
   createToolResult,
   createToolError
 } from '../shared/schemas.js';
@@ -51,6 +52,10 @@ export function isForbiddenUrl(url) {
  * @returns {Promise<Object>} Standard ToolResult contract
  */
 export async function executeBrowserTool(toolName, rawArgs = {}, activeTab, options = {}) {
+  const normalized = normalizeToolInvocation(toolName, rawArgs);
+  toolName = normalized.toolName;
+  rawArgs = normalized.args;
+
   const chromeApi = options.chromeApi || (typeof chrome !== 'undefined' ? chrome : null);
   const signal = options.signal;
   const vault = options.vault;
@@ -98,7 +103,7 @@ export async function executeBrowserTool(toolName, rawArgs = {}, activeTab, opti
 
         await chromeApi.tabs.update(tabId, { url });
         await waitForTabLoad(tabId, 15000, chromeApi, signal);
-        await sleepMs(800, signal);
+        await sleepMs(150, signal);
         await ensureContentScript(tabId, chromeApi);
 
         const textResp = await sendToTab(tabId, {
@@ -131,7 +136,7 @@ export async function executeBrowserTool(toolName, rawArgs = {}, activeTab, opti
 
         await chromeApi.tabs.update(tabId, { url });
         await waitForTabLoad(tabId, 15000, chromeApi, signal);
-        await sleepMs(600, signal);
+        await sleepMs(150, signal);
         await ensureContentScript(tabId, chromeApi);
 
         const currentTab = await getTabSafe(tabId, chromeApi);
@@ -147,7 +152,7 @@ export async function executeBrowserTool(toolName, rawArgs = {}, activeTab, opti
       case TOOL_NAMES.GO_BACK: {
         await chromeApi.tabs.goBack(tabId).catch(() => {});
         await waitForTabLoad(tabId, 10000, chromeApi, signal);
-        await sleepMs(500, signal);
+        await sleepMs(100, signal);
         await ensureContentScript(tabId, chromeApi);
 
         const currentTab = await getTabSafe(tabId, chromeApi);
@@ -162,7 +167,7 @@ export async function executeBrowserTool(toolName, rawArgs = {}, activeTab, opti
       case TOOL_NAMES.GO_FORWARD: {
         await chromeApi.tabs.goForward(tabId).catch(() => {});
         await waitForTabLoad(tabId, 10000, chromeApi, signal);
-        await sleepMs(500, signal);
+        await sleepMs(100, signal);
         await ensureContentScript(tabId, chromeApi);
 
         const currentTab = await getTabSafe(tabId, chromeApi);
@@ -194,7 +199,7 @@ export async function executeBrowserTool(toolName, rawArgs = {}, activeTab, opti
         }
 
         await chromeApi.tabs.update(target.id, { active: true });
-        await sleepMs(400, signal);
+        await sleepMs(100, signal);
         await ensureContentScript(target.id, chromeApi);
 
         const newTab = await getTabSafe(target.id, chromeApi);
@@ -329,7 +334,7 @@ export async function executeBrowserTool(toolName, rawArgs = {}, activeTab, opti
           // If channel closed, verify whether navigation actually started
           if (err instanceof ChannelClosedError || err.message?.includes('message channel closed')) {
             await waitForTabLoad(tabId, 12000, chromeApi, signal);
-            await sleepMs(800, signal);
+            await sleepMs(200, signal);
             await ensureContentScript(tabId, chromeApi);
 
             const afterTab = await getTabSafe(tabId, chromeApi);
@@ -350,7 +355,7 @@ export async function executeBrowserTool(toolName, rawArgs = {}, activeTab, opti
           throw new ToolExecutionError(resp?.error || `Could not click [#${targetId || '?'}] "${hint}"`, { toolName });
         }
 
-        await sleepMs(500, signal);
+        await sleepMs(100, signal);
         const currentTab = await getTabSafe(tabId, chromeApi);
         return createToolResult({
           toolName,
@@ -391,7 +396,7 @@ export async function executeBrowserTool(toolName, rawArgs = {}, activeTab, opti
             type: 'EXECUTE_ACTION',
             payload: { action: 'PRESS_ENTER', target_id: targetId, semantic_hint: hint }
           }, 3000, chromeApi).catch(() => {});
-          await sleepMs(600, signal);
+          await sleepMs(150, signal);
         }
 
         const currentTab = await getTabSafe(tabId, chromeApi);
@@ -481,7 +486,7 @@ export async function executeBrowserTool(toolName, rawArgs = {}, activeTab, opti
           payload: { action: 'SCROLL', deltaY }
         }, 5000, chromeApi);
 
-        await sleepMs(300, signal);
+        await sleepMs(100, signal);
         const currentTab = await getTabSafe(tabId, chromeApi);
         return createToolResult({
           toolName,

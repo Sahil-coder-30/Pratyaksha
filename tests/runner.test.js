@@ -112,3 +112,14 @@ test('PratyakshaAgentRunner - Human Approval Interception, Resumption, and Rejec
   assert.equal(agent.pendingApproval, null);
   assert.ok(events.some(e => e.type === AGENT_EVENT_TYPES.APPROVAL_REJECTED));
 });
+
+test('PratyakshaAgentRunner - Two-Agent Architecture Selection', async () => {
+  const chromeApi = createMockChrome();
+  const agent = new PratyakshaAgentRunner({
+    chromeApi,
+    useTwoAgentGraph: true
+  });
+
+  assert.equal(agent.useTwoAgentGraph, true);
+});
+

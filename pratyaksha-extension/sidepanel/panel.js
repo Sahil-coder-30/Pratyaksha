@@ -245,7 +245,7 @@ async function loadSettings() {
   if (geminiModelGroup) geminiModelGroup.style.display = provider === 'gemini' ? 'flex' : 'none';
 
   if (mistralApiKey) mistralApiKey.value = data.mistralApiKey || config.mistralApiKey || '';
-  if (mistralModel) mistralModel.value = data.mistralModel || config.mistralModel || 'ministral-8b-latest';
+  if (mistralModel) mistralModel.value = data.mistralModel || config.mistralModel || 'codestral-latest';
 
   if (openrouterApiKey) openrouterApiKey.value = data.openrouterApiKey || config.openrouterApiKey || '';
   if (openrouterModel) openrouterModel.value = data.openrouterModel || config.openrouterModel || 'deepseek/deepseek-v4.1-flash';
@@ -258,7 +258,7 @@ async function loadSettings() {
   if (!data.mistralApiKey && config.mistralApiKey) {
     await chrome.storage.local.set({
       mistralApiKey: config.mistralApiKey,
-      mistralModel: config.mistralModel || 'ministral-8b-latest',
+      mistralModel: config.mistralModel || 'codestral-latest',
       provider: 'mistral'
     });
   }
@@ -279,7 +279,7 @@ async function saveSettings() {
       provider,
       engineMode: provider,
       mistralApiKey: activeMistralKey,
-      mistralModel: mistralModel ? mistralModel.value : 'ministral-8b-latest',
+      mistralModel: mistralModel ? mistralModel.value : 'codestral-latest',
       geminiApiKey: activeGeminiKey,
       geminiModel: geminiModel ? geminiModel.value : 'gemini-3.5-flash',
       openrouterApiKey: activeOpenRouterKey,
@@ -404,7 +404,7 @@ async function handleRunPrompt() {
       let model = '';
       if (provider === 'mistral') {
         apiKey = (settings.mistralApiKey || config.mistralApiKey || '').trim();
-        model = settings.mistralModel || config.mistralModel || 'ministral-8b-latest';
+        model = settings.mistralModel || config.mistralModel || 'codestral-latest';
       } else if (provider === 'openrouter') {
         apiKey = (settings.openrouterApiKey || config.openrouterApiKey || '').trim();
         model = settings.openrouterModel || config.openrouterModel || 'deepseek/deepseek-v4.1-flash';
@@ -424,6 +424,9 @@ async function handleRunPrompt() {
         model,
         vault: globalVault,
         maxSteps: 100,
+        mistralApiKey: (settings.mistralApiKey || config.mistralApiKey || '').trim(),
+        geminiApiKey: (settings.geminiApiKey || config.geminiApiKey || '').trim(),
+        openrouterApiKey: (settings.openrouterApiKey || config.openrouterApiKey || '').trim(),
         onEvent: handleAgentEvent
       });
 
@@ -455,6 +458,8 @@ async function handleRunPrompt() {
     const lower = `${exactMessage} ${err?.code || ''}`.toLowerCase();
     if (lower.includes('402') || lower.includes('requires more credits') || lower.includes('payment required')) {
       exactMessage = `OpenRouter error (402 Payment Required): Insufficient credits or token allowance. (Hint: OpenRouter requires an active balance. Check key limit at openrouter.ai/settings/keys, pick a free-tier model like deepseek/deepseek-chat:free in Settings, or switch to Gemini). Diagnostic: ${exactMessage}`;
+    } else if (lower.includes('429') || lower.includes('backend_out_of_capacity') || lower.includes('3505') || lower.includes('rate limit')) {
+      exactMessage = `AI Provider Overload (429 Capacity / Rate Limit): Mistral servers are temporarily out of capacity for this model. (Hint: Select 'open-mistral-nemo' or switch to Google Gemini in Settings (⚙) to resume immediately). Diagnostic: ${exactMessage}`;
     } else if (lower.includes('err_internet_disconnected') || lower.includes('err_network_changed') || lower.includes('fetch failed')) {
       exactMessage = `Network error (ERR_INTERNET_DISCONNECTED / ERR_NETWORK_CHANGED): Connection to the AI model interrupted or changed. Please verify your internet connection. Diagnostic: ${exactMessage}`;
     }

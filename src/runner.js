@@ -6,8 +6,8 @@
  * to the compiled LangGraph StateGraph engine, model factory, checkpointer, and events.
  */
 
-import { makeModel, makeModelWithFallbacks } from './agent/models.js';
-import { createAgentGraph } from './agent/graph.js';
+import { makeModel, makeModelWithFallbacks, buildAutomaticFallbacks } from './agent/models.js';
+import { createAgentGraph, createTwoAgentGraph } from './agent/graph.js';
 import { ChromeStorageSaver } from './persistence/checkpointer.js';
 import { ThreadStore } from './persistence/thread-store.js';
 import { AgentEventEmitter, AGENT_EVENT_TYPES } from './ui/agent-events.js';
@@ -20,12 +20,16 @@ export class PratyakshaAgentRunner {
     this.provider = options.provider || 'mistral';
     this.apiKey = (options.apiKey || '').trim();
     this.modelName = options.model || (
-      this.provider === 'mistral' ? 'ministral-8b-latest' :
+      this.provider === 'mistral' ? 'codestral-latest' :
       this.provider === 'openrouter' ? 'deepseek/deepseek-v4.1-flash' :
       'gemini-3.5-flash'
     );
+    this.geminiApiKey = (options.geminiApiKey || '').trim();
+    this.openrouterApiKey = (options.openrouterApiKey || '').trim();
+    this.mistralApiKey = (options.mistralApiKey || '').trim();
     this.vault = options.vault || globalVault;
     this.maxSteps = options.maxSteps || 100;
+    this.useTwoAgentGraph = options.useTwoAgentGraph ?? false;
     this.onEvent = options.onEvent || (() => {});
     this.chromeApi = options.chromeApi || (typeof chrome !== 'undefined' ? chrome : null);
 
@@ -89,15 +93,21 @@ export class PratyakshaAgentRunner {
       meta: { provider: this.provider, model: this.modelName }
     });
 
-    // 2. Resolve Model
+    // 2. Resolve Model with Automatic Degradation Fallbacks
     let model = null;
     try {
       if (this.apiKey) {
-        model = makeModel({
+        const primaryConfig = {
           provider: this.provider,
           apiKey: this.apiKey,
           model: this.modelName
+        };
+        const fallbacks = buildAutomaticFallbacks(primaryConfig, {
+          geminiApiKey: this.geminiApiKey,
+          openrouterApiKey: this.openrouterApiKey,
+          mistralApiKey: this.mistralApiKey
         });
+        model = makeModelWithFallbacks(primaryConfig, fallbacks);
       }
     } catch (err) {
       this.events.emit(AGENT_EVENT_TYPES.TOOL_ERROR, { error: `Model setup error: ${err.message}` });
@@ -114,7 +124,8 @@ export class PratyakshaAgentRunner {
     this.events.emitStateChange('PERCEIVING', 'Scanning DOM & evaluating task…');
 
     // 4. Compile Graph
-    const app = createAgentGraph({
+    const graphFactory = this.useTwoAgentGraph ? createTwoAgentGraph : createAgentGraph;
+    const app = graphFactory({
       model,
       chromeApi: this.chromeApi,
       vault: this.vault,
@@ -247,6 +258,8 @@ export class PratyakshaAgentRunner {
       status: final.success ? 'COMPLETED' : 'TERMINATED',
       summary: final.summary
     });
+
+    await this.checkpointer.flush().catch(() => {});
 
     return {
       success: final.success,
@@ -389,6 +402,26 @@ export function diagnoseExecutionError(err, rawMsg = '', rawCode = 'EXECUTION_ER
     return {
       code: 'UNAUTHORIZED',
       message: `Authentication error (401 Unauthorized): Invalid or expired API key. Configure a valid key in Settings (⚙). Diagnostic: ${rawMsg}`
+    };
+  }
+
+  // 4. Rate Limits & Capacity Exhaustion (429 / 3505 / RATE_LIMIT_EXCEEDED / backend_out_of_capacity)
+  if (
+    err?.status === 429 ||
+    err?.statusCode === 429 ||
+    err?.raw_status_code === 429 ||
+    rawCode === 429 ||
+    rawCode === 'RATE_LIMIT_EXCEEDED' ||
+    combined.includes('429') ||
+    combined.includes('backend_out_of_capacity') ||
+    combined.includes('rate limit') ||
+    combined.includes('rate_limited') ||
+    combined.includes('not enough capacity') ||
+    combined.includes('3505')
+  ) {
+    return {
+      code: 'RATE_LIMIT_EXCEEDED',
+      message: `AI Provider Overload (429 Capacity / Rate Limit): The model provider is temporarily out of capacity or rate-limited. (Hint: Switch to Google Gemini or select 'open-mistral-nemo' / 'codestral-latest' in Settings (⚙) to continue immediately). Diagnostic: ${rawMsg}`
     };
   }
 

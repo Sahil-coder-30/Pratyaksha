@@ -85,43 +85,21 @@ window.PratyakshaDOM = (function() {
       const y = Math.max(8, Math.min(window.innerHeight - 12, rect.top + rect.height / 2));
       cursor.classList.remove('is-clicking');
       cursor.classList.add('is-visible');
-      const fromX = Number(cursor.dataset.x) || Math.min(window.innerWidth * 0.56, window.innerWidth - 18);
-      const fromY = Number(cursor.dataset.y) || Math.min(window.innerHeight * 0.52, window.innerHeight - 18);
-      const distance = Math.hypot(x - fromX, y - fromY);
-      const duration = matchMedia('(prefers-reduced-motion: reduce)').matches
-        ? 80
-        : Math.max(260, Math.min(820, distance / 0.85));
-      const moveId = ++cursorMoveId;
-      const startAt = performance.now();
-      const arc = Math.min(22, distance * 0.035) * (x >= fromX ? 1 : -1);
-
       cursor.dataset.x = String(x);
       cursor.dataset.y = String(y);
-      const animate = now => {
-        try {
-          if (moveId !== cursorMoveId || !cursor.isConnected) return;
-          const progress = Math.min(1, (now - startAt) / duration);
-          const eased = progress < 0.5
-            ? 4 * progress * progress * progress
-            : 1 - Math.pow(-2 * progress + 2, 3) / 2;
-          const nextX = fromX + (x - fromX) * eased;
-          const nextY = fromY + (y - fromY) * eased + Math.sin(progress * Math.PI) * arc;
-          cursor.style.left = `${nextX}px`;
-          cursor.style.top = `${nextY}px`;
-          if (progress < 1) requestAnimationFrame(animate);
-          else if (click) {
-            cursor.classList.add('is-clicking');
-            setTimeout(() => {
-              try { cursor?.classList.remove('is-clicking'); } catch (_) {}
-            }, 460);
-          }
-        } catch (_) {}
-      };
-      requestAnimationFrame(animate);
-      return { x, y, duration };
+      cursor.style.left = `${x}px`;
+      cursor.style.top = `${y}px`;
+
+      if (click) {
+        cursor.classList.add('is-clicking');
+        setTimeout(() => {
+          try { cursor?.classList.remove('is-clicking'); } catch (_) {}
+        }, 200);
+      }
+      return { x, y, duration: 160 };
     } catch (err) {
       console.warn('[PRATYAKSHA] moveAgentCursor error:', err);
-      return { x: 0, y: 0, duration: 100 };
+      return { x: 0, y: 0, duration: 0 };
     }
   }
 
@@ -570,71 +548,70 @@ window.PratyakshaDOM = (function() {
 
       await this.scrollIntoView(el);
       const { duration } = moveAgentCursor(el);
-      await new Promise(r => setTimeout(r, duration));
+      await new Promise(r => setTimeout(r, duration || 160));
 
       el.focus();
+
+      const shouldClear = options.clearFirst !== false;
+      const textToType = String(value ?? '');
 
       const isContentEditable = el.isContentEditable ||
                                 el.getAttribute('contenteditable') === 'true' ||
                                 el.getAttribute('contenteditable') === '';
 
-      const characters = Array.from(String(value));
-      const typingDelay = character => {
-        // Five characters per word gives 40–48 ms per character at 250–300 WPM.
-        const base = 12000 / (250 + Math.random() * 50);
-        const pause = /[.,!?;:]/.test(character) ? 36 : (/\s/.test(character) ? 8 : 0);
-        return base + pause;
-      };
-
       if (isContentEditable) {
-        // Rich text editors: Gmail body, Slack, Notion, Quill, etc.
-        if (options.clearFirst) {
-          try {
-            // Select all and delete
-            const sel = window.getSelection();
-            const range = document.createRange();
-            range.selectNodeContents(el);
-            sel.removeAllRanges();
-            sel.addRange(range);
+        // Rich text editors: Gmail compose body, Slack, Notion, etc.
+        try {
+          const sel = window.getSelection();
+          const range = document.createRange();
+          range.selectNodeContents(el);
+          sel.removeAllRanges();
+          sel.addRange(range);
+          if (shouldClear) {
             document.execCommand('delete', false);
-          } catch (_) { el.innerText = ''; }
+          }
+          document.execCommand('insertText', false, textToType);
+        } catch (_) {
+          if (shouldClear) el.innerHTML = '';
+          el.innerText = textToType;
         }
-        for (const character of characters) {
-          let inserted = false;
-          try { inserted = document.execCommand('insertText', false, character); } catch (_) {}
-          if (!inserted) el.appendChild(document.createTextNode(character));
-          el.dispatchEvent(new InputEvent('input', { data: character, inputType: 'insertText', bubbles: true }));
-          await new Promise(r => setTimeout(r, typingDelay(character)));
-        }
+        el.dispatchEvent(new InputEvent('input', { bubbles: true, cancelable: true, data: textToType, inputType: 'insertText' }));
         el.dispatchEvent(new Event('change', { bubbles: true }));
-
       } else {
         // Native <input> / <textarea>
-        if (options.clearFirst) {
+        const isTA = el instanceof HTMLTextAreaElement;
+        const proto = isTA ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+        const setter = Object.getOwnPropertyDescriptor(proto, 'value')?.set;
+
+        if (shouldClear) {
           try {
-            // Use native setter to trigger React/Vue/Angular state
-            const isTA = el instanceof HTMLTextAreaElement;
-            const proto = isTA ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
-            const setter = Object.getOwnPropertyDescriptor(proto, 'value')?.set;
-            (setter ? setter.call(el, '') : (el.value = ''));
+            if (setter) setter.call(el, ''); else el.value = '';
             el.dispatchEvent(new Event('input', { bubbles: true }));
           } catch (_) { el.value = ''; }
         }
 
-        const isTA = el instanceof HTMLTextAreaElement;
-        const proto = isTA ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
-        const setter = Object.getOwnPropertyDescriptor(proto, 'value')?.set;
-        let currentValue = options.clearFirst ? '' : el.value;
-        for (const character of characters) {
-          currentValue += character;
-          if (setter) setter.call(el, currentValue); else el.value = currentValue;
-          el.dispatchEvent(new InputEvent('input', { bubbles: true, cancelable: true, data: character, inputType: 'insertText' }));
-          await new Promise(r => setTimeout(r, typingDelay(character)));
+        const finalValue = shouldClear ? textToType : (el.value + textToType);
+        if (setter) {
+          setter.call(el, finalValue);
+        } else {
+          el.value = finalValue;
         }
+        el.dispatchEvent(new InputEvent('input', { bubbles: true, cancelable: true, data: textToType, inputType: 'insertText' }));
         el.dispatchEvent(new Event('change', { bubbles: true }));
       }
 
-      await new Promise(r => setTimeout(r, 180));
+      // If typing an email address into a combobox/recipient input or pressEnter requested, commit chip
+      const looksLikeEmail = /@[\w.-]+\.[a-zA-Z]{2,}/.test(textToType);
+      const isRecipientInput = el.getAttribute('role') === 'combobox' ||
+                               el.getAttribute('type') === 'email' ||
+                               el.getAttribute('name')?.includes('to') ||
+                               el.getAttribute('aria-label')?.toLowerCase().includes('to');
+      if (options.pressEnter || (looksLikeEmail && isRecipientInput)) {
+        await new Promise(r => setTimeout(r, 100));
+        await this.pressEnter(el);
+      }
+
+      await new Promise(r => setTimeout(r, 120));
       return true;
     },
 

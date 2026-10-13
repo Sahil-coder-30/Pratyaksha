@@ -35,7 +35,7 @@ export function detectTargetService(task = '') {
  * Formats interactive DOM elements into an ASCII table.
  * Prioritizes inputs and buttons, pushes blacklisted targets to the end.
  */
-export function buildDOMTable(elements = [], max = 75, blacklistedTargets = new Set()) {
+export function buildDOMTable(elements = [], max = 35, blacklistedTargets = new Set()) {
   if (!elements.length) return 'No interactive elements detected.';
 
   const header = '[ID]  TAG            TYPE/ROLE     LABEL / PLACEHOLDER / TEXT                     STATUS/VAL';
