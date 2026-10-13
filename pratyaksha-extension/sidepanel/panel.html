@@ -5,7 +5,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>PRATYAKSHA</title>
-  <link rel="icon" type="image/svg+xml" href="../assets/dark_favicon.svg">
+  <link rel="icon" type="image/svg+xml" href="../assets/light_favicon.svg">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link
@@ -190,24 +190,35 @@
         <!-- Hidden input elements retain full functional configuration without exposing keys -->
         <input type="hidden" id="mistralApiKey">
         <input type="hidden" id="geminiApiKey">
+        <input type="hidden" id="openrouterApiKey">
 
         <div class="form-group">
           <label for="engineSelect">Planner Engine / AI Provider</label>
           <select id="engineSelect" class="form-input">
-            <option value="mistral" selected>Mistral AI (mistral-large-latest)</option>
-            <option value="gemini">Google Gemini Cloud VLM</option>
+            <option value="mistral" selected>Mistral AI (ministral-8b-latest)</option>
+            <option value="openrouter">OpenRouter (deepseek/deepseek-v4.1-flash)</option>
+            <option value="gemini">Google Gemini (gemini-3.5-flash)</option>
             <option value="deterministic">Deterministic Semantic Planner (Offline / 0-Config)</option>
           </select>
-          <small class="form-hint">Mistral Large provides premier autonomous reasoning with native browser tool
-            calling.</small>
+          <small class="form-hint">Supports verified production models: Mistral (ministral-8b-latest), OpenRouter (deepseek/deepseek-v4.1-flash), and Gemini (gemini-3.5-flash).</small>
+        </div>
+
+        <div class="form-group" id="openrouterGroup" style="display:none;">
+          <label for="openrouterModel">OpenRouter Model</label>
+          <select id="openrouterModel" class="form-input">
+            <option value="deepseek/deepseek-v4.1-flash" selected>deepseek/deepseek-v4.1-flash (Default)</option>
+            <option value="deepseek/deepseek-chat">deepseek/deepseek-chat (DeepSeek V3)</option>
+            <option value="deepseek/deepseek-chat:free">deepseek/deepseek-chat:free (100% Free)</option>
+            <option value="deepseek/deepseek-r1:free">deepseek/deepseek-r1:free (Free Reasoning)</option>
+            <option value="meta-llama/llama-3.3-70b-instruct:free">meta-llama/llama-3.3-70b-instruct:free (Free)</option>
+          </select>
+          <small class="form-hint">Tip: If your OpenRouter balance is low or zero, choose a free-tier model (:free).</small>
         </div>
 
         <div class="form-group" id="mistralGroup">
           <label for="mistralModel">Mistral Model</label>
           <select id="mistralModel" class="form-input">
-            <option value="mistral-large-latest" selected>mistral-large-latest (Recommended / Flagship)</option>
-            <option value="codestral-latest">codestral-latest (Coding Specialized)</option>
-            <option value="mistral-small-latest">mistral-small-latest (Fast)</option>
+            <option value="ministral-8b-latest" selected>ministral-8b-latest</option>
           </select>
         </div>
 
@@ -217,10 +228,7 @@
         <div class="form-group" id="geminiModelGroup" style="display:none;">
           <label for="geminiModel">Gemini Model</label>
           <select id="geminiModel" class="form-input">
-            <option value="gemini-3.8-flash">gemini-3.8-flash (Recommended / Latest)</option>
-            <option value="gemini-2.5-flash">gemini-2.5-flash</option>
-            <option value="gemini-1.5-flash">gemini-1.5-flash</option>
-            <option value="gemini-1.5-pro">gemini-1.5-pro (High Reasoning)</option>
+            <option value="gemini-3.5-flash" selected>gemini-3.5-flash</option>
           </select>
         </div>
 
@@ -238,60 +246,41 @@
     </div>
   </div>
 
+  <!-- Human-in-the-Loop Action Approval Modal -->
+  <div class="modal-overlay" id="approvalModal" style="display:none;">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div class="modal-header-brand">
+          <div class="modal-brand-dot" style="background: #f59e0b;"></div>
+          <h3>Action Approval Required</h3>
+        </div>
+      </div>
+      <div class="modal-body">
+        <div class="vault-security-card" style="border-color: rgba(245, 158, 11, 0.4);">
+          <div class="vault-icon-pill" style="color: #f59e0b;">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+              <path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+          </div>
+          <div class="vault-info">
+            <div class="vault-heading" id="approvalToolTitle">Sensitive Operation</div>
+            <div class="vault-sub" id="approvalReasonText">The agent is about to execute a state-modifying browser action.</div>
+          </div>
+          <span class="vault-badge" style="color: #f59e0b;">● Confirmation Needed</span>
+        </div>
+        <div class="form-group">
+          <label>Target Action</label>
+          <div id="approvalActionDetails" style="padding: 10px; background: rgba(0,0,0,0.25); border-radius: 6px; font-family: monospace; font-size: 12px; word-break: break-all; color: #e2e8f0;"></div>
+        </div>
+      </div>
+      <div class="modal-footer" style="display: flex; gap: 8px; justify-content: flex-end;">
+        <button id="rejectApprovalBtn" class="btn-secondary" style="padding: 8px 14px; border-radius: 6px; background: rgba(239,68,68,0.15); color: #ef4444; border: 1px solid rgba(239,68,68,0.3); cursor: pointer;">Reject Action</button>
+        <button id="confirmApprovalBtn" class="btn-primary" style="padding: 8px 14px; border-radius: 6px; cursor: pointer;">Approve & Execute</button>
+      </div>
+    </div>
+  </div>
+
   <script type="module" src="panel.js"></script>
-</body>
-
-</html>
-<input type="hidden" id="mistralApiKey">
-<input type="hidden" id="geminiApiKey">
-
-<div class="form-group">
-  <label for="engineSelect">Planner Engine / AI Provider</label>
-  <select id="engineSelect" class="form-input">
-    <option value="mistral" selected>Mistral AI (mistral-large-latest)</option>
-    <option value="gemini">Google Gemini Cloud VLM</option>
-    <option value="deterministic">Deterministic Semantic Planner (Offline / 0-Config)</option>
-  </select>
-  <small class="form-hint">Mistral Large provides premier autonomous reasoning with native browser tool calling.</small>
-</div>
-
-<div class="form-group" id="mistralGroup">
-  <label for="mistralModel">Mistral Model</label>
-  <select id="mistralModel" class="form-input">
-    <option value="mistral-large-latest" selected>mistral-large-latest (Recommended / Flagship)</option>
-    <option value="codestral-latest">codestral-latest (Coding Specialized)</option>
-    <option value="mistral-small-latest">mistral-small-latest (Fast)</option>
-  </select>
-</div>
-
-<!-- Container retained for safe display toggling in panel.js -->
-<div class="form-group" id="geminiKeyGroup" style="display:none;"></div>
-
-<div class="form-group" id="geminiModelGroup" style="display:none;">
-  <label for="geminiModel">Gemini Model</label>
-  <select id="geminiModel" class="form-input">
-    <option value="gemini-3.8-flash">gemini-3.8-flash (Recommended / Latest)</option>
-    <option value="gemini-2.5-flash">gemini-2.5-flash</option>
-    <option value="gemini-1.5-flash">gemini-1.5-flash</option>
-    <option value="gemini-1.5-pro">gemini-1.5-pro (High Reasoning)</option>
-  </select>
-</div>
-
-<div class="form-group">
-  <label for="privacyLevel">Privacy Firewall Strictness</label>
-  <select id="privacyLevel" class="form-input">
-    <option value="strict">Strict (Verhoeff Aadhaar + PAN + Phone + Email)</option>
-    <option value="standard">Standard (Email + Phone)</option>
-  </select>
-</div>
-</div>
-<div class="modal-footer">
-  <button id="saveSettingsBtn" class="btn-primary">Save Settings</button>
-</div>
-</div>
-</div>
-
-<script type="module" src="panel.js"></script>
 </body>
 
 </html>

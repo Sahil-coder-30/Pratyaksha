@@ -79,31 +79,55 @@ Explore the complete interactive documentation portal by running `npm run docs:s
 | Layer | Technology | Role |
 |-------|-----------|------|
 | **Browser Extension** | Chrome Manifest V3 (MV3) | Tab management, side panel execution HUD, content scripting |
-| **Agent Engine** | LangGraph StateGraph Architecture | Deterministic semantic planner + Mistral Large / Gemini VLM fallback |
-| **PII & Vault** | Verhoeff & Luhn checksums + Ephemeral Map | Sovereign client-side PII identification and temporary rehydration |
+| **Agent Engine** | LangGraph StateGraph Architecture | 8-node state machine (Intake, Privacy, Planner, Policy, Agent, Verifier, Recovery, Finalize) |
+| **Agent Framework** | `@langchain/core` & Chat Models | Mistral Large (`@langchain/mistralai`), Gemini (`@langchain/google-genai`), OpenRouter (`@langchain/openai`) |
+| **Tool System** | LangChain `DynamicStructuredTool` + Zod | 19 sovereign browser automation tools with strict runtime schema validation |
+| **Checkpointer** | `ChromeStorageSaver` (LangGraph) | Secrets-scrubbed persistent state persistence in `chrome.storage.local` across MV3 worker cycles |
+| **PII & Vault** | Verhoeff & Luhn checksums + Ephemeral Map | Sovereign client-side PII identification, anonymization tokenization, and DOM rehydration |
 | **OCR Engine** | `PaddleOCR.js` / `PP-OCRv5` | Sub-millisecond on-device character recognition |
 | **Vision Model** | `YOLO26n` (ONNX Runtime Web) | Visual privacy-object detection (IDs, signatures, faces, QR codes) |
 | **Named Entity** | `BERT-base NER` (Transformers.js) | Contextual text entity extraction (PERSON, LOCATION, ORG) |
-| **Compute** | WebGPU + WASM SIMD fallback | Local hardware-accelerated tensor execution |
+| **Build Pipeline** | `esbuild` | Zero-external-dependency self-contained ESM bundle for Chrome MV3 (`npm run build`) |
 
 ---
 
-## ⚡ Quick Start
+## ⚡ Quick Start & Development
 
-### 1. Load the Extension in Chrome
+### 1. Run Comprehensive Unit & Integration Tests
+```bash
+# Execute the full 44-test test suite across all 9 modules
+npm test
+```
+
+### 2. Build the Extension Bundle
+```bash
+# Compile modular LangGraph architecture from src/ into production Chrome bundle
+npm run build
+```
+*(You can also run `node build.js` from either the project root or inside `pratyaksha-extension/`)*
+
+### 3. Package the Extension for Distribution
+```bash
+# Assemble and package into pratyaksha-extension-v1.0.0.zip
+npm run ext:pack
+```
+
+### 4. Load the Extension in Chrome
 1. Open Google Chrome and navigate to `chrome://extensions/`.
-2. Enable **Developer mode** (toggle in top-right corner).
-3. Click **Load unpacked** and select the [`pratyaksha-extension/`](file:///Users/home/Desktop/PS-%2026171/pratyaksha-extension) folder.
-4. Pin the **PRATYAKSHA** extension to your toolbar and click it to open the Side Panel HUD.
+2. Enable **Developer mode** (toggle in the top-right corner).
+3. Click **Load unpacked** and select either:
+   - The production [`build/`](file:///Users/home/Desktop/PS-%2026171/build) folder *(Clean, standalone production distribution)*
+   - Or the [`pratyaksha-extension/`](file:///Users/home/Desktop/PS-%2026171/pratyaksha-extension) folder *(Direct development extension directory)*
+4. Pin the **PRATYAKSHA** extension to your toolbar and click it to open the Side Panel Cockpit.
 
-### 2. Run the Interactive Testbed
+### 5. Run the Interactive Testbed
 ```bash
 # Start the local test server for the operations portal demo
 npm run demo
 ```
-Open [http://localhost:8080/test-demo.html](http://localhost:8080/test-demo.html) in Chrome and command the agent to test automatic form filling and PII redaction.
+Open [http://localhost:8080/test-demo.html](http://localhost:8080/test-demo.html) in Chrome and command the agent to test automatic form filling, web navigation, and PII redaction.
 
-### 3. Explore Full Interactive Documentation
+### 6. Explore Full Interactive Documentation
 ```bash
 # Serve the complete documentation suite
 npm run docs:serve
@@ -116,21 +140,34 @@ Open [http://localhost:8080/index.html](http://localhost:8080/index.html) in any
 
 ```
 .
-├── pratyaksha-extension/           # Chrome Manifest V3 Extension
-│   ├── manifest.json               # Extension manifest configuration
-│   ├── agent/                      # LangGraph StateGraph engine, tools, & planner
-│   ├── background/                 # Service worker & tab management
-│   ├── content/                    # DOM action dispatcher & highlighter
-│   ├── popup/                      # Quick launcher popup
-│   ├── sidepanel/                  # Execution cockpit HUD & trace view
-│   └── vault/                      # In-memory PII vault & Verhoeff validator
-├── demo/                           # Interactive testing testbed
-│   └── test-demo.html              # Operations portal test harness
-├── Docs/                           # Interactive documentation & architectural specs
-│   ├── index.html                  # Master documentation portal
-│   ├── 01_master_plan.html ... 08_ml_privacy_module.html
-│   └── pdf/                        # Technical system design whitepapers
-├── public/                         # Public diagrams & SVGs
-├── vercel.json                     # Production deployment routing
-└── package.json                    # Workspace scripts
+├── src/                               # Sovereign LangChain + LangGraph Agent Source
+│   ├── shared/                        # Constants, standardized errors, 19 Zod tool schemas
+│   ├── browser/                       # Navigation, tab management, DOM table builder, blacklisting
+│   ├── safety/                        # PII vault, action policy, approval tokens, execution limits
+│   ├── persistence/                   # ChromeStorageSaver checkpointer, thread state isolation
+│   ├── agent/                         # Models factory, LangChain tools, planner, verifier, recovery, graph
+│   ├── ui/                            # Event emitter, telemetry relays, secret redactions
+│   └── runner.js                      # PratyakshaAgentRunner & LangGraphAgent drop-in facade
+├── pratyaksha-extension/              # Chrome Manifest V3 Extension
+│   ├── manifest.json                  # Extension manifest configuration
+│   ├── agent/
+│   │   └── graph-engine.js            # Standalone esbuild bundle (LangChain + LangGraph)
+│   ├── background/
+│   │   └── service-worker.js          # Background service worker & tab management
+│   ├── content/
+│   │   ├── dom-actions.js             # Synthetic DOM events & visual indicators
+│   │   └── content-main.js            # Injected DOM perception & action executor
+│   ├── popup/                         # Quick launcher popup
+│   ├── sidepanel/                     # 3D Orb HUD cockpit & execution trace view
+│   ├── vault/                         # In-memory PII vault & Verhoeff checksum validator
+│   └── env.js                         # Provider configuration (Mistral, Gemini, OpenRouter)
+├── tests/                             # 9 test suites covering all units and integration paths (44 tests)
+├── demo/                              # Interactive testing testbed (test-demo.html)
+├── Docs/                              # Comprehensive architectural specs & interactive portal
+│   ├── architecture.md                # System design & LangGraph engine technical specification
+│   ├── agent-graph.mmd                # Compiled Mermaid graph topology
+│   └── implementation-plan.md         # Phased implementation audit and plan
+├── build.js                           # esbuild bundling script for MV3 compliance
+└── package.json                       # Dependencies & execution scripts
 ```
+

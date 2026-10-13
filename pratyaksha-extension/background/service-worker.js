@@ -20,7 +20,7 @@ chrome.runtime.onInstalled.addListener(async (details) => {
       privacyMode: res.privacyMode || 'strict',
       engineMode: res.engineMode || (activeKey ? 'gemini' : 'deterministic'),
       geminiApiKey: activeKey,
-      geminiModel: (res.geminiModel === 'gemini-2.0-flash' ? 'gemini-3.8-flash' : (res.geminiModel || config.model || 'gemini-3.8-flash')),
+      geminiModel: res.geminiModel || config.geminiModel || 'gemini-3.5-flash',
       approvalMode: res.approvalMode !== undefined ? res.approvalMode : true
     });
   });

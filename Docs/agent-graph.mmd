@@ -1,0 +1,31 @@
+%%{init: {'flowchart': {'curve': 'linear'}}}%%
+graph TD;
+	__start__([<p>__start__</p>]):::first
+	intake(intake)
+	privacy(privacy)
+	planner(planner)
+	policy(policy)
+	browser_agent(browser_agent)
+	verification(verification)
+	recovery(recovery)
+	finalize(finalize)
+	__end__([<p>__end__</p>]):::last
+	__start__ --> intake;
+	browser_agent --> verification;
+	finalize --> __end__;
+	privacy --> planner;
+	intake -.-> privacy;
+	intake -.-> finalize;
+	planner -.-> policy;
+	planner -.-> finalize;
+	policy -.-> browser_agent;
+	policy -.-> finalize;
+	verification -.-> finalize;
+	verification -.-> recovery;
+	verification -.-> browser_agent;
+	recovery -.-> finalize;
+	recovery -.-> planner;
+	recovery -.-> policy;
+	classDef default fill:#f2f0ff,line-height:1.2;
+	classDef first fill-opacity:0;
+	classDef last fill:#bfb6fc;
