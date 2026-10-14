@@ -1,3 +1,6 @@
+#How to run : Open new terminal
+#             cd Pratyaksha 
+#             python -m ML.src.workers.privacy.ocr
 
 from pathlib import Path
 
