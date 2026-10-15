@@ -11,6 +11,7 @@
 import { StateGraph, START, END, interrupt } from '@langchain/langgraph';
 import { AgentState } from './state.js';
 import { anonymizeInputTask } from '../safety/privacy.js';
+import { evaluateInputWithJev, evaluateOutputWithJev } from '../safety/jev-guard.js';
 import { plannerAgentNode, createPlannerAgent } from './planner-agent.js';
 import { browserActorAgentNode, createBrowserActorAgent } from './browser-actor-agent.js';
 import { classifyAction } from '../safety/action-policy.js';
@@ -63,6 +64,7 @@ export function createAgentGraph(options = {}) {
         events?.emit?.('THINKING', {
           phase: 'privacy',
           text: `Privacy Shield: Anonymized ${detected.length} sensitive credential/token item(s).`,
+          piiDetectedCount: detected.length,
           step: 0,
           maxSteps
         });
@@ -74,6 +76,38 @@ export function createAgentGraph(options = {}) {
       };
     })
 
+    // ── 2b. JEV INPUT GUARD NODE (Machine-Native System One) ─────────────────
+    .addNode('jev_input_guard', async (state) => {
+      const task = state.sanitizedTask || state.originalTask || '';
+      events?.emit?.('THINKING', {
+        phase: 'guardrail',
+        text: 'Screening task boundary via TypeSafe Jev System One model…',
+        step: 0,
+        maxSteps
+      });
+
+      const jevResult = await evaluateInputWithJev(task, state.browserSession, options);
+
+      if (!jevResult.allowed) {
+        events?.emit?.('THINKING', {
+          phase: 'guardrail',
+          text: `Task blocked by TypeSafe Jev guardrail: ${jevResult.reason}`,
+          step: 0,
+          maxSteps
+        });
+        return {
+          status: 'BLOCKED',
+          jevInputResult: jevResult,
+          error: { message: `Task rejected by safety guardrail: ${jevResult.reason}` }
+        };
+      }
+
+      return {
+        status: 'JEV_INPUT_PASSED',
+        jevInputResult: jevResult
+      };
+    })
+
     // ── 3. PLANNER AGENT NODE (Independent Module) ───────────────────────────
     .addNode('planner', async (state) => {
       return plannerAgentNode(state, {
@@ -82,6 +116,62 @@ export function createAgentGraph(options = {}) {
         events,
         maxSteps
       });
+    })
+
+    // ── 3b. PLAN PROCEEDING HITL GATE ─────────────────────────────────────────
+    .addNode('plan_gate', async (state) => {
+      const subgoals = state.plan?.subgoals || [];
+      const hasHighRiskSubgoal = subgoals.some(s => s.riskTier === 'HIGH' || s.riskTier === 'RESTRICTED');
+      const requiresPlanApproval = hasHighRiskSubgoal || options.forcePlanApproval === true;
+
+      if (requiresPlanApproval && state.planApprovalStatus !== 'APPROVED') {
+        events?.emit?.('THINKING', {
+          phase: 'approval',
+          text: 'Plan contains high-risk subgoals: awaiting operator confirmation before browser execution',
+          step: 0,
+          maxSteps
+        });
+        events?.emit?.('PLAN_APPROVAL_REQUIRED', {
+          plan: state.plan,
+          subgoals,
+          threadId: state.threadId
+        });
+
+        if (options.enableInterrupts !== false) {
+          try {
+            const approvalRes = interrupt({
+              type: 'PLAN_APPROVAL_REQUIRED',
+              plan: state.plan,
+              reason: 'Plan includes high-risk or irreversible browser actions'
+            });
+
+            if (approvalRes && (approvalRes.approved === false || approvalRes.status === 'REJECTED')) {
+              return {
+                status: 'PLAN_REJECTED',
+                planApprovalStatus: 'REJECTED',
+                error: { message: 'Operator cancelled task execution during plan review.' }
+              };
+            }
+
+            return {
+              status: 'PLAN_APPROVED',
+              planApprovalStatus: 'APPROVED'
+            };
+          } catch (err) {
+            console.warn('[PlanGate] Interrupt not supported in execution context:', err.message);
+          }
+        }
+
+        return {
+          status: 'AWAITING_PLAN_APPROVAL',
+          pendingPlanApproval: state.plan
+        };
+      }
+
+      return {
+        status: 'PLAN_APPROVED',
+        planApprovalStatus: 'APPROVED'
+      };
     })
 
     // ── 4. POLICY NODE ────────────────────────────────────────────────────────
@@ -151,7 +241,8 @@ export function createAgentGraph(options = {}) {
         vault,
         signal: options.signal,
         maxSteps,
-        events
+        events,
+        enableInterrupts: options.enableInterrupts
       });
     })
 
@@ -171,8 +262,64 @@ export function createAgentGraph(options = {}) {
       return recoveryNode(state, { chromeApi });
     })
 
+    // ── 7b. JEV OUTPUT GUARD NODE (Machine-Native System One) ────────────────
+    .addNode('jev_output_guard', async (state) => {
+      const rawSummary = state.latestObservation?.summary || state.verificationResult?.reason || '';
+      const evidence = state.verificationResult?.evidence || '';
+
+      events?.emit?.('THINKING', {
+        phase: 'guardrail',
+        text: 'Screening final output groundedness via TypeSafe Jev System One model…',
+        step: state.stepCount,
+        maxSteps
+      });
+
+      const jevOut = await evaluateOutputWithJev(rawSummary, evidence, options);
+
+      // Scrub output PII so tokens never leak into finalResult
+      let cleanSummary = rawSummary;
+      if (vault) {
+        cleanSummary = anonymizeInputTask(rawSummary, vault).sanitizedText;
+      }
+
+      return {
+        jevOutputResult: jevOut,
+        latestObservation: state.latestObservation
+          ? { ...state.latestObservation, summary: cleanSummary }
+          : null
+      };
+    })
+
     // ── 8. FINALIZE NODE ──────────────────────────────────────────────────────
     .addNode('finalize', async (state) => {
+      if (state.status === 'AWAITING_PLAN_APPROVAL') {
+        return {
+          status: 'AWAITING_PLAN_APPROVAL',
+          pendingPlanApproval: state.pendingPlanApproval,
+          finalResult: {
+            success: false,
+            awaitingPlanApproval: true,
+            pendingPlanApproval: state.pendingPlanApproval,
+            summary: 'Execution paused: Plan requires operator confirmation before proceeding.',
+            steps: 0,
+            evidence: 'Awaiting plan approval'
+          }
+        };
+      }
+
+      if (state.status === 'PLAN_REJECTED') {
+        return {
+          status: 'TERMINATED',
+          finalResult: {
+            success: false,
+            cancelledByOperator: true,
+            summary: state.error?.message || 'Plan rejected by operator.',
+            steps: 0,
+            evidence: 'Operator rejected plan'
+          }
+        };
+      }
+
       if (state.status === 'AWAITING_APPROVAL') {
         return {
           status: 'AWAITING_APPROVAL',
@@ -242,10 +389,26 @@ export function createAgentGraph(options = {}) {
       privacy: 'privacy',
       finalize: 'finalize'
     })
-    .addEdge('privacy', 'planner')
+    .addEdge('privacy', 'jev_input_guard')
+
+    .addConditionalEdges('jev_input_guard', (state) => {
+      if (state.status === 'BLOCKED') return 'finalize';
+      return 'planner';
+    }, {
+      planner: 'planner',
+      finalize: 'finalize'
+    })
 
     .addConditionalEdges('planner', (state) => {
       if (state.status === 'AWAITING_USER_INPUT') return 'finalize';
+      return 'plan_gate';
+    }, {
+      plan_gate: 'plan_gate',
+      finalize: 'finalize'
+    })
+
+    .addConditionalEdges('plan_gate', (state) => {
+      if (state.status === 'AWAITING_PLAN_APPROVAL' || state.status === 'PLAN_REJECTED') return 'finalize';
       return 'policy';
     }, {
       policy: 'policy',
@@ -279,16 +442,18 @@ export function createAgentGraph(options = {}) {
     })
 
     .addConditionalEdges('verification', (state) => {
-      if (state.status === 'VERIFIED') return 'finalize';
+      if (state.status === 'VERIFIED') return 'jev_output_guard';
       if (state.status === 'RECOVERABLE') {
         if ((state.stepCount || 0) < maxSteps) return 'recovery';
-        return 'finalize';
+        return 'jev_output_guard';
       }
-      return 'finalize';
+      return 'jev_output_guard';
     }, {
-      finalize: 'finalize',
+      jev_output_guard: 'jev_output_guard',
       recovery: 'recovery'
     })
+
+    .addEdge('jev_output_guard', 'finalize')
 
     .addConditionalEdges('recovery', (state) => {
       if (state.status === 'BLOCKED') return 'finalize';

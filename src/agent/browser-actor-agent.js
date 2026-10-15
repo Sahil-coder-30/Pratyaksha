@@ -8,23 +8,40 @@
  */
 
 import { HumanMessage, SystemMessage, ToolMessage } from '@langchain/core/messages';
+import { interrupt } from '@langchain/langgraph';
 import { buildDOMTable, getPageContext } from '../browser/page-context.js';
 import { createLangChainBrowserTools } from './browser-tools.js';
 import { sanitizeObservationForModel } from '../safety/privacy.js';
 import { pruneContext, validateToolCall } from './middleware.js';
 import { normalizeToolInvocation } from '../shared/schemas.js';
+import { classifyAction } from '../safety/action-policy.js';
 import { formatError, NotFoundError, PolicyViolationError } from '../shared/errors.js';
 
-export const BROWSER_ACTOR_SYSTEM_PROMPT = `You are PRATYAKSHA Core Browser Agent — an autonomous browser execution actor.
-You control real web pages to accomplish user objectives.
-You perceive live page interactive elements, select precise targets, and execute actions using your tools.
+export const BROWSER_ACTOR_SYSTEM_PROMPT = `You are PRATYAKSHA Core Browser Agent — an autonomous visual browser execution actor.
+You control live web applications, dynamic single-page apps (SPAs), chats, and web forms to accomplish user objectives.
+You perceive live page interactive elements, evaluate dynamic changes on the website, and execute actions using your tools.
 
-EXECUTION RULES:
-1. Target elements by numeric [ID] from the provided interactive elements table for maximum accuracy.
-2. For form filling (such as search, email, or input), type required values before triggering buttons.
-3. NEVER ask conversational confirmation questions like "Shall I proceed?", "Would you like me to continue?", or "Shall I proceed with sending?". You are an autonomous agent—execute the full sequence to completion.
-4. Once an email is sent, form is submitted, or the objective is fulfilled, call finish_task immediately with success: true and a clear summary. Do NOT keep clicking around.
-5. Never claim completion without executing real browser operations.`;
+CRITICAL EXECUTION PRINCIPLES:
+1. DO NOT OPERATE IN A RIGID ONE-WAY FLOW:
+   Websites and chat applications are dynamic, asynchronous, and reactive. Never execute a predetermined script blindly.
+   After performing each step, observe and identify what changed on the website before deciding the next move.
+
+2. SENSE → ANALYZE CHANGES → ACT ITERATIVE CYCLE:
+   In each iteration:
+   - SENSE: Read the latest INTERACTIVE ELEMENTS table and previous tool observation.
+   - ANALYZE CHANGES: Identify what actually changed on the page (e.g. did a new chat message or response bubble appear? Did a modal or dialog open? Did an input clear or accept text? Did a button state change? Did the URL change?).
+   - DECIDE NEXT ACTION: If interacting with a chat or conversational interface, evaluate what the other party/system responded before drafting the next reply. If an action opened a modal, target elements inside that new modal. If waiting for an asynchronous event (like a bot or user response in a chat), observe the page before proceeding.
+   - ONLY FINISH WHEN TRUE GOAL IS ATTAINED: In chat/multi-turn workflows, do NOT call finish_task prematurely after just sending one message unless the full conversation goal specified by the user is completely achieved.
+
+3. DOM TARGETING:
+   - Target elements by numeric [ID] from the provided interactive elements table for guaranteed accuracy.
+   - For text inputs, search boxes, or chat fields, always use type_into_element before clicking send/submit.
+
+4. NO CONVERSATIONAL CONFIRMATION DRIFT:
+   - NEVER ask meta questions like "Shall I proceed?", "Would you like me to continue?", or "Shall I proceed with sending?". You are an autonomous browser actor—perform the browser actions directly on the page.
+
+5. COMPLETION CRITERIA:
+   - When the user's ultimate goal has been verified on the page (e.g., chat completed, search results extracted, email sent and confirmed), call finish_task immediately with a clear summary.`;
 
 /**
  * Builds the runtime system prompt for the browser execution turn.
@@ -52,6 +69,15 @@ export function buildBrowserActorPrompt({
     blacklistSection = `\n⚠️ AVOID ELEMENTS: [${blacklistedTargets.join(', ')}] (Previously failed/dead ends)\n`;
   }
 
+  let iterationNotice = '';
+  if (stepCount > 1) {
+    iterationNotice = `\n⚡ ITERATION ${stepCount}/${maxSteps} NOTICE:
+The INTERACTIVE ELEMENTS table below shows the LIVE, UPDATED DOM following your previous action.
+1. Identify what CHANGED on the website (new messages/replies, new modals, modified inputs, or state changes).
+2. Analyze the newly appeared elements carefully.
+3. Formulate and execute your next action based on this fresh state rather than assuming previous assumptions.\n`;
+  }
+
   return `${BROWSER_ACTOR_SYSTEM_PROMPT}
 
 CURRENT OBJECTIVE: ${taskObjective}
@@ -59,7 +85,7 @@ STEP: ${stepCount} of ${maxSteps}
 CURRENT PAGE:
   URL  : ${currentUrl || 'unknown'}
   Title: ${currentTitle || 'unknown'}
-
+${iterationNotice}
 INTERACTIVE ELEMENTS:
 ${domTable}
 ${planSection}${blacklistSection}`;
@@ -245,7 +271,7 @@ export async function browserActorAgentNode(state, options = {}) {
     const lastType = getMessageType(lastMsg);
     if (lastType === 'ai' || lastType === 'assistant' || (lastType !== 'human' && lastType !== 'user' && lastType !== 'tool')) {
       messages.push(new HumanMessage(
-        `Proceed with the objective: "${task}". Review the live DOM elements table above and execute the next browser tool (e.g. click_element, type_into_element, or finish_task). DO NOT ask conversational questions ("Shall I proceed?")—execute the action autonomously or call finish_task if the objective is fulfilled.`
+        `Step ${stepCount} Iteration: Review the updated live DOM elements table above. Identify what changed on the website after the previous step (e.g. newly arrived chat messages, opened modals, updated forms, or status changes). Analyze the updated state and execute the next tool for: "${task}". Do NOT execute in a blind one-way flow—react dynamically to the live page state.`
       ));
     }
   }
@@ -318,29 +344,70 @@ export async function browserActorAgentNode(state, options = {}) {
           : validation.reason;
         observationText = `BLOCKED [${toolCall.name} - ${errInfo.code || 'POLICY_VIOLATION'}]: ${exactMsg}`;
       } else {
-        const matchingTool = tools.find(t => t.name === toolCall.name) ||
-                             tools.find(t => t.name === rawToolCall.name);
-        if (matchingTool) {
-          try {
-            observationText = await matchingTool.invoke(toolCall.args);
-          } catch (err) {
+        // Dynamic Pre-Execution Policy & Tool-Calling HITL Gate
+        const policyDecision = classifyAction(toolCall.name, toolCall.args, pageCtx);
+        let operatorApproved = true;
+
+        if (policyDecision.requiresApproval) {
+          events?.emit?.('THINKING', {
+            phase: 'approval',
+            text: `Tool intercepted: requires operator confirmation (${policyDecision.reason})`,
+            step: stepCount,
+            maxSteps
+          });
+          events?.emit?.('TOOL_APPROVAL_REQUIRED', {
+            toolName: toolCall.name,
+            args: toolCall.args,
+            reason: policyDecision.reason,
+            riskTier: policyDecision.riskTier,
+            step: stepCount
+          });
+
+          if (options.enableInterrupts !== false) {
+            try {
+              const approvalRes = interrupt({
+                type: 'TOOL_APPROVAL_REQUIRED',
+                action: toolCall,
+                reason: policyDecision.reason,
+                riskTier: policyDecision.riskTier,
+                summary: policyDecision.summary
+              });
+
+              if (approvalRes && (approvalRes.approved === false || approvalRes.status === 'REJECTED')) {
+                operatorApproved = false;
+                observationText = `REJECTED_BY_OPERATOR: The user denied permission to execute ${toolCall.name}. Reason: ${approvalRes.reason || 'User cancelled action.'}. Do not retry this identical action; choose an alternative safe action or conclude the task.`;
+              }
+            } catch (err) {
+              console.warn('[BrowserActor] Tool interrupt skipped or unsupported in execution context:', err.message);
+            }
+          }
+        }
+
+        if (operatorApproved) {
+          const matchingTool = tools.find(t => t.name === toolCall.name) ||
+                               tools.find(t => t.name === rawToolCall.name);
+          if (matchingTool) {
+            try {
+              observationText = await matchingTool.invoke(toolCall.args);
+            } catch (err) {
+              hasToolError = true;
+              const envelope = formatError(err);
+              const errInfo = envelope.error || envelope;
+              const exactMsg = (errInfo.message && !errInfo.message.includes('Our team has been notified'))
+                ? errInfo.message
+                : (err?.message || String(err));
+              observationText = `ERROR [${toolCall.name} - ${errInfo.code || 'TOOL_ERROR'}]: ${exactMsg}`;
+            }
+          } else {
             hasToolError = true;
-            const envelope = formatError(err);
+            const nfErr = new NotFoundError(`Tool "${toolCall.name}" is not registered in the browser suite`);
+            const envelope = formatError(nfErr);
             const errInfo = envelope.error || envelope;
             const exactMsg = (errInfo.message && !errInfo.message.includes('Our team has been notified'))
               ? errInfo.message
-              : (err?.message || String(err));
-            observationText = `ERROR [${toolCall.name} - ${errInfo.code || 'TOOL_ERROR'}]: ${exactMsg}`;
+              : `Tool "${toolCall.name}" is not registered in the browser suite`;
+            observationText = `ERROR [${toolCall.name} - ${errInfo.code || 'NOT_FOUND'}]: ${exactMsg}`;
           }
-        } else {
-          hasToolError = true;
-          const nfErr = new NotFoundError(`Tool "${toolCall.name}" is not registered in the browser suite`);
-          const envelope = formatError(nfErr);
-          const errInfo = envelope.error || envelope;
-          const exactMsg = (errInfo.message && !errInfo.message.includes('Our team has been notified'))
-            ? errInfo.message
-            : `Tool "${toolCall.name}" is not registered in the browser suite`;
-          observationText = `ERROR [${toolCall.name} - ${errInfo.code || 'NOT_FOUND'}]: ${exactMsg}`;
         }
       }
 

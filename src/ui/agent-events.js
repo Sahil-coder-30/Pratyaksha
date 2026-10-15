@@ -12,8 +12,10 @@ import { sanitizeEventPayload } from '../safety/privacy.js';
 export const AGENT_EVENT_TYPES = Object.freeze({
   TASK_START: 'TASK_START',
   PLAN_CREATED: 'PLAN_CREATED',
+  PLAN_APPROVAL_REQUIRED: 'PLAN_APPROVAL_REQUIRED',
   STATE_CHANGE: 'STATE_CHANGE',
   TOOL_CALL: 'TOOL_CALL',
+  TOOL_APPROVAL_REQUIRED: 'TOOL_APPROVAL_REQUIRED',
   OBSERVATION: 'OBSERVATION',
   TOOL_ERROR: 'TOOL_ERROR',
   APPROVAL_REQUIRED: 'APPROVAL_REQUIRED',
@@ -31,9 +33,20 @@ export const AGENT_EVENT_TYPES = Object.freeze({
 });
 
 export class AgentEventEmitter {
-  constructor(listener = () => {}) {
+  constructor(listener = () => {}, options = {}) {
     this.listener = typeof listener === 'function' ? listener : () => {};
     this.isCancelled = false;
+    this.context = options.context || {};
+    this.telemetryUrl = options.telemetryUrl || 'http://localhost:9464/v1/telemetry';
+    this.telemetryEnabled = options.telemetryEnabled ?? (
+      typeof window !== 'undefined' ||
+      (typeof chrome !== 'undefined' && Boolean(chrome?.runtime?.id)) ||
+      (typeof process !== 'undefined' && process.env?.PRATYAKSHA_TELEMETRY === 'true')
+    );
+  }
+
+  setContext(ctx = {}) {
+    this.context = { ...this.context, ...ctx };
   }
 
   emit(type, payload = {}) {
@@ -43,6 +56,8 @@ export class AgentEventEmitter {
     const event = {
       type,
       timestamp: new Date().toLocaleTimeString(),
+      isoTimestamp: new Date().toISOString(),
+      ...this.context,
       ...sanitized
     };
 
@@ -50,6 +65,17 @@ export class AgentEventEmitter {
       this.listener(event);
     } catch (err) {
       console.warn('[PRATYAKSHA Event Relay] Listener warning:', err.message);
+    }
+
+    if (this.telemetryEnabled && typeof fetch === 'function') {
+      try {
+        fetch(this.telemetryUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(event),
+          keepalive: true
+        }).catch(() => {});
+      } catch (_) {}
     }
   }
 
@@ -62,8 +88,8 @@ export class AgentEventEmitter {
     this.emit(AGENT_EVENT_TYPES.STATE_CHANGE, { state, label });
   }
 
-  emitTaskComplete(summary, success = true, steps = 1) {
-    this.emit(AGENT_EVENT_TYPES.TASK_COMPLETE, { summary, success, steps });
+  emitTaskComplete(summary, success = true, steps = 1, extra = {}) {
+    this.emit(AGENT_EVENT_TYPES.TASK_COMPLETE, { summary, success, steps, ...extra });
   }
 
   emitCancelled(message = 'Execution cancelled by user.') {

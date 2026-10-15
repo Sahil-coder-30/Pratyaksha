@@ -81,6 +81,13 @@ export class PratyakshaAgentRunner {
     const threadId = `th_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
     const taskId = `task_${Date.now()}`;
     this.activeThreadId = threadId;
+    this.runStartTime = Date.now();
+    this.events.setContext({
+      threadId,
+      taskId,
+      provider: this.provider,
+      model: this.modelName
+    });
 
     // 1. Initialize checkpointer & thread store
     await this.checkpointer.hydrate();
@@ -248,10 +255,12 @@ export class PratyakshaAgentRunner {
       steps: result.stepCount || 1
     };
 
+    const durationMs = this.runStartTime ? Date.now() - this.runStartTime : 0;
+
     if (final.success) {
-      this.events.emitTaskComplete(final.summary, true, final.steps);
+      this.events.emitTaskComplete(final.summary, true, final.steps, { durationMs });
     } else {
-      this.events.emit(AGENT_EVENT_TYPES.BUDGET_REACHED, { summary: final.summary });
+      this.events.emit(AGENT_EVENT_TYPES.BUDGET_REACHED, { summary: final.summary, steps: final.steps, durationMs });
     }
 
     await this.threadStore.updateThread(threadId, {

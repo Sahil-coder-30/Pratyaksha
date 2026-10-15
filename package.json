@@ -11,7 +11,12 @@
     "demo": "python3 -m http.server 8080 --directory demo",
     "demo:serve": "python3 -m http.server 8080 --directory demo",
     "serve": "npx serve Docs",
-    "ext:pack": "node build.js && cd build && zip -r ../pratyaksha-extension-v1.0.0.zip . -x '*.DS_Store'"
+    "ext:pack": "node build.js && cd build && zip -r ../pratyaksha-extension-v1.0.0.zip . -x '*.DS_Store'",
+    "telemetry:collector": "node observability/collector.js",
+    "telemetry:seed": "node observability/collector.js --seed",
+    "telemetry:simulate": "curl -s -X POST http://localhost:9464/v1/simulate",
+    "telemetry:up": "docker compose -f observability/docker-compose.yml up -d",
+    "telemetry:down": "docker compose -f observability/docker-compose.yml down"
   },
   "dependencies": {
     "@langchain/core": "^1.2.17",
@@ -20,6 +25,7 @@
     "@langchain/langgraph-checkpoint": "^1.1.6",
     "@langchain/mistralai": "^1.2.0",
     "@langchain/openai": "^1.6.2",
+    "@typesafe-ai/sdk": "^0.6.0",
     "faultkit": "^1.1.0",
     "puppeteer-core": "^25.12.0",
     "zod": "^4.6.6"

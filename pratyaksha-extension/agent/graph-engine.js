@@ -61939,6 +61939,648 @@ var init_errors6 = __esm({
   }
 });
 
+// node_modules/@typesafe-ai/sdk/dist/index.mjs
+var dist_exports = {};
+__export(dist_exports, {
+  APIConnectionError: () => APIConnectionError3,
+  APIError: () => APIError3,
+  APIPromise: () => APIPromise4,
+  APITimeoutError: () => APITimeoutError,
+  APIUserAbortError: () => APIUserAbortError3,
+  AuthenticationError: () => AuthenticationError3,
+  BadRequestError: () => BadRequestError4,
+  ENV: () => ENV,
+  InternalServerError: () => InternalServerError4,
+  LOG_LEVELS: () => LOG_LEVELS,
+  NotFoundError: () => NotFoundError4,
+  PermissionDeniedError: () => PermissionDeniedError3,
+  RateLimitError: () => RateLimitError4,
+  TypeSafeClient: () => TypeSafeClient,
+  TypeSafeError: () => TypeSafeError,
+  UnprocessableEntityError: () => UnprocessableEntityError4,
+  VERSION: () => VERSION3,
+  choice: () => choice,
+  noul: () => noul,
+  score: () => score
+});
+var requestIdFrom, APIPromise4, ENV, readEnv3, fromCodeOrEnv, range, DEFAULT_RETRY_POLICY, isRetryableStatus, parseRetryAfter, retryDelayMs, sleep4, TypeSafeError, isRecord2, extractMessage, describeValidationErrors, MAX_RAW_BODY_IN_MESSAGE, APIError3, BadRequestError4, AuthenticationError3, PermissionDeniedError3, NotFoundError4, UnprocessableEntityError4, RateLimitError4, InternalServerError4, APIConnectionError3, APITimeoutError, APIUserAbortError3, LOG_LEVELS, DEFAULT_LOG_LEVEL, isLogLevel, parseLogLevel3, PREFIX, consoleLogger, RANK, drop, withLevel, KEY_HEADERS, OPAQUE_HEADERS, redactKey, redact, redactHeaders, noul, score, choice, validateQuestions, Models3, unwrapModels, g, isBrowser3, describeRuntime, VERSION3, missingApiKey, missingFetch, refuseBrowser, defaultFetch, assertNonNegativeInteger, assertPositiveMs, assertNonNegativeMs, assertFraction, assertStatusSet, resolveRetryPolicy, isRetryableError, resolveLogLevel, stripTrailingSlashes, mergeHeaders, bufferResponse, RUNTIME, TypeSafeClient, parseBody;
+var init_dist = __esm({
+  "node_modules/@typesafe-ai/sdk/dist/index.mjs"() {
+    requestIdFrom = (headers) => headers.get("x-typesafe-request-id") ?? void 0;
+    APIPromise4 = class APIPromise5 extends Promise {
+      #responsePromise;
+      #parseResponse;
+      #parsed;
+      constructor(responsePromise, parseResponse2) {
+        super((resolve) => resolve(void 0));
+        this.#responsePromise = responsePromise;
+        this.#parseResponse = parseResponse2;
+      }
+      /**
+      * Resolves to the raw `Response` without parsing the body. SDK requests buffer the full
+      * body under the request timeout before handoff; reading it afterwards is caller-owned.
+      * The caller owns the body; don't also `await` the parsed result on the same promise.
+      */
+      asResponse() {
+        return this.#responsePromise;
+      }
+      /** Return the parsed result, HTTP response, and request ID. */
+      async withResponse() {
+        const [data, response] = await Promise.all([this.#parse(), this.#responsePromise]);
+        return {
+          data,
+          response,
+          requestId: requestIdFrom(response.headers)
+        };
+      }
+      /** Transform the parsed result, sharing the HTTP response and a single body parse. */
+      map(fn) {
+        return new APIPromise5(this.#responsePromise, () => this.#parse().then(fn));
+      }
+      #parse() {
+        this.#parsed ??= this.#responsePromise.then(this.#parseResponse);
+        return this.#parsed;
+      }
+      then(onfulfilled, onrejected) {
+        return this.#parse().then(onfulfilled, onrejected);
+      }
+      catch(onrejected) {
+        return this.#parse().catch(onrejected);
+      }
+      finally(onfinally) {
+        return this.#parse().finally(onfinally);
+      }
+    };
+    ENV = {
+      /** Required API key; used when `apiKey` is omitted. */
+      apiKey: "TYPESAFE_API_KEY",
+      /** API root; defaults to `https://api.typesafe.ai`. */
+      baseURL: "TYPESAFE_BASE_URL",
+      /** Default model name; defaults to `jev-latest`. */
+      defaultModel: "TYPESAFE_DEFAULT_MODEL",
+      /** Log level; defaults to `warn`. */
+      logLevel: "TYPESAFE_LOG_LEVEL"
+    };
+    readEnv3 = (name) => {
+      if (typeof process === "undefined" || !process.env) return void 0;
+      return process.env[name]?.trim() || void 0;
+    };
+    fromCodeOrEnv = (fromCode, envVar) => fromCode ?? readEnv3(envVar);
+    range = (from, to) => Array.from({ length: to - from }, (_, i) => from + i);
+    DEFAULT_RETRY_POLICY = {
+      maxRetries: 2,
+      backoffInitialMs: 500,
+      backoffMaxMs: 5e3,
+      backoffJitter: 0.25,
+      /** HTTP 408, 429, and 5xx responses. */
+      httpStatuses: /* @__PURE__ */ new Set([
+        408,
+        429,
+        ...range(500, 600)
+      ]),
+      respectRetryAfter: true,
+      /** Maximum server retry delay before falling back to backoff. */
+      maxRetryAfterMs: 6e4,
+      apiConnectionError: true,
+      apiTimeoutError: true
+    };
+    DEFAULT_RETRY_POLICY.maxRetries;
+    isRetryableStatus = (status, policy = DEFAULT_RETRY_POLICY) => policy.httpStatuses.has(status);
+    parseRetryAfter = (headers, now = Date.now()) => {
+      const ms = Number(headers.get("retry-after-ms"));
+      if (headers.has("retry-after-ms") && Number.isFinite(ms) && ms >= 0) return ms;
+      const raw = headers.get("retry-after");
+      if (raw === null) return void 0;
+      const seconds = Number(raw);
+      if (Number.isFinite(seconds)) return seconds >= 0 ? seconds * 1e3 : void 0;
+      const date6 = Date.parse(raw);
+      if (!Number.isNaN(date6)) return Math.max(0, date6 - now);
+    };
+    retryDelayMs = (attempt, headers, policy = DEFAULT_RETRY_POLICY, random = Math.random) => {
+      if (policy.respectRetryAfter && headers !== void 0) {
+        const retryAfter = parseRetryAfter(headers);
+        if (retryAfter !== void 0 && retryAfter <= policy.maxRetryAfterMs) return retryAfter;
+      }
+      const exponential = Math.min(policy.backoffInitialMs * 2 ** attempt, policy.backoffMaxMs);
+      return Math.round(exponential * (1 - random() * policy.backoffJitter));
+    };
+    sleep4 = (ms, signal) => new Promise((resolve, reject) => {
+      if (signal?.aborted) return reject(signal.reason);
+      const onAbort = () => {
+        clearTimeout(timer);
+        reject(signal?.reason);
+      };
+      const timer = setTimeout(() => {
+        signal?.removeEventListener("abort", onAbort);
+        resolve();
+      }, ms);
+      signal?.addEventListener("abort", onAbort, { once: true });
+    });
+    TypeSafeError = class extends Error {
+      constructor(message, options) {
+        super(message, options);
+        this.name = new.target.name;
+      }
+    };
+    isRecord2 = (value) => typeof value === "object" && value !== null;
+    extractMessage = (body) => {
+      if (typeof body === "string") return body || void 0;
+      if (!isRecord2(body)) return void 0;
+      const { error: error62, message, detail } = body;
+      if (typeof error62 === "string") return error62;
+      if (isRecord2(error62) && typeof error62.message === "string") return error62.message;
+      if (typeof message === "string") return message;
+      if (typeof detail === "string") return detail;
+      if (isRecord2(detail) && typeof detail.message === "string") return detail.message;
+      if (Array.isArray(detail)) return describeValidationErrors(detail);
+    };
+    describeValidationErrors = (errors) => {
+      const parts = errors.flatMap((e) => {
+        if (!isRecord2(e) || typeof e.msg !== "string") return [];
+        const loc = Array.isArray(e.loc) ? e.loc.filter((x) => x !== "body").join(".") : "";
+        return [loc ? `${loc}: ${e.msg}` : e.msg];
+      });
+      return parts.length > 0 ? parts.join("; ") : void 0;
+    };
+    MAX_RAW_BODY_IN_MESSAGE = 200;
+    APIError3 = class APIError4 extends TypeSafeError {
+      /** HTTP response status code. */
+      status;
+      /** HTTP response headers. */
+      headers;
+      /** Parsed JSON, response text, or `undefined` for an empty body. */
+      body;
+      /** Request ID from `x-typesafe-request-id`, or `undefined` when absent. */
+      requestId;
+      constructor(status, body, headers, message) {
+        super(message ?? APIError4.describe(status, body));
+        this.status = status;
+        this.body = body;
+        this.headers = headers;
+        this.requestId = requestIdFrom(headers);
+      }
+      static describe(status, body) {
+        const detail = extractMessage(body);
+        if (detail) return `${status} ${detail}`;
+        if (body === void 0) return `${status} status code (no body)`;
+        const raw = typeof body === "string" ? body : JSON.stringify(body);
+        return `${status} ${raw.length > MAX_RAW_BODY_IN_MESSAGE ? `${raw.slice(0, MAX_RAW_BODY_IN_MESSAGE)}\u2026` : raw}`;
+      }
+      /** Create the error subclass for an HTTP status code. */
+      static fromResponse(status, body, headers) {
+        if (status === 400) return new BadRequestError4(status, body, headers);
+        if (status === 401) return new AuthenticationError3(status, body, headers);
+        if (status === 403) return new PermissionDeniedError3(status, body, headers);
+        if (status === 404) return new NotFoundError4(status, body, headers);
+        if (status === 422) return new UnprocessableEntityError4(status, body, headers);
+        if (status === 429) return new RateLimitError4(status, body, headers);
+        if (status >= 500) return new InternalServerError4(status, body, headers);
+        return new APIError4(status, body, headers);
+      }
+    };
+    BadRequestError4 = class extends APIError3 {
+    };
+    AuthenticationError3 = class extends APIError3 {
+    };
+    PermissionDeniedError3 = class extends APIError3 {
+    };
+    NotFoundError4 = class extends APIError3 {
+    };
+    UnprocessableEntityError4 = class extends APIError3 {
+    };
+    RateLimitError4 = class extends APIError3 {
+      /** Server retry delay in milliseconds, or `undefined` when absent or invalid. */
+      retryAfterMs = parseRetryAfter(this.headers);
+    };
+    InternalServerError4 = class extends APIError3 {
+    };
+    APIConnectionError3 = class extends TypeSafeError {
+      constructor(message = "Connection error.", options) {
+        super(message, options);
+      }
+    };
+    APITimeoutError = class extends APIConnectionError3 {
+      /** Configured timeout in milliseconds. */
+      timeoutMs;
+      constructor(timeoutMs, options) {
+        super(`Request timed out after ${timeoutMs}ms.`, options);
+        this.timeoutMs = timeoutMs;
+      }
+    };
+    APIUserAbortError3 = class extends TypeSafeError {
+      constructor(message = "Request was aborted.", options) {
+        super(message, options);
+      }
+    };
+    LOG_LEVELS = [
+      "debug",
+      "info",
+      "warn",
+      "error",
+      "off"
+    ];
+    DEFAULT_LOG_LEVEL = "warn";
+    isLogLevel = (value) => LOG_LEVELS.includes(value);
+    parseLogLevel3 = (value, source) => {
+      if (isLogLevel(value)) return value;
+      throw new TypeSafeError(`Invalid log level "${value}" from ${source}. Expected one of: ${LOG_LEVELS.join(", ")}.`);
+    };
+    PREFIX = "[typesafe-sdk]";
+    consoleLogger = {
+      debug: (message, ...args) => console.debug(`${PREFIX} ${message}`, ...args),
+      info: (message, ...args) => console.info(`${PREFIX} ${message}`, ...args),
+      warn: (message, ...args) => console.warn(`${PREFIX} ${message}`, ...args),
+      error: (message, ...args) => console.error(`${PREFIX} ${message}`, ...args)
+    };
+    RANK = {
+      debug: 0,
+      info: 1,
+      warn: 2,
+      error: 3,
+      off: 4
+    };
+    drop = () => {
+    };
+    withLevel = (sink, level) => {
+      const enabled = (at) => RANK[at] >= RANK[level];
+      return {
+        debug: enabled("debug") ? (message, ...args) => sink.debug(message, ...args) : drop,
+        info: enabled("info") ? (message, ...args) => sink.info(message, ...args) : drop,
+        warn: enabled("warn") ? (message, ...args) => sink.warn(message, ...args) : drop,
+        error: enabled("error") ? (message, ...args) => sink.error(message, ...args) : drop
+      };
+    };
+    KEY_HEADERS = /* @__PURE__ */ new Set([
+      "authorization",
+      "proxy-authorization",
+      "x-api-key"
+    ]);
+    OPAQUE_HEADERS = /* @__PURE__ */ new Set(["cookie", "set-cookie"]);
+    redactKey = (value) => {
+      const [scheme, secret] = value.includes(" ") ? value.split(/\s+/, 2) : [void 0, value];
+      const tail = secret && secret.length > 8 ? secret.slice(-4) : "";
+      return `${scheme ? `${scheme} ` : ""}***${tail}`;
+    };
+    redact = (name, value) => {
+      const lower = name.toLowerCase();
+      if (KEY_HEADERS.has(lower)) return redactKey(value);
+      if (OPAQUE_HEADERS.has(lower)) return "***";
+      return value;
+    };
+    redactHeaders = (headers) => Object.fromEntries(Object.entries(headers).map(([name, value]) => [name, redact(name, value)]));
+    noul = (instructions = null, criteria) => ({
+      type: "noul",
+      instructions,
+      criteria
+    });
+    score = (instructions, criteria) => {
+      if (!Array.isArray(criteria)) throw new TypeSafeError("Score criteria must be a list of descriptions indexed by score from zero, not a map.");
+      return {
+        type: "score",
+        instructions,
+        criteria
+      };
+    };
+    choice = (instructions, criteria) => {
+      if (Array.isArray(criteria)) throw new TypeSafeError("Choice criteria must be a map of labels to descriptions, not a list.");
+      return {
+        type: "choice",
+        instructions,
+        criteria
+      };
+    };
+    validateQuestions = (questions) => {
+      if (Object.keys(questions).length === 0) throw new TypeSafeError("At least one question is required.");
+      for (const [name, question] of Object.entries(questions)) {
+        if (question.type !== "score") continue;
+        if (!Array.isArray(question.criteria)) throw new TypeSafeError(`Score question "${name}" has criteria that are not a list; score criteria must be a list of descriptions indexed by score from zero.`);
+        if (question.criteria.length < 2) throw new TypeSafeError(`Score question "${name}" has ${question.criteria.length} criteria; at least two scores are required.`);
+      }
+    };
+    Models3 = class {
+      #transport;
+      constructor(transport) {
+        this.#transport = transport;
+      }
+      /** List the models available to the account. */
+      list(options = {}) {
+        return this.#transport.request("GET", "/v1/models", options).map(unwrapModels);
+      }
+    };
+    unwrapModels = (wire) => {
+      if (Array.isArray(wire?.models)) return wire.models;
+      throw new TypeSafeError("Unexpected response shape from GET /v1/models; expected { models: [...] }.");
+    };
+    g = globalThis;
+    isBrowser3 = () => typeof g.window !== "undefined" && typeof g.window.document !== "undefined" && typeof g.navigator !== "undefined";
+    describeRuntime = () => {
+      const platform = g.process?.platform && g.process?.arch ? ` (${g.process.platform}; ${g.process.arch})` : "";
+      if (g.Bun?.version) return `bun/${g.Bun.version}${platform}`;
+      if (g.Deno?.version?.deno) return `deno/${g.Deno.version.deno}${platform}`;
+      if (g.EdgeRuntime !== void 0) return "vercel-edge";
+      if (g.navigator?.userAgent === "Cloudflare-Workers") return "cloudflare-workers";
+      if (g.process?.versions?.node) return `node/${g.process.versions.node}${platform}`;
+      if (isBrowser3()) return "browser";
+      return "unknown";
+    };
+    VERSION3 = "0.6.0";
+    missingApiKey = () => {
+      throw new TypeSafeError(`No API key was provided. Pass \`apiKey\` to the TypeSafeClient constructor or set the ${ENV.apiKey} environment variable.`);
+    };
+    missingFetch = () => {
+      throw new TypeSafeError("No global `fetch` is available in this runtime. Pass a `fetch` implementation to the TypeSafeClient constructor.");
+    };
+    refuseBrowser = () => {
+      throw new TypeSafeError("TypeSafeClient is running in a browser, which would expose your API key to anyone using the page. Call the API from a server instead, or pass `dangerouslyAllowBrowser: true` if you understand the risk.");
+    };
+    defaultFetch = (input2, init) => globalThis.fetch(input2, init);
+    assertNonNegativeInteger = (name, value) => {
+      if (!Number.isInteger(value) || value < 0) throw new TypeSafeError(`\`${name}\` must be a non-negative integer, got ${String(value)}.`);
+      return value;
+    };
+    assertPositiveMs = (name, value) => {
+      if (!Number.isFinite(value) || value <= 0) throw new TypeSafeError(`\`${name}\` must be a positive number of milliseconds, got ${String(value)}.`);
+      return value;
+    };
+    assertNonNegativeMs = (name, value) => {
+      if (!Number.isFinite(value) || value < 0) throw new TypeSafeError(`\`${name}\` must be a non-negative number of milliseconds, got ${String(value)}.`);
+      return value;
+    };
+    assertFraction = (name, value) => {
+      if (!Number.isFinite(value) || value < 0 || value > 1) throw new TypeSafeError(`\`${name}\` must be between 0 and 1, got ${String(value)}.`);
+      return value;
+    };
+    assertStatusSet = (name, statuses) => {
+      for (const status of statuses) if (!Number.isInteger(status) || status < 100 || status > 999) throw new TypeSafeError(`\`${name}\` must contain HTTP status codes, got ${String(status)}.`);
+      return statuses;
+    };
+    resolveRetryPolicy = (base, overrides) => {
+      const o = overrides ?? {};
+      return {
+        maxRetries: o.maxRetries === void 0 ? base.maxRetries : assertNonNegativeInteger("retry.maxRetries", o.maxRetries),
+        backoffInitialMs: o.backoffInitialMs === void 0 ? base.backoffInitialMs : assertNonNegativeMs("retry.backoffInitialMs", o.backoffInitialMs),
+        backoffMaxMs: o.backoffMaxMs === void 0 ? base.backoffMaxMs : assertNonNegativeMs("retry.backoffMaxMs", o.backoffMaxMs),
+        backoffJitter: o.backoffJitter === void 0 ? base.backoffJitter : assertFraction("retry.backoffJitter", o.backoffJitter),
+        httpStatuses: new Set(o.httpStatuses === void 0 ? base.httpStatuses : assertStatusSet("retry.httpStatuses", o.httpStatuses)),
+        respectRetryAfter: o.respectRetryAfter ?? base.respectRetryAfter,
+        maxRetryAfterMs: o.maxRetryAfterMs === void 0 ? base.maxRetryAfterMs : assertNonNegativeMs("retry.maxRetryAfterMs", o.maxRetryAfterMs),
+        apiConnectionError: o.apiConnectionError ?? base.apiConnectionError,
+        apiTimeoutError: o.apiTimeoutError ?? base.apiTimeoutError
+      };
+    };
+    isRetryableError = (err, policy) => {
+      if (err instanceof APITimeoutError) return policy.apiTimeoutError;
+      if (err instanceof APIConnectionError3) return policy.apiConnectionError;
+      return false;
+    };
+    resolveLogLevel = (fromCode) => {
+      if (fromCode !== void 0) return parseLogLevel3(fromCode, "the `logLevel` option");
+      const fromEnv = readEnv3(ENV.logLevel);
+      if (fromEnv !== void 0) return parseLogLevel3(fromEnv, ENV.logLevel);
+      return DEFAULT_LOG_LEVEL;
+    };
+    stripTrailingSlashes = (url2) => url2.replace(/\/+$/, "");
+    mergeHeaders = (...sources) => {
+      const entries = /* @__PURE__ */ new Map();
+      for (const source of sources) for (const [name, value] of Object.entries(source)) if (value === void 0) entries.delete(name.toLowerCase());
+      else entries.set(name.toLowerCase(), [name, value]);
+      return Object.fromEntries(entries.values());
+    };
+    bufferResponse = async (response, signal) => {
+      const reader = response.clone().body?.getReader();
+      if (!reader) return;
+      const cancel = () => {
+        reader.cancel(signal.reason).catch(() => {
+        });
+        response.body?.cancel(signal.reason).catch(() => {
+        });
+      };
+      signal.addEventListener("abort", cancel, { once: true });
+      try {
+        if (signal.aborted) cancel();
+        signal.throwIfAborted();
+        while (!(await reader.read()).done) signal.throwIfAborted();
+        signal.throwIfAborted();
+      } finally {
+        signal.removeEventListener("abort", cancel);
+        reader.releaseLock();
+      }
+    };
+    RUNTIME = describeRuntime();
+    TypeSafeClient = class {
+      /** API key excluded from serialization and public properties. */
+      #apiKey;
+      /** API root with trailing slashes removed. */
+      baseURL;
+      /** Model used when a request omits `model`. */
+      defaultModel;
+      /** Configured log verbosity. */
+      logLevel;
+      /** The configured logger, filtered to `logLevel`. */
+      logger;
+      /** Retry settings with constructor overrides applied. */
+      retry;
+      /** Timeout per attempt in milliseconds. */
+      timeout;
+      /** Additional headers sent with each request. */
+      defaultHeaders;
+      /** HTTP fetch implementation. */
+      fetch;
+      /** The models available to the account. */
+      models;
+      #requestCount = 0;
+      /**
+      * Create a client for the TypeSafe AI API.
+      *
+      * Explicit options take precedence over environment variables, then SDK defaults.
+      * Empty or whitespace-only environment values are ignored.
+      *
+      * @throws {TypeSafeError} The API key is missing, configuration is invalid, or the runtime is unsupported.
+      */
+      constructor(config2 = {}) {
+        if (isBrowser3() && !config2.dangerouslyAllowBrowser) refuseBrowser();
+        this.#apiKey = fromCodeOrEnv(config2.apiKey, ENV.apiKey) ?? missingApiKey();
+        this.baseURL = stripTrailingSlashes(fromCodeOrEnv(config2.baseURL, ENV.baseURL) ?? "https://api.typesafe.ai");
+        this.defaultModel = fromCodeOrEnv(config2.defaultModel, ENV.defaultModel) ?? "jev-latest";
+        this.logLevel = resolveLogLevel(config2.logLevel);
+        this.logger = withLevel(config2.logger ?? consoleLogger, this.logLevel);
+        this.retry = resolveRetryPolicy(DEFAULT_RETRY_POLICY, config2.retry);
+        this.timeout = assertPositiveMs("timeout", config2.timeout ?? 1e4);
+        this.defaultHeaders = { ...config2.defaultHeaders };
+        if (config2.fetch === void 0 && typeof globalThis.fetch !== "function") missingFetch();
+        this.fetch = config2.fetch ?? defaultFetch;
+        const transport = {
+          request: (method, path4, options) => this.#request(method, path4, options),
+          defaultModel: this.defaultModel
+        };
+        this.models = new Models3(transport);
+      }
+      /**
+      * Answer named questions about text or structured state.
+      *
+      * @param request - State, questions, and an optional model override.
+      * @param options - Per-call timeout, retry, headers, and cancellation settings.
+      * @returns Answers typed by question name and criteria, with model and token usage.
+      * @throws {TypeSafeError} Questions are empty, or score criteria are not a list of at least two entries.
+      * @throws {APIError} The server returns a non-2xx response after retries.
+      * @throws {APIConnectionError} The request cannot connect or times out after retries.
+      * @throws {APIUserAbortError} The caller aborts the request.
+      *
+      * @example
+      * ```ts
+      * const { answers } = await client.systemOne({
+      *   state: "I was charged twice. Please help.",
+      *   questions: { billing: noul("Is this about billing?") },
+      * });
+      * console.log(answers.billing.noul);
+      * ```
+      */
+      systemOne(request, options = {}) {
+        validateQuestions(request.questions);
+        const body = {
+          ...request,
+          model: request.model ?? this.defaultModel
+        };
+        return this.#request("POST", "/v1/systemone", {
+          ...options,
+          body
+        });
+      }
+      /** Send a request and parse its response body. */
+      #request(method, path4, options = {}) {
+        const resolved = {
+          method,
+          path: path4,
+          body: options.body,
+          headers: mergeHeaders(this.defaultHeaders, options.headers ?? {}),
+          signal: options.signal,
+          timeout: options.timeout === void 0 ? this.timeout : assertPositiveMs("timeout", options.timeout),
+          retry: resolveRetryPolicy(this.retry, options.retry)
+        };
+        const tag = `#${++this.#requestCount} ${method} ${path4}`;
+        return new APIPromise4(this.fetchWithRetries(tag, resolved), async (res) => {
+          const parsed = await parseBody(res);
+          this.logger.debug(`${tag} <- body`, parsed);
+          return parsed;
+        });
+      }
+      /** Retry eligible failures, logging attempt summaries at `info` and headers and bodies at `debug`. */
+      async fetchWithRetries(tag, req) {
+        const url2 = `${this.baseURL}${req.path}`;
+        const headers = mergeHeaders(req.headers, {
+          Authorization: `Bearer ${this.#apiKey}`,
+          Accept: "application/json",
+          "User-Agent": `typesafe-sdk/${VERSION3}`,
+          "X-TypeSafe-SDK": `typesafe-sdk/${VERSION3}`,
+          "X-TypeSafe-Runtime": RUNTIME,
+          "Content-Type": req.body === void 0 ? void 0 : "application/json",
+          "X-TypeSafe-Retry-Count": void 0
+        });
+        const body = req.body === void 0 ? void 0 : JSON.stringify(req.body);
+        for (let attempt = 0; ; attempt++) {
+          const retriesLeft = req.retry.maxRetries - attempt;
+          const attemptHeaders = attempt === 0 ? headers : {
+            ...headers,
+            "X-TypeSafe-Retry-Count": String(attempt)
+          };
+          this.logger.debug(`${tag} -> ${url2}`, {
+            headers: redactHeaders(attemptHeaders),
+            body: req.body
+          });
+          const started = Date.now();
+          let res;
+          try {
+            res = await this.attempt(tag, url2, {
+              method: req.method,
+              headers: attemptHeaders,
+              body
+            }, req);
+          } catch (err) {
+            if (err instanceof APIUserAbortError3 || retriesLeft <= 0) throw err;
+            if (!isRetryableError(err, req.retry)) throw err;
+            await this.backOff(tag, attempt, retriesLeft, err.message, void 0, req);
+            continue;
+          }
+          const requestId = requestIdFrom(res.headers);
+          this.logger.info(`${tag} <- ${res.status} in ${Date.now() - started}ms${requestId ? ` (request ${requestId})` : ""}`);
+          if (res.ok) return res;
+          const errorBody = await parseBody(res);
+          this.logger.debug(`${tag} <- error body`, errorBody);
+          const error62 = APIError3.fromResponse(res.status, errorBody, res.headers);
+          if (retriesLeft <= 0 || !isRetryableStatus(res.status, req.retry)) throw error62;
+          await this.backOff(tag, attempt, retriesLeft, `${res.status}`, res.headers, req);
+        }
+      }
+      /**
+      * One HTTP round trip, including body delivery, with a timeout. The caller's signal and our
+      * timer both abort the same controller; we check which fired to choose the error class.
+      */
+      async attempt(tag, url2, init, { signal, timeout }) {
+        const controller = new AbortController();
+        const abortFromCaller = () => controller.abort(signal?.reason);
+        if (signal?.aborted) abortFromCaller();
+        signal?.addEventListener("abort", abortFromCaller, { once: true });
+        let timedOut = false;
+        const timer = setTimeout(() => {
+          timedOut = true;
+          controller.abort();
+        }, timeout);
+        const started = Date.now();
+        const elapsed2 = () => `${Date.now() - started}ms`;
+        try {
+          const response = await this.fetch(url2, {
+            ...init,
+            signal: controller.signal
+          });
+          await bufferResponse(response, controller.signal);
+          return response;
+        } catch (err) {
+          if (signal?.aborted) {
+            this.logger.info(`${tag} aborted by caller after ${elapsed2()}`);
+            throw new APIUserAbortError3(void 0, { cause: err });
+          }
+          if (timedOut) {
+            this.logger.info(`${tag} timed out after ${elapsed2()}`);
+            throw new APITimeoutError(timeout, { cause: err });
+          }
+          this.logger.info(`${tag} connection error after ${elapsed2()}`, err);
+          throw new APIConnectionError3(err instanceof Error ? `Connection error: ${err.message}` : void 0, { cause: err });
+        } finally {
+          clearTimeout(timer);
+          signal?.removeEventListener("abort", abortFromCaller);
+        }
+      }
+      /** Wait before retrying; caller cancellation throws `APIUserAbortError`. */
+      async backOff(tag, attempt, retriesLeft, reason, headers, { retry: retry2, signal }) {
+        const delay2 = retryDelayMs(attempt, headers, retry2);
+        const nth = attempt + 1;
+        const total = attempt + retriesLeft;
+        this.logger.info(`${tag} retrying in ${delay2}ms (retry ${nth}/${total}) after ${reason}`);
+        try {
+          await sleep4(delay2, signal);
+        } catch (err) {
+          this.logger.info(`${tag} aborted by caller while waiting to retry`);
+          throw new APIUserAbortError3(void 0, { cause: err });
+        }
+      }
+    };
+    parseBody = async (res) => {
+      const text = await res.text();
+      if (text.length === 0) return void 0;
+      if ((res.headers.get("content-type") ?? "").includes("application/json")) try {
+        return JSON.parse(text);
+      } catch {
+        return text;
+      }
+      try {
+        return JSON.parse(text);
+      } catch {
+        return text;
+      }
+    };
+  }
+});
+
 // node_modules/zod/index.js
 var init_zod = __esm({
   "node_modules/zod/index.js"() {
@@ -67198,13 +67840,13 @@ async function* convertOpenAICompletionsStream(source, options = {}) {
         usage: usageSnapshot
       };
     }
-    const choice = data.choices?.[0];
-    if (!choice) continue;
-    if (choice.finish_reason != null) {
-      finishReason = mapFinishReason(choice.finish_reason);
-      responseMetadata = buildResponseMetadata(data, choice);
+    const choice3 = data.choices?.[0];
+    if (!choice3) continue;
+    if (choice3.finish_reason != null) {
+      finishReason = mapFinishReason(choice3.finish_reason);
+      responseMetadata = buildResponseMetadata(data, choice3);
     }
-    const { delta } = choice;
+    const { delta } = choice3;
     if (!delta) continue;
     const reasoningText = getReasoningDeltaText(delta);
     if (reasoningText) {
@@ -67347,11 +67989,11 @@ async function* convertOpenAICompletionsStream(source, options = {}) {
       name: "function_call",
       payload: delta.function_call
     };
-    if (choice.logprobs) yield {
+    if (choice3.logprobs) yield {
       event: "provider",
       provider,
       name: "logprobs",
-      payload: choice.logprobs
+      payload: choice3.logprobs
     };
   }
   for (const [index2, acc] of blockAccumulators) yield {
@@ -67410,22 +68052,22 @@ function buildUsageSnapshot(usage) {
     ...Object.keys(outputTokenDetails).length > 0 && { output_token_details: outputTokenDetails }
   };
 }
-function buildResponseMetadata(data, choice) {
+function buildResponseMetadata(data, choice3) {
   return {
     model_provider: "openai",
     model_name: data.model,
     system_fingerprint: data.system_fingerprint,
     service_tier: data.service_tier,
-    finish_reason: choice.finish_reason,
+    finish_reason: choice3.finish_reason,
     ...data.usage ? { usage: data.usage } : {}
   };
 }
 
 // node_modules/@langchain/mistralai/dist/utils/stream_events.js
 function mistralDataToOpenAIChunk(data) {
-  const choice = data.choices?.[0];
-  if (!choice) return data;
-  const delta = choice.delta ?? {};
+  const choice3 = data.choices?.[0];
+  if (!choice3) return data;
+  const delta = choice3.delta ?? {};
   const toolCalls = delta.toolCalls ?? delta.tool_calls;
   const mappedDelta = {
     ...delta,
@@ -67442,10 +68084,10 @@ function mistralDataToOpenAIChunk(data) {
     created: data.created ?? 0,
     model: data.model ?? "",
     choices: [{
-      index: choice.index ?? 0,
+      index: choice3.index ?? 0,
       delta: mappedDelta,
-      finish_reason: choice.finish_reason ?? choice.finishReason ?? null,
-      logprobs: choice.logprobs ?? null
+      finish_reason: choice3.finish_reason ?? choice3.finishReason ?? null,
+      logprobs: choice3.logprobs ?? null
     }],
     usage: data.usage ?? null,
     system_fingerprint: data.system_fingerprint ?? null
@@ -69885,7 +70527,7 @@ var LangSmithToOTELTranslator = class {
             span.setAttribute(GEN_AI_RESPONSE_ID, outputs.id);
           }
           if (outputs.choices && Array.isArray(outputs.choices)) {
-            const finishReasons = outputs.choices.map((choice) => choice.finish_reason).filter((reason) => reason).map(String);
+            const finishReasons = outputs.choices.map((choice3) => choice3.finish_reason).filter((reason) => reason).map(String);
             if (finishReasons.length > 0) {
               span.setAttribute(GEN_AI_RESPONSE_FINISH_REASONS, finishReasons.join(", "));
             }
@@ -74728,11 +75370,11 @@ var handle429 = async (response) => {
   }
   return false;
 };
-function _formatFeedbackScore(score) {
-  if (typeof score === "number") {
-    return Number(score.toFixed(4));
+function _formatFeedbackScore(score3) {
+  if (typeof score3 === "number") {
+    return Number(score3.toFixed(4));
   }
-  return score;
+  return score3;
 }
 function _checkBackendVersion(backendVersion, minVersion) {
   if (!backendVersion) {
@@ -78138,7 +78780,7 @@ Message: ${Array.isArray(result.detail) ? result.detail.join("\n") : "Unspecifie
     });
   }
   async createFeedback(runIdOrParams, keyArg, optionsArg) {
-    const { runId = null, key, score, value, correction, comment, sourceInfo, feedbackSourceType = "api", sourceRunId, feedbackId, feedbackConfig, projectId, traceId, comparativeExperimentId, sessionId, startTime, extendTraceRetention, address: rawAddress } = typeof runIdOrParams === "object" && runIdOrParams !== null ? runIdOrParams : { runId: runIdOrParams, key: keyArg, ...optionsArg };
+    const { runId = null, key, score: score3, value, correction, comment, sourceInfo, feedbackSourceType = "api", sourceRunId, feedbackId, feedbackConfig, projectId, traceId, comparativeExperimentId, sessionId, startTime, extendTraceRetention, address: rawAddress } = typeof runIdOrParams === "object" && runIdOrParams !== null ? runIdOrParams : { runId: runIdOrParams, key: keyArg, ...optionsArg };
     const address = ensureAgent(rawAddress);
     rejectConflicting(sessionId ?? projectId, address);
     if (!runId && !projectId) {
@@ -78165,7 +78807,7 @@ Message: ${Array.isArray(result.detail) ? result.detail.join("\n") : "Unspecifie
       run_id: runId,
       trace_id: traceId,
       key,
-      score: _formatFeedbackScore(score),
+      score: _formatFeedbackScore(score3),
       value,
       correction,
       comment,
@@ -78195,10 +78837,10 @@ Message: ${Array.isArray(result.detail) ? result.detail.join("\n") : "Unspecifie
     });
     return feedback;
   }
-  async updateFeedback(feedbackId, { score, value, correction, comment }) {
+  async updateFeedback(feedbackId, { score: score3, value, correction, comment }) {
     const feedbackUpdate = {};
-    if (score !== void 0 && score !== null) {
-      feedbackUpdate["score"] = _formatFeedbackScore(score);
+    if (score3 !== void 0 && score3 !== null) {
+      feedbackUpdate["score"] = _formatFeedbackScore(score3);
     }
     if (value !== void 0 && value !== null) {
       feedbackUpdate["value"] = value;
@@ -89216,7 +89858,7 @@ Sha256.prototype.finalize = function() {
   this.hash();
 };
 Sha256.prototype.hash = function() {
-  var a = this.h0, b = this.h1, c = this.h2, d = this.h3, e = this.h4, f3 = this.h5, g = this.h6, h = this.h7, blocks2 = this.blocks, j = 16, s0, s1, maj, t1, t2, ch, ab, da, cd, bc;
+  var a = this.h0, b = this.h1, c = this.h2, d = this.h3, e = this.h4, f3 = this.h5, g2 = this.h6, h = this.h7, blocks2 = this.blocks, j = 16, s0, s1, maj, t1, t2, ch, ab, da, cd, bc;
   for (; j < 64; ++j) {
     t1 = blocks2[j - 15];
     s0 = (t1 >>> 7 | t1 << 25) ^ (t1 >>> 18 | t1 << 14) ^ t1 >>> 3;
@@ -89244,7 +89886,7 @@ Sha256.prototype.hash = function() {
       s1 = (e >>> 6 | e << 26) ^ (e >>> 11 | e << 21) ^ (e >>> 25 | e << 7);
       ab = a & b;
       maj = ab ^ a & c ^ bc;
-      ch = e & f3 ^ ~e & g;
+      ch = e & f3 ^ ~e & g2;
       t1 = h + s1 + ch + K[j] + blocks2[j];
       t2 = s0 + maj;
       h = d + t1 << 0;
@@ -89254,16 +89896,16 @@ Sha256.prototype.hash = function() {
     s1 = (h >>> 6 | h << 26) ^ (h >>> 11 | h << 21) ^ (h >>> 25 | h << 7);
     da = d & a;
     maj = da ^ d & b ^ ab;
-    ch = g & h ^ ~g & e;
+    ch = g2 & h ^ ~g2 & e;
     t1 = f3 + s1 + ch + K[j + 1] + blocks2[j + 1];
     t2 = s0 + maj;
-    g = c + t1 << 0;
+    g2 = c + t1 << 0;
     c = t1 + t2 << 0;
     s0 = (c >>> 2 | c << 30) ^ (c >>> 13 | c << 19) ^ (c >>> 22 | c << 10);
-    s1 = (g >>> 6 | g << 26) ^ (g >>> 11 | g << 21) ^ (g >>> 25 | g << 7);
+    s1 = (g2 >>> 6 | g2 << 26) ^ (g2 >>> 11 | g2 << 21) ^ (g2 >>> 25 | g2 << 7);
     cd = c & d;
     maj = cd ^ c & a ^ da;
-    ch = f3 & g ^ ~f3 & h;
+    ch = f3 & g2 ^ ~f3 & h;
     t1 = e + s1 + ch + K[j + 2] + blocks2[j + 2];
     t2 = s0 + maj;
     f3 = b + t1 << 0;
@@ -89272,7 +89914,7 @@ Sha256.prototype.hash = function() {
     s1 = (f3 >>> 6 | f3 << 26) ^ (f3 >>> 11 | f3 << 21) ^ (f3 >>> 25 | f3 << 7);
     bc = b & c;
     maj = bc ^ b & d ^ cd;
-    ch = f3 & g ^ ~f3 & h;
+    ch = f3 & g2 ^ ~f3 & h;
     t1 = e + s1 + ch + K[j + 3] + blocks2[j + 3];
     t2 = s0 + maj;
     e = a + t1 << 0;
@@ -89285,7 +89927,7 @@ Sha256.prototype.hash = function() {
   this.h3 = this.h3 + d << 0;
   this.h4 = this.h4 + e << 0;
   this.h5 = this.h5 + f3 << 0;
-  this.h6 = this.h6 + g << 0;
+  this.h6 = this.h6 + g2 << 0;
   this.h7 = this.h7 + h << 0;
 };
 Sha256.prototype.hex = function() {
@@ -93656,8 +94298,8 @@ Received: ${JSON.stringify(content, null, 2)}`);
     }];
   });
 }
-function mistralAIResponseToChatMessage(choice, usage) {
-  const { message } = choice;
+function mistralAIResponseToChatMessage(choice3, usage) {
+  const { message } = choice3;
   if (message === void 0) throw new Error("No message found in response");
   let rawToolCalls = [];
   if ("toolCalls" in message && Array.isArray(message.toolCalls)) rawToolCalls = message.toolCalls;
@@ -93987,13 +94629,13 @@ var ChatMistralAI = class extends BaseChatModel {
     const streamIterable = await this.completionWithRetry(input2, true);
     for await (const { data } of streamIterable) {
       if (options.signal?.aborted) return;
-      const choice = data?.choices[0];
-      if (!choice || !("delta" in choice)) continue;
-      const { delta } = choice;
+      const choice3 = data?.choices[0];
+      if (!choice3 || !("delta" in choice3)) continue;
+      const { delta } = choice3;
       if (!delta) continue;
       const newTokenIndices = {
         prompt: 0,
-        completion: choice.index ?? 0
+        completion: choice3.index ?? 0
       };
       const message = _convertDeltaToMessageChunk(delta, this.streamUsage || options.streamUsage ? data.usage : null);
       if (message === null) continue;
@@ -94001,7 +94643,7 @@ var ChatMistralAI = class extends BaseChatModel {
       if (Array.isArray(text)) text = text[0].type === "text" ? text[0].text : "";
       const generationInfo = { ...newTokenIndices };
       if (data?.model) generationInfo.model = data.model;
-      if (choice.finishReason) generationInfo.finishReason = choice.finishReason;
+      if (choice3.finishReason) generationInfo.finishReason = choice3.finishReason;
       const generationChunk = new ChatGenerationChunk({
         message,
         text,
@@ -95481,12 +96123,12 @@ function __await(v) {
 }
 function __asyncGenerator(thisArg, _arguments, generator) {
   if (!Symbol.asyncIterator) throw new TypeError("Symbol.asyncIterator is not defined.");
-  var g = generator.apply(thisArg, _arguments || []), i, q = [];
+  var g2 = generator.apply(thisArg, _arguments || []), i, q = [];
   return i = {}, verb("next"), verb("throw"), verb("return"), i[Symbol.asyncIterator] = function() {
     return this;
   }, i;
   function verb(n3) {
-    if (g[n3]) i[n3] = function(v) {
+    if (g2[n3]) i[n3] = function(v) {
       return new Promise(function(a, b) {
         q.push([n3, v, a, b]) > 1 || resume(n3, v);
       });
@@ -95494,7 +96136,7 @@ function __asyncGenerator(thisArg, _arguments, generator) {
   }
   function resume(n3, v) {
     try {
-      step(g[n3](v));
+      step(g2[n3](v));
     } catch (e) {
       settle2(q[0][3], e);
     }
@@ -100888,7 +101530,7 @@ function normalizeChatCompletionChunk(chunk) {
   }
   return {
     ...chunk,
-    choices: chunk.choices.map((choice) => ({ ...choice, finish_reason: choice.finish_reason ?? null }))
+    choices: chunk.choices.map((choice3) => ({ ...choice3, finish_reason: choice3.finish_reason ?? null }))
   };
 }
 function normalizeChatCompletionStream(stream2) {
@@ -100952,13 +101594,13 @@ function maybeParseChatCompletion(completion, params) {
   if (!params || !hasAutoParseableInput(params)) {
     return {
       ...completion,
-      choices: completion.choices.map((choice) => ({
-        ...choice,
+      choices: completion.choices.map((choice3) => ({
+        ...choice3,
         message: {
-          ...choice.message,
+          ...choice3.message,
           parsed: null,
-          ...choice.message.tool_calls ? {
-            tool_calls: choice.message.tool_calls
+          ...choice3.message.tool_calls ? {
+            tool_calls: choice3.message.tool_calls
           } : void 0
         }
       }))
@@ -100967,21 +101609,21 @@ function maybeParseChatCompletion(completion, params) {
   return parseChatCompletion(completion, params);
 }
 function parseChatCompletion(completion, params) {
-  const choices = completion.choices.map((choice) => {
-    if (choice.finish_reason === "length") {
+  const choices = completion.choices.map((choice3) => {
+    if (choice3.finish_reason === "length") {
       throw new LengthFinishReasonError();
     }
-    if (choice.finish_reason === "content_filter") {
+    if (choice3.finish_reason === "content_filter") {
       throw new ContentFilterFinishReasonError();
     }
     return {
-      ...choice,
+      ...choice3,
       message: {
-        ...choice.message,
-        ...choice.message.tool_calls ? {
-          tool_calls: choice.message.tool_calls?.map((toolCall) => parseToolCall2(params, toolCall)) ?? void 0
+        ...choice3.message,
+        ...choice3.message.tool_calls ? {
+          tool_calls: choice3.message.tool_calls?.map((toolCall) => parseToolCall2(params, toolCall)) ?? void 0
         } : void 0,
-        parsed: choice.message.content !== null && choice.message.content !== void 0 && !choice.message.refusal && (choice.message.content !== "" || !choice.message.tool_calls?.length && !choice.message.function_call) ? parseResponseFormat(params, choice.message.content) : null
+        parsed: choice3.message.content !== null && choice3.message.content !== void 0 && !choice3.message.refusal && (choice3.message.content !== "" || !choice3.message.tool_calls?.length && !choice3.message.function_call) ? parseResponseFormat(params, choice3.message.content) : null
       }
     };
   });
@@ -102547,8 +103189,8 @@ var _AbstractChatCompletionRunner_validateParams;
 var _AbstractChatCompletionRunner_stringifyFunctionCallResult;
 var DEFAULT_MAX_CHAT_COMPLETIONS = 10;
 function normalizeToolCallIds(chatCompletion) {
-  for (const choice of chatCompletion.choices) {
-    for (const toolCall of choice.message.tool_calls ?? []) {
+  for (const choice3 of chatCompletion.choices) {
+    for (const toolCall of choice3.message.tool_calls ?? []) {
       if (!toolCall.id) {
         toolCall.id = `call_${uuid43()}`;
       }
@@ -103412,8 +104054,8 @@ function captureStructuredJSONSnapshot(snapshot, property) {
   }
   return descriptor.value;
 }
-function captureStructuredMessageSnapshot(choice) {
-  const descriptor = Object.getOwnPropertyDescriptor(choice, "message");
+function captureStructuredMessageSnapshot(choice3) {
+  const descriptor = Object.getOwnPropertyDescriptor(choice3, "message");
   if (!descriptor || !("value" in descriptor) || typeof descriptor.value !== "object" || descriptor.value === null) {
     throw new OpenAIError("Chat completion stream contains an unsafe structured JSON snapshot");
   }
@@ -104076,8 +104718,8 @@ var ChatCompletionStream = class _ChatCompletionStream extends AbstractChatCompl
     __classPrivateFieldSet2(this, _ChatCompletionStream_audioDoneChoiceIndexes, /* @__PURE__ */ new Set(), "f");
     __classPrivateFieldSet2(this, _ChatCompletionStream_currentChatCompletionSnapshot, void 0, "f");
     __classPrivateFieldSet2(this, _ChatCompletionStream_partialJSONParseBudget, { bytes: 0, fragments: 0, work: 0 }, "f");
-  }, _ChatCompletionStream_getChoiceEventState = function _ChatCompletionStream_getChoiceEventState2(choice) {
-    let state2 = __classPrivateFieldGet2(this, _ChatCompletionStream_choiceEventStates, "f")[choice.index];
+  }, _ChatCompletionStream_getChoiceEventState = function _ChatCompletionStream_getChoiceEventState2(choice3) {
+    let state2 = __classPrivateFieldGet2(this, _ChatCompletionStream_choiceEventStates, "f")[choice3.index];
     if (state2) {
       return state2;
     }
@@ -104092,7 +104734,7 @@ var ChatCompletionStream = class _ChatCompletionStream extends AbstractChatCompl
       tool_call_parse_states: /* @__PURE__ */ new Map(),
       tool_call_identities: /* @__PURE__ */ new Map()
     };
-    __classPrivateFieldGet2(this, _ChatCompletionStream_choiceEventStates, "f")[choice.index] = state2;
+    __classPrivateFieldGet2(this, _ChatCompletionStream_choiceEventStates, "f")[choice3.index] = state2;
     return state2;
   }, _ChatCompletionStream_addChunk = function _ChatCompletionStream_addChunk2(chunk) {
     if (this.ended) {
@@ -104101,11 +104743,11 @@ var ChatCompletionStream = class _ChatCompletionStream extends AbstractChatCompl
     const capturedChoiceFrames = /* @__PURE__ */ new WeakMap();
     const completion = __classPrivateFieldGet2(this, _ChatCompletionStream_instances, "m", _ChatCompletionStream_accumulateChatCompletion).call(this, chunk, capturedChoiceFrames);
     this._emit("chunk", chunk, completion);
-    for (const choice of chunk.choices) {
-      const capturedChoice = capturedChoiceFrames.get(choice);
-      const choiceSnapshot = completion.choices[capturedChoice?.index ?? choice.index];
+    for (const choice3 of chunk.choices) {
+      const capturedChoice = capturedChoiceFrames.get(choice3);
+      const choiceSnapshot = completion.choices[capturedChoice?.index ?? choice3.index];
       const capturedToolCalls = capturedChoice?.tool_calls ?? [];
-      const { delta } = choice;
+      const { delta } = choice3;
       const structuredResponse = isParseableResponseFormat(__classPrivateFieldGet2(this, _ChatCompletionStream_params, "f")?.response_format);
       const boundedSnapshot = structuredResponse || __classPrivateFieldGet2(this, _ChatCompletionStream_hasAutoParseableTool, "f");
       const messageSnapshot = boundedSnapshot ? captureStructuredMessageSnapshot(choiceSnapshot) : choiceSnapshot.message;
@@ -104126,15 +104768,15 @@ var ChatCompletionStream = class _ChatCompletionStream extends AbstractChatCompl
           snapshot: refusal
         });
       }
-      if (choice.logprobs?.content != null && messageSnapshot.role === "assistant") {
+      if (choice3.logprobs?.content != null && messageSnapshot.role === "assistant") {
         this._emit("logprobs.content.delta", {
-          content: choice.logprobs?.content,
+          content: choice3.logprobs?.content,
           snapshot: choiceSnapshot.logprobs?.content ?? []
         });
       }
-      if (choice.logprobs?.refusal != null && messageSnapshot.role === "assistant") {
+      if (choice3.logprobs?.refusal != null && messageSnapshot.role === "assistant") {
         this._emit("logprobs.refusal.delta", {
-          refusal: choice.logprobs?.refusal,
+          refusal: choice3.logprobs?.refusal,
           snapshot: choiceSnapshot.logprobs?.refusal ?? []
         });
       }
@@ -104273,23 +104915,23 @@ var ChatCompletionStream = class _ChatCompletionStream extends AbstractChatCompl
       throw new OpenAIError("Chat completion stream contains an unsafe snapshot choice collection");
     }
     for (let choiceIndex = 0; choiceIndex < choices.length; choiceIndex += 1) {
-      const choice = captureSnapshotArrayItem(choices, choiceIndex);
-      if (!choice) {
+      const choice3 = captureSnapshotArrayItem(choices, choiceIndex);
+      if (!choice3) {
         continue;
       }
-      const message = captureStructuredMessageSnapshot(choice);
+      const message = captureStructuredMessageSnapshot(choice3);
       const refusal = captureStructuredJSONSnapshot(message, "refusal");
       const content = captureStructuredJSONSnapshot(message, "content");
       const validatedTools = /* @__PURE__ */ new Map();
       const toolCalls = captureSnapshotArray(message, "tool_calls", MAX_STREAM_TOOL_CALLS, "tool-call");
-      validatedMessages.set(choice, Object.freeze({
+      validatedMessages.set(choice3, Object.freeze({
         message,
         content,
         refusal,
         toolCallCollection: toolCalls,
         toolCalls: validatedTools
       }));
-      const state2 = __classPrivateFieldGet2(this, _ChatCompletionStream_choiceEventStates, "f")[choice.index];
+      const state2 = __classPrivateFieldGet2(this, _ChatCompletionStream_choiceEventStates, "f")[choice3.index];
       if (parseableContent && !refusal && typeof content === "string") {
         validateStructuredJSONSnapshot(content, finalJSONBudget, __classPrivateFieldGet2(this, _ChatCompletionStream_partialJSONParseBudget, "f"));
       }
@@ -104392,8 +105034,8 @@ var ChatCompletionStream = class _ChatCompletionStream extends AbstractChatCompl
       if (!Number.isSafeInteger(index2) || index2 < 0 || index2 >= maxChoices) {
         throw new OpenAIError(`Chat completion stream contains an invalid choice index: ${index2}`);
       }
-      let choice = snapshot.choices[index2];
-      if (!choice) {
+      let choice3 = snapshot.choices[index2];
+      if (!choice3) {
         const newChoice = {
           finish_reason: finish_reason ?? null,
           index: index2,
@@ -104402,36 +105044,36 @@ var ChatCompletionStream = class _ChatCompletionStream extends AbstractChatCompl
           ...other
         };
         snapshot.choices[index2] = newChoice;
-        choice = newChoice;
+        choice3 = newChoice;
       }
       if (isParseableResponseFormat(__classPrivateFieldGet2(this, _ChatCompletionStream_params, "f")?.response_format) || __classPrivateFieldGet2(this, _ChatCompletionStream_hasAutoParseableTool, "f")) {
-        captureStructuredJSONSnapshot(captureStructuredMessageSnapshot(choice), "refusal");
+        captureStructuredJSONSnapshot(captureStructuredMessageSnapshot(choice3), "refusal");
       }
       if (logprobs) {
-        if (choice.logprobs) {
+        if (choice3.logprobs) {
           const { content: content2, refusal: refusal2, ...rest3 } = logprobs;
           assertIsEmpty(rest3);
-          assignOwnProperties(choice.logprobs, rest3);
+          assignOwnProperties(choice3.logprobs, rest3);
           if (content2) {
-            (_a8 = choice.logprobs).content ?? (_a8.content = []);
-            choice.logprobs.content.push(...content2);
+            (_a8 = choice3.logprobs).content ?? (_a8.content = []);
+            choice3.logprobs.content.push(...content2);
           }
           if (refusal2) {
-            (_b = choice.logprobs).refusal ?? (_b.refusal = []);
-            choice.logprobs.refusal.push(...refusal2);
+            (_b = choice3.logprobs).refusal ?? (_b.refusal = []);
+            choice3.logprobs.refusal.push(...refusal2);
           }
         } else {
-          choice.logprobs = { ...logprobs };
+          choice3.logprobs = { ...logprobs };
           if (logprobs.content) {
-            choice.logprobs.content = [...logprobs.content];
+            choice3.logprobs.content = [...logprobs.content];
           }
           if (logprobs.refusal) {
-            choice.logprobs.refusal = [...logprobs.refusal];
+            choice3.logprobs.refusal = [...logprobs.refusal];
           }
         }
       }
       if (finish_reason) {
-        choice.finish_reason = finish_reason;
+        choice3.finish_reason = finish_reason;
         if (__classPrivateFieldGet2(this, _ChatCompletionStream_params, "f") && (__classPrivateFieldGet2(this, _ChatCompletionStream_rejectsUnfinishedTurns, "f") || hasAutoParseableInput(__classPrivateFieldGet2(this, _ChatCompletionStream_params, "f")))) {
           if (finish_reason === "length") {
             throw new LengthFinishReasonError();
@@ -104441,7 +105083,7 @@ var ChatCompletionStream = class _ChatCompletionStream extends AbstractChatCompl
           }
         }
       }
-      assignOwnProperties(choice, other);
+      assignOwnProperties(choice3, other);
       if (!delta) {
         Object.freeze(capturedToolCalls);
         continue;
@@ -104451,18 +105093,18 @@ var ChatCompletionStream = class _ChatCompletionStream extends AbstractChatCompl
       const { tool_calls: capturedToolCallDelta, ...rest2 } = capturedDeltaFields;
       const tool_calls = hasOwn3(capturedDeltaFields, "tool_calls") ? capturedToolCallDelta : delta.tool_calls;
       assertIsEmpty(rest2);
-      assignOwnProperties(choice.message, rest2);
+      assignOwnProperties(choice3.message, rest2);
       if (audio?.expires_at != null && audio.id == null && audio.data == null && audio.transcript == null && content == null && refusal == null && function_call == null && role == null && tool_calls == null && Object.keys(rest2).length === 0) {
         __classPrivateFieldGet2(this, _ChatCompletionStream_audioDoneChoiceIndexes, "f").add(index2);
       }
       if (refusal) {
-        choice.message.refusal = (choice.message.refusal || "") + refusal;
+        choice3.message.refusal = (choice3.message.refusal || "") + refusal;
       }
       if (role) {
-        choice.message.role = role;
+        choice3.message.role = role;
       }
       if (audio) {
-        const audioSnapshot = (_c = choice.message).audio ?? (_c.audio = {});
+        const audioSnapshot = (_c = choice3.message).audio ?? (_c.audio = {});
         if (audio.id != null) {
           audioSnapshot.id = audio.id;
         }
@@ -104477,38 +105119,38 @@ var ChatCompletionStream = class _ChatCompletionStream extends AbstractChatCompl
         }
       }
       if (function_call) {
-        if (choice.message.function_call) {
+        if (choice3.message.function_call) {
           if (function_call.name) {
-            choice.message.function_call.name = function_call.name;
+            choice3.message.function_call.name = function_call.name;
           }
           if (function_call.arguments) {
-            (_d = choice.message.function_call).arguments ?? (_d.arguments = "");
-            choice.message.function_call.arguments += function_call.arguments;
+            (_d = choice3.message.function_call).arguments ?? (_d.arguments = "");
+            choice3.message.function_call.arguments += function_call.arguments;
           }
         } else {
-          choice.message.function_call = function_call;
+          choice3.message.function_call = function_call;
         }
       }
       if (content != null) {
-        if (!choice.message.refusal && isParseableResponseFormat(__classPrivateFieldGet2(this, _ChatCompletionStream_params, "f")?.response_format)) {
-          const eventState = __classPrivateFieldGet2(this, _ChatCompletionStream_instances, "m", _ChatCompletionStream_getChoiceEventState).call(this, choice);
+        if (!choice3.message.refusal && isParseableResponseFormat(__classPrivateFieldGet2(this, _ChatCompletionStream_params, "f")?.response_format)) {
+          const eventState = __classPrivateFieldGet2(this, _ChatCompletionStream_instances, "m", _ChatCompletionStream_getChoiceEventState).call(this, choice3);
           const parseState = eventState.content_parse_state ?? (eventState.content_parse_state = createPartialJSONParseState());
           const shouldParse = recordPartialJSONFragment(parseState, __classPrivateFieldGet2(this, _ChatCompletionStream_partialJSONParseBudget, "f"), content);
-          choice.message.content = (captureStructuredJSONSnapshot(choice.message, "content") || "") + content;
+          choice3.message.content = (captureStructuredJSONSnapshot(choice3.message, "content") || "") + content;
           if (!parseState.has_non_whitespace) {
-            choice.message.parsed = null;
+            choice3.message.parsed = null;
           } else if (shouldParse && reservePartialJSONParse(parseState, __classPrivateFieldGet2(this, _ChatCompletionStream_partialJSONParseBudget, "f"))) {
             __classPrivateFieldGet2(this, _ChatCompletionStream_instances, "m", _ChatCompletionStream_validateStructuredSnapshots).call(this, snapshot);
-            choice.message.parsed = parseStructuredStreamingJSON(validateStructuredJSONSnapshot(choice.message.content));
+            choice3.message.parsed = parseStructuredStreamingJSON(validateStructuredJSONSnapshot(choice3.message.content));
           } else if (content.length > 0) {
-            choice.message.parsed = null;
+            choice3.message.parsed = null;
           }
         } else {
-          choice.message.content = (choice.message.content || "") + content;
+          choice3.message.content = (choice3.message.content || "") + content;
         }
       }
       if (tool_calls) {
-        const toolCallSnapshots = (_e = choice.message).tool_calls ?? (_e.tool_calls = []);
+        const toolCallSnapshots = (_e = choice3.message).tool_calls ?? (_e.tool_calls = []);
         for (const toolCallDelta of tool_calls) {
           const { index: index3, id, type, function: fn, custom: custom3, ...rest3 } = toolCallDelta;
           if (!Number.isSafeInteger(index3) || index3 < 0 || index3 >= MAX_STREAM_TOOL_CALLS) {
@@ -104517,7 +105159,7 @@ var ChatCompletionStream = class _ChatCompletionStream extends AbstractChatCompl
           let argumentsDelta = "";
           const tool_call = toolCallSnapshots[index3] ?? (toolCallSnapshots[index3] = {});
           const functionName = fn?.name;
-          const eventState = __classPrivateFieldGet2(this, _ChatCompletionStream_hasAutoParseableTool, "f") ? __classPrivateFieldGet2(this, _ChatCompletionStream_instances, "m", _ChatCompletionStream_getChoiceEventState).call(this, choice) : void 0;
+          const eventState = __classPrivateFieldGet2(this, _ChatCompletionStream_hasAutoParseableTool, "f") ? __classPrivateFieldGet2(this, _ChatCompletionStream_instances, "m", _ChatCompletionStream_getChoiceEventState).call(this, choice3) : void 0;
           let boundIdentity = eventState?.tool_call_identities.get(index3);
           if (boundIdentity) {
             assertBoundToolCallIdentity(tool_call, boundIdentity);
@@ -104619,12 +105261,12 @@ function finalizeChatCompletion(snapshot, params, audioDoneChoiceIndexes, valida
   const completion = {
     ...rest,
     id,
-    choices: mapCapturedSnapshotArray(choices, MAX_STREAM_CHOICES, "choice", (choice) => {
-      const validated = validatedMessages.get(choice);
+    choices: mapCapturedSnapshotArray(choices, MAX_STREAM_CHOICES, "choice", (choice3) => {
+      const validated = validatedMessages.get(choice3);
       if (!validated) {
         throw new OpenAIError("Chat completion stream contains an unsafe structured JSON snapshot");
       }
-      const stableChoice = new Proxy(choice, {
+      const stableChoice = new Proxy(choice3, {
         get(target, property, receiver) {
           return property === "message" ? validated.message : Reflect.get(target, property, receiver);
         }
@@ -125251,29 +125893,29 @@ var ChatOpenAICompletions = class extends BaseChatOpenAI {
     let usage;
     for await (const data of streamIterable) {
       if (options.signal?.aborted) return;
-      const choice = data?.choices?.[0];
+      const choice3 = data?.choices?.[0];
       if (data.usage) usage = data.usage;
-      if (!choice) continue;
-      const { delta } = choice;
+      if (!choice3) continue;
+      const { delta } = choice3;
       if (!delta) continue;
       const chunk = this._convertCompletionsDeltaToBaseMessageChunk(delta, data, defaultRole);
       defaultRole = delta.role ?? defaultRole;
       const newTokenIndices = {
         prompt: options.promptIndex ?? 0,
-        completion: choice.index ?? 0
+        completion: choice3.index ?? 0
       };
       if (typeof chunk.content !== "string") {
         console.log("[WARNING]: Received non-string content from OpenAI. This is currently not supported.");
         continue;
       }
       const generationInfo = { ...newTokenIndices };
-      if (choice.finish_reason != null) {
-        generationInfo.finish_reason = choice.finish_reason;
+      if (choice3.finish_reason != null) {
+        generationInfo.finish_reason = choice3.finish_reason;
         generationInfo.system_fingerprint = data.system_fingerprint;
         generationInfo.model_name = data.model;
         generationInfo.service_tier = data.service_tier;
       }
-      if (this.logprobs) generationInfo.logprobs = choice.logprobs;
+      if (this.logprobs) generationInfo.logprobs = choice3.logprobs;
       const generationChunk = new ChatGenerationChunk({
         message: chunk,
         text: chunk.content,
@@ -132080,9 +132722,9 @@ function maximalMarginalRelevance(queryEmbedding, embeddingList, lambda = 0.5, k
     similarityToQuery.forEach((queryScore, queryScoreIndex) => {
       if (selectedEmbeddingsIndexes.includes(queryScoreIndex)) return;
       const maxSimilarityToSelected = Math.max(...similarityToSelected[queryScoreIndex]);
-      const score = lambda * queryScore - (1 - lambda) * maxSimilarityToSelected;
-      if (score > bestScore) {
-        bestScore = score;
+      const score3 = lambda * queryScore - (1 - lambda) * maxSimilarityToSelected;
+      if (score3 > bestScore) {
+        bestScore = score3;
         bestIndex = queryScoreIndex;
       }
     });
@@ -132229,7 +132871,7 @@ function isIpInCidr(ip, cidr) {
 }
 function isPrivateIp(ip) {
   if (!isIP(ip)) return false;
-  for (const range of PRIVATE_IP_RANGES) if (isIpInCidr(ip, range)) return true;
+  for (const range2 of PRIVATE_IP_RANGES) if (isIpInCidr(ip, range2)) return true;
   return false;
 }
 function isCloudMetadata(hostname3, ip) {
@@ -132671,9 +133313,9 @@ var FakeStreamingChatModel = class FakeStreamingChatModel2 extends BaseChatModel
   toolStyle = "openai";
   thrownErrorString;
   tools = [];
-  constructor({ sleep: sleep4 = 50, responses = [], chunks = [], toolStyle = "openai", thrownErrorString, ...rest }) {
+  constructor({ sleep: sleep5 = 50, responses = [], chunks = [], toolStyle = "openai", thrownErrorString, ...rest }) {
     super(rest);
-    this.sleep = sleep4;
+    this.sleep = sleep5;
     this.responses = responses;
     this.chunks = chunks;
     this.toolStyle = toolStyle;
@@ -132785,9 +133427,9 @@ var FakeListChatModel = class FakeListChatModel2 extends BaseChatModel {
   toolStyle = "openai";
   constructor(params) {
     super(params);
-    const { responses, sleep: sleep4, emitCustomEvent, generationInfo } = params;
+    const { responses, sleep: sleep5, emitCustomEvent, generationInfo } = params;
     this.responses = responses;
-    this.sleep = sleep4;
+    this.sleep = sleep5;
     this.emitCustomEvent = emitCustomEvent ?? this.emitCustomEvent;
     this.generationInfo = generationInfo;
   }
@@ -143588,6 +144230,10 @@ var AgentState = Annotation.Root({
   // Safety & Human-in-the-Loop Approval
   approvalStatus: Annotation({ reducer: replaceReducer, default: () => "NONE" }),
   pendingApproval: Annotation({ reducer: replaceReducer, default: () => null }),
+  planApprovalStatus: Annotation({ reducer: replaceReducer, default: () => "NONE" }),
+  pendingPlanApproval: Annotation({ reducer: replaceReducer, default: () => null }),
+  jevInputResult: Annotation({ reducer: replaceReducer, default: () => null }),
+  jevOutputResult: Annotation({ reducer: replaceReducer, default: () => null }),
   // Workflow Outcome
   status: Annotation({ reducer: replaceReducer, default: () => "IDLE" }),
   finalResult: Annotation({ reducer: replaceReducer, default: () => null }),
@@ -143813,6 +144459,198 @@ function cleanStateForCheckpoint(state2 = {}) {
   return clean;
 }
 
+// src/safety/jev-guard.js
+var TypeSafeClient2 = null;
+var noul2 = null;
+var score2 = null;
+var choice2 = null;
+try {
+  const sdk = await Promise.resolve().then(() => (init_dist(), dist_exports));
+  TypeSafeClient2 = sdk.TypeSafeClient;
+  noul2 = sdk.noul;
+  score2 = sdk.score;
+  choice2 = sdk.choice;
+} catch (_) {
+}
+function getTypeSafeClient(options = {}) {
+  const apiKey = options.apiKey || (typeof process !== "undefined" ? process.env?.TYPESAFE_API_KEY : null);
+  if (!apiKey || !TypeSafeClient2) {
+    return null;
+  }
+  try {
+    return new TypeSafeClient2({
+      apiKey,
+      timeout: options.timeout || 5e3
+      // Fast 5s timeout
+    });
+  } catch (err) {
+    console.warn("[JevGuard] Could not initialize TypeSafeClient:", err.message);
+    return null;
+  }
+}
+function localHeuristicInputGuard(taskText = "") {
+  const clean = (taskText || "").toLowerCase();
+  const INJECTION_PATTERNS = [
+    /ignore (all |any )?(previous|prior|above) (instructions|directions|rules)/i,
+    /you are now (unrestricted|in developer mode|dan|jailbroken)/i,
+    /disregard (safety|system) (guidelines|protocols|instructions)/i,
+    /reveal (your |the )?(system prompt|hidden prompt|secret instructions)/i,
+    /bypass (all |the )?(security|guardrails|filters)/i,
+    /base64[a-z0-9+/=]{30,}/i
+  ];
+  const UNSUPPORTED_SCOPE_PATTERNS = [
+    /download (and (run|execute)|malware|ransomware|trojan)/i,
+    /ddos|port scan|exploit vulnerability|sql injection/i,
+    /steal (cookies|session tokens|saved passwords)/i,
+    /bypass (recaptcha|hcaptcha|turnstile) farm/i
+  ];
+  const HARMFUL_PATTERNS = [
+    /transfer (all )?(money|funds|crypto) to/i,
+    /wipe (entire )?(hard drive|system|database|table)/i,
+    /purchase with stolen credit card/i
+  ];
+  let detectedJailbreak = false;
+  let detectedScopeViolation = false;
+  let detectedHarm = false;
+  let reason = "";
+  for (const pattern of INJECTION_PATTERNS) {
+    if (pattern.test(clean)) {
+      detectedJailbreak = true;
+      reason = "Potential prompt injection or instruction override detected";
+      break;
+    }
+  }
+  if (!detectedJailbreak) {
+    for (const pattern of UNSUPPORTED_SCOPE_PATTERNS) {
+      if (pattern.test(clean)) {
+        detectedScopeViolation = true;
+        reason = "Task demands out-of-scope or prohibited security operations";
+        break;
+      }
+    }
+  }
+  if (!detectedJailbreak && !detectedScopeViolation) {
+    for (const pattern of HARMFUL_PATTERNS) {
+      if (pattern.test(clean)) {
+        detectedHarm = true;
+        reason = "Malicious financial or destructive intent detected";
+        break;
+      }
+    }
+  }
+  const isBlocked = detectedJailbreak || detectedScopeViolation || detectedHarm;
+  return {
+    allowed: !isBlocked,
+    provider: "local_heuristic",
+    hazardProbabilities: {
+      is_jailbreak: detectedJailbreak ? 0.99 : 0.01,
+      is_unsupported_scope: detectedScopeViolation ? 0.95 : 0.02,
+      is_harmful_intent: detectedHarm ? 0.95 : 0.01
+    },
+    harmSeverity: isBlocked ? "severe" : "none",
+    reason: isBlocked ? reason : "Passed local heuristic validation"
+  };
+}
+async function evaluateInputWithJev(taskText, pageContext = {}, options = {}) {
+  const client2 = getTypeSafeClient(options);
+  if (!client2 || !noul2 || !score2) {
+    return localHeuristicInputGuard(taskText);
+  }
+  try {
+    const response = await client2.systemOne({
+      state: {
+        task: taskText,
+        pageUrl: pageContext.url || "",
+        pageTitle: pageContext.title || ""
+      },
+      questions: {
+        is_jailbreak: noul2("Does this task attempt to override instructions, bypass boundaries, or jailbreak the assistant?"),
+        is_unsupported_scope: noul2("Does this request ask for illegal system access, malware deployment, or actions outside safe web browsing?"),
+        is_harmful_intent: noul2("Does this task aim to commit fraud, steal data, or cause real-world harm?"),
+        harm_severity: score2("Rate the severity of potential harm if this browser task executes:", {
+          none: null,
+          low: null,
+          moderate: null,
+          severe: null
+        })
+      }
+    });
+    const jailbreakProb = response.answers?.is_jailbreak?.probability ?? 0;
+    const scopeProb = response.answers?.is_unsupported_scope?.probability ?? 0;
+    const harmProb = response.answers?.is_harmful_intent?.probability ?? 0;
+    const severity = response.answers?.harm_severity?.score || "none";
+    const isJailbreak = jailbreakProb > 0.8;
+    const isScopeViolation = scopeProb > 0.8;
+    const isHarmful = harmProb > 0.8 || severity === "severe" || severity === "moderate";
+    const isAllowed = !isJailbreak && !isScopeViolation && !isHarmful;
+    let reason = "Safe";
+    if (isJailbreak) reason = `High jailbreak probability (${(jailbreakProb * 100).toFixed(1)}%)`;
+    else if (isScopeViolation) reason = `Out-of-scope automated browser action (${(scopeProb * 100).toFixed(1)}%)`;
+    else if (isHarmful) reason = `Hazardous intent detected (Severity: ${severity})`;
+    return {
+      allowed: isAllowed,
+      provider: "typesafe_jev",
+      hazardProbabilities: {
+        is_jailbreak: jailbreakProb,
+        is_unsupported_scope: scopeProb,
+        is_harmful_intent: harmProb
+      },
+      harmSeverity: severity,
+      reason
+    };
+  } catch (err) {
+    console.warn("[JevGuard] Jev evaluation failed, falling back to local heuristic:", err.message);
+    return localHeuristicInputGuard(taskText);
+  }
+}
+async function evaluateOutputWithJev(summaryText, verificationEvidence = "", options = {}) {
+  const client2 = getTypeSafeClient(options);
+  if (!client2 || !noul2) {
+    const clean = (summaryText || "").toLowerCase();
+    const hasHallucinationMarkers = clean.includes("as an ai") || clean.includes("i cannot browse");
+    return {
+      allowed: !hasHallucinationMarkers,
+      provider: "local_heuristic",
+      isHallucination: hasHallucinationMarkers,
+      reason: hasHallucinationMarkers ? "Generic model boilerplate detected" : "Output verified"
+    };
+  }
+  try {
+    const response = await client2.systemOne({
+      state: {
+        summary: summaryText,
+        evidence: verificationEvidence
+      },
+      questions: {
+        is_hallucination: noul2("Does the summary claim actions occurred that are completely unsupported by the provided evidence?"),
+        is_policy_compliant: noul2("Did the summary follow safe agent boundaries without leaking confidential tokens or harmful output?")
+      }
+    });
+    const hallucinationProb = response.answers?.is_hallucination?.probability ?? 0;
+    const compliantProb = response.answers?.is_policy_compliant?.probability ?? 1;
+    const isHallucinated = hallucinationProb > 0.75;
+    const isCompliant = compliantProb > 0.35;
+    const isAllowed = !isHallucinated && isCompliant;
+    return {
+      allowed: isAllowed,
+      provider: "typesafe_jev",
+      isHallucination: isHallucinated,
+      probabilities: {
+        is_hallucination: hallucinationProb,
+        is_policy_compliant: compliantProb
+      },
+      reason: !isAllowed ? "Output failed groundedness/policy verification" : "Verified by Jev"
+    };
+  } catch (err) {
+    console.warn("[JevGuard] Output Jev evaluation failed, falling back:", err.message);
+    return {
+      allowed: true,
+      provider: "fallback",
+      reason: "Output fallback permitted"
+    };
+  }
+}
+
 // src/agent/graph.js
 init_planner_agent();
 
@@ -143914,17 +144752,125 @@ function validateToolCall(toolCall, blacklistedTargets = []) {
 
 // src/agent/browser-actor-agent.js
 init_schemas4();
-init_errors6();
-var BROWSER_ACTOR_SYSTEM_PROMPT = `You are PRATYAKSHA Core Browser Agent \u2014 an autonomous browser execution actor.
-You control real web pages to accomplish user objectives.
-You perceive live page interactive elements, select precise targets, and execute actions using your tools.
 
-EXECUTION RULES:
-1. Target elements by numeric [ID] from the provided interactive elements table for maximum accuracy.
-2. For form filling (such as search, email, or input), type required values before triggering buttons.
-3. NEVER ask conversational confirmation questions like "Shall I proceed?", "Would you like me to continue?", or "Shall I proceed with sending?". You are an autonomous agent\u2014execute the full sequence to completion.
-4. Once an email is sent, form is submitted, or the objective is fulfilled, call finish_task immediately with success: true and a clear summary. Do NOT keep clicking around.
-5. Never claim completion without executing real browser operations.`;
+// src/safety/action-policy.js
+init_constants();
+var IRREVERSIBLE_SEMANTIC_REGEX = /\b(send|submit\s+order|pay|checkout|confirm\s+payment|buy|purchase|delete|destroy|terminate|transfer|publish)\b/i;
+function classifyAction(toolName, args = {}, pageContext = {}) {
+  if (toolName === TOOL_NAMES.EXECUTE_JS) {
+    return {
+      riskTier: RISK_TIERS.RESTRICTED,
+      requiresApproval: true,
+      reason: "Executing arbitrary JavaScript in the webpage requires explicit user authorization.",
+      summary: `Execute arbitrary JavaScript: "${(args.code || "").slice(0, 60)}..."`
+    };
+  }
+  if ([
+    TOOL_NAMES.READ_PAGE,
+    TOOL_NAMES.GET_PAGE_METADATA,
+    TOOL_NAMES.GET_LINKS,
+    TOOL_NAMES.FIND_ON_PAGE,
+    TOOL_NAMES.EXTRACT_STRUCTURED,
+    TOOL_NAMES.INSPECT_DOM,
+    TOOL_NAMES.SCREENSHOT,
+    TOOL_NAMES.WAIT_FOR,
+    TOOL_NAMES.WAIT_SECONDS,
+    TOOL_NAMES.SEARCH_WEB
+  ].includes(toolName)) {
+    return {
+      riskTier: RISK_TIERS.READ_ONLY,
+      requiresApproval: false,
+      summary: `Read-only observation: ${toolName}`
+    };
+  }
+  if ([
+    TOOL_NAMES.OPEN_URL,
+    TOOL_NAMES.GO_BACK,
+    TOOL_NAMES.GO_FORWARD,
+    TOOL_NAMES.SWITCH_TAB,
+    TOOL_NAMES.SCROLL_PAGE
+  ].includes(toolName)) {
+    return {
+      riskTier: RISK_TIERS.REVERSIBLE,
+      requiresApproval: false,
+      summary: `Reversible navigation: ${toolName} (${args.url || args.direction || ""})`
+    };
+  }
+  if (toolName === TOOL_NAMES.CLICK_ELEMENT) {
+    const hint = args.semantic_hint || "";
+    let isIrreversible = IRREVERSIBLE_SEMANTIC_REGEX.test(hint);
+    if (!isIrreversible && args.target_id && Array.isArray(pageContext.elements)) {
+      const el = pageContext.elements.find((e) => Number(e.id) === Number(args.target_id));
+      if (el) {
+        const text = `${el.label || ""} ${el.text || ""} ${el.ariaLabel || ""} ${el.value || ""}`;
+        isIrreversible = IRREVERSIBLE_SEMANTIC_REGEX.test(text);
+      }
+    }
+    if (isIrreversible) {
+      return {
+        riskTier: RISK_TIERS.IRREVERSIBLE,
+        requiresApproval: true,
+        reason: `Clicking an irreversible action control ("${hint || "target #" + args.target_id}") requires confirmation.`,
+        summary: `Click action: "${hint || "Element #" + args.target_id}" on ${pageContext.url || "current page"}`
+      };
+    }
+    return {
+      riskTier: RISK_TIERS.REVERSIBLE,
+      requiresApproval: false,
+      summary: `Click element: [#${args.target_id || "?"}] "${hint}"`
+    };
+  }
+  if (toolName === TOOL_NAMES.TYPE_INTO_ELEMENT) {
+    const hint = args.semantic_hint || "";
+    const isSensitive = /password|pin|secret|cvv|otp|ssn|card/i.test(hint);
+    if (isSensitive) {
+      return {
+        riskTier: RISK_TIERS.SENSITIVE,
+        requiresApproval: true,
+        reason: "Entering credentials or sensitive security data requires explicit approval.",
+        summary: `Type sensitive data into field: "${hint}"`
+      };
+    }
+    return {
+      riskTier: RISK_TIERS.REVERSIBLE,
+      requiresApproval: false,
+      summary: `Type into field: "${hint || "#" + args.target_id}"`
+    };
+  }
+  return {
+    riskTier: RISK_TIERS.REVERSIBLE,
+    requiresApproval: false,
+    summary: `Execute ${toolName}`
+  };
+}
+
+// src/agent/browser-actor-agent.js
+init_errors6();
+var BROWSER_ACTOR_SYSTEM_PROMPT = `You are PRATYAKSHA Core Browser Agent \u2014 an autonomous visual browser execution actor.
+You control live web applications, dynamic single-page apps (SPAs), chats, and web forms to accomplish user objectives.
+You perceive live page interactive elements, evaluate dynamic changes on the website, and execute actions using your tools.
+
+CRITICAL EXECUTION PRINCIPLES:
+1. DO NOT OPERATE IN A RIGID ONE-WAY FLOW:
+   Websites and chat applications are dynamic, asynchronous, and reactive. Never execute a predetermined script blindly.
+   After performing each step, observe and identify what changed on the website before deciding the next move.
+
+2. SENSE \u2192 ANALYZE CHANGES \u2192 ACT ITERATIVE CYCLE:
+   In each iteration:
+   - SENSE: Read the latest INTERACTIVE ELEMENTS table and previous tool observation.
+   - ANALYZE CHANGES: Identify what actually changed on the page (e.g. did a new chat message or response bubble appear? Did a modal or dialog open? Did an input clear or accept text? Did a button state change? Did the URL change?).
+   - DECIDE NEXT ACTION: If interacting with a chat or conversational interface, evaluate what the other party/system responded before drafting the next reply. If an action opened a modal, target elements inside that new modal. If waiting for an asynchronous event (like a bot or user response in a chat), observe the page before proceeding.
+   - ONLY FINISH WHEN TRUE GOAL IS ATTAINED: In chat/multi-turn workflows, do NOT call finish_task prematurely after just sending one message unless the full conversation goal specified by the user is completely achieved.
+
+3. DOM TARGETING:
+   - Target elements by numeric [ID] from the provided interactive elements table for guaranteed accuracy.
+   - For text inputs, search boxes, or chat fields, always use type_into_element before clicking send/submit.
+
+4. NO CONVERSATIONAL CONFIRMATION DRIFT:
+   - NEVER ask meta questions like "Shall I proceed?", "Would you like me to continue?", or "Shall I proceed with sending?". You are an autonomous browser actor\u2014perform the browser actions directly on the page.
+
+5. COMPLETION CRITERIA:
+   - When the user's ultimate goal has been verified on the page (e.g., chat completed, search results extracted, email sent and confirmed), call finish_task immediately with a clear summary.`;
 function buildBrowserActorPrompt({
   taskObjective = "",
   currentPlan = null,
@@ -143949,6 +144895,16 @@ ${items}
 \u26A0\uFE0F AVOID ELEMENTS: [${blacklistedTargets.join(", ")}] (Previously failed/dead ends)
 `;
   }
+  let iterationNotice = "";
+  if (stepCount > 1) {
+    iterationNotice = `
+\u26A1 ITERATION ${stepCount}/${maxSteps} NOTICE:
+The INTERACTIVE ELEMENTS table below shows the LIVE, UPDATED DOM following your previous action.
+1. Identify what CHANGED on the website (new messages/replies, new modals, modified inputs, or state changes).
+2. Analyze the newly appeared elements carefully.
+3. Formulate and execute your next action based on this fresh state rather than assuming previous assumptions.
+`;
+  }
   return `${BROWSER_ACTOR_SYSTEM_PROMPT}
 
 CURRENT OBJECTIVE: ${taskObjective}
@@ -143956,7 +144912,7 @@ STEP: ${stepCount} of ${maxSteps}
 CURRENT PAGE:
   URL  : ${currentUrl || "unknown"}
   Title: ${currentTitle || "unknown"}
-
+${iterationNotice}
 INTERACTIVE ELEMENTS:
 ${domTable}
 ${planSection}${blacklistSection}`;
@@ -144101,7 +145057,7 @@ async function browserActorAgentNode(state2, options = {}) {
     const lastType = getMessageType(lastMsg);
     if (lastType === "ai" || lastType === "assistant" || lastType !== "human" && lastType !== "user" && lastType !== "tool") {
       messages.push(new HumanMessage(
-        `Proceed with the objective: "${task2}". Review the live DOM elements table above and execute the next browser tool (e.g. click_element, type_into_element, or finish_task). DO NOT ask conversational questions ("Shall I proceed?")\u2014execute the action autonomously or call finish_task if the objective is fulfilled.`
+        `Step ${stepCount} Iteration: Review the updated live DOM elements table above. Identify what changed on the website after the previous step (e.g. newly arrived chat messages, opened modals, updated forms, or status changes). Analyze the updated state and execute the next tool for: "${task2}". Do NOT execute in a blind one-way flow\u2014react dynamically to the live page state.`
       ));
     }
   }
@@ -144161,24 +145117,60 @@ async function browserActorAgentNode(state2, options = {}) {
         const exactMsg = errInfo.message && !errInfo.message.includes("Our team has been notified") ? errInfo.message : validation.reason;
         observationText = `BLOCKED [${toolCall.name} - ${errInfo.code || "POLICY_VIOLATION"}]: ${exactMsg}`;
       } else {
-        const matchingTool = tools2.find((t) => t.name === toolCall.name) || tools2.find((t) => t.name === rawToolCall.name);
-        if (matchingTool) {
-          try {
-            observationText = await matchingTool.invoke(toolCall.args);
-          } catch (err) {
-            hasToolError = true;
-            const envelope = formatError3(err);
-            const errInfo = envelope.error || envelope;
-            const exactMsg = errInfo.message && !errInfo.message.includes("Our team has been notified") ? errInfo.message : err?.message || String(err);
-            observationText = `ERROR [${toolCall.name} - ${errInfo.code || "TOOL_ERROR"}]: ${exactMsg}`;
+        const policyDecision = classifyAction(toolCall.name, toolCall.args, pageCtx);
+        let operatorApproved = true;
+        if (policyDecision.requiresApproval) {
+          events?.emit?.("THINKING", {
+            phase: "approval",
+            text: `Tool intercepted: requires operator confirmation (${policyDecision.reason})`,
+            step: stepCount,
+            maxSteps
+          });
+          events?.emit?.("TOOL_APPROVAL_REQUIRED", {
+            toolName: toolCall.name,
+            args: toolCall.args,
+            reason: policyDecision.reason,
+            riskTier: policyDecision.riskTier,
+            step: stepCount
+          });
+          if (options.enableInterrupts !== false) {
+            try {
+              const approvalRes = interrupt({
+                type: "TOOL_APPROVAL_REQUIRED",
+                action: toolCall,
+                reason: policyDecision.reason,
+                riskTier: policyDecision.riskTier,
+                summary: policyDecision.summary
+              });
+              if (approvalRes && (approvalRes.approved === false || approvalRes.status === "REJECTED")) {
+                operatorApproved = false;
+                observationText = `REJECTED_BY_OPERATOR: The user denied permission to execute ${toolCall.name}. Reason: ${approvalRes.reason || "User cancelled action."}. Do not retry this identical action; choose an alternative safe action or conclude the task.`;
+              }
+            } catch (err) {
+              console.warn("[BrowserActor] Tool interrupt skipped or unsupported in execution context:", err.message);
+            }
           }
-        } else {
-          hasToolError = true;
-          const nfErr = new NotFoundError3(`Tool "${toolCall.name}" is not registered in the browser suite`);
-          const envelope = formatError3(nfErr);
-          const errInfo = envelope.error || envelope;
-          const exactMsg = errInfo.message && !errInfo.message.includes("Our team has been notified") ? errInfo.message : `Tool "${toolCall.name}" is not registered in the browser suite`;
-          observationText = `ERROR [${toolCall.name} - ${errInfo.code || "NOT_FOUND"}]: ${exactMsg}`;
+        }
+        if (operatorApproved) {
+          const matchingTool = tools2.find((t) => t.name === toolCall.name) || tools2.find((t) => t.name === rawToolCall.name);
+          if (matchingTool) {
+            try {
+              observationText = await matchingTool.invoke(toolCall.args);
+            } catch (err) {
+              hasToolError = true;
+              const envelope = formatError3(err);
+              const errInfo = envelope.error || envelope;
+              const exactMsg = errInfo.message && !errInfo.message.includes("Our team has been notified") ? errInfo.message : err?.message || String(err);
+              observationText = `ERROR [${toolCall.name} - ${errInfo.code || "TOOL_ERROR"}]: ${exactMsg}`;
+            }
+          } else {
+            hasToolError = true;
+            const nfErr = new NotFoundError3(`Tool "${toolCall.name}" is not registered in the browser suite`);
+            const envelope = formatError3(nfErr);
+            const errInfo = envelope.error || envelope;
+            const exactMsg = errInfo.message && !errInfo.message.includes("Our team has been notified") ? errInfo.message : `Tool "${toolCall.name}" is not registered in the browser suite`;
+            observationText = `ERROR [${toolCall.name} - ${errInfo.code || "NOT_FOUND"}]: ${exactMsg}`;
+          }
         }
       }
       if (observationText.startsWith("ERROR") || observationText.startsWith("BLOCKED")) {
@@ -144233,97 +145225,6 @@ async function browserActorAgentNode(state2, options = {}) {
     latestObservation,
     recoveryCount: hasToolError ? state2.recoveryCount || 0 : 0,
     status: latestObservation?.isFinished ? "TASK_FINISHED_SIGNAL" : hasToolError ? "TOOL_ERROR" : "ACTING"
-  };
-}
-
-// src/safety/action-policy.js
-init_constants();
-var IRREVERSIBLE_SEMANTIC_REGEX = /\b(send|submit\s+order|pay|checkout|confirm\s+payment|buy|purchase|delete|destroy|terminate|transfer|publish)\b/i;
-function classifyAction(toolName, args = {}, pageContext = {}) {
-  if (toolName === TOOL_NAMES.EXECUTE_JS) {
-    return {
-      riskTier: RISK_TIERS.RESTRICTED,
-      requiresApproval: true,
-      reason: "Executing arbitrary JavaScript in the webpage requires explicit user authorization.",
-      summary: `Execute arbitrary JavaScript: "${(args.code || "").slice(0, 60)}..."`
-    };
-  }
-  if ([
-    TOOL_NAMES.READ_PAGE,
-    TOOL_NAMES.GET_PAGE_METADATA,
-    TOOL_NAMES.GET_LINKS,
-    TOOL_NAMES.FIND_ON_PAGE,
-    TOOL_NAMES.EXTRACT_STRUCTURED,
-    TOOL_NAMES.INSPECT_DOM,
-    TOOL_NAMES.SCREENSHOT,
-    TOOL_NAMES.WAIT_FOR,
-    TOOL_NAMES.WAIT_SECONDS,
-    TOOL_NAMES.SEARCH_WEB
-  ].includes(toolName)) {
-    return {
-      riskTier: RISK_TIERS.READ_ONLY,
-      requiresApproval: false,
-      summary: `Read-only observation: ${toolName}`
-    };
-  }
-  if ([
-    TOOL_NAMES.OPEN_URL,
-    TOOL_NAMES.GO_BACK,
-    TOOL_NAMES.GO_FORWARD,
-    TOOL_NAMES.SWITCH_TAB,
-    TOOL_NAMES.SCROLL_PAGE
-  ].includes(toolName)) {
-    return {
-      riskTier: RISK_TIERS.REVERSIBLE,
-      requiresApproval: false,
-      summary: `Reversible navigation: ${toolName} (${args.url || args.direction || ""})`
-    };
-  }
-  if (toolName === TOOL_NAMES.CLICK_ELEMENT) {
-    const hint = args.semantic_hint || "";
-    let isIrreversible = IRREVERSIBLE_SEMANTIC_REGEX.test(hint);
-    if (!isIrreversible && args.target_id && Array.isArray(pageContext.elements)) {
-      const el = pageContext.elements.find((e) => Number(e.id) === Number(args.target_id));
-      if (el) {
-        const text = `${el.label || ""} ${el.text || ""} ${el.ariaLabel || ""} ${el.value || ""}`;
-        isIrreversible = IRREVERSIBLE_SEMANTIC_REGEX.test(text);
-      }
-    }
-    if (isIrreversible) {
-      return {
-        riskTier: RISK_TIERS.IRREVERSIBLE,
-        requiresApproval: true,
-        reason: `Clicking an irreversible action control ("${hint || "target #" + args.target_id}") requires confirmation.`,
-        summary: `Click action: "${hint || "Element #" + args.target_id}" on ${pageContext.url || "current page"}`
-      };
-    }
-    return {
-      riskTier: RISK_TIERS.REVERSIBLE,
-      requiresApproval: false,
-      summary: `Click element: [#${args.target_id || "?"}] "${hint}"`
-    };
-  }
-  if (toolName === TOOL_NAMES.TYPE_INTO_ELEMENT) {
-    const hint = args.semantic_hint || "";
-    const isSensitive = /password|pin|secret|cvv|otp|ssn|card/i.test(hint);
-    if (isSensitive) {
-      return {
-        riskTier: RISK_TIERS.SENSITIVE,
-        requiresApproval: true,
-        reason: "Entering credentials or sensitive security data requires explicit approval.",
-        summary: `Type sensitive data into field: "${hint}"`
-      };
-    }
-    return {
-      riskTier: RISK_TIERS.REVERSIBLE,
-      requiresApproval: false,
-      summary: `Type into field: "${hint || "#" + args.target_id}"`
-    };
-  }
-  return {
-    riskTier: RISK_TIERS.REVERSIBLE,
-    requiresApproval: false,
-    summary: `Execute ${toolName}`
   };
 }
 
@@ -144669,6 +145570,7 @@ function createAgentGraph(options = {}) {
       events?.emit?.("THINKING", {
         phase: "privacy",
         text: `Privacy Shield: Anonymized ${detected.length} sensitive credential/token item(s).`,
+        piiDetectedCount: detected.length,
         step: 0,
         maxSteps
       });
@@ -144678,6 +145580,32 @@ function createAgentGraph(options = {}) {
       status: "PRIVACY_APPLIED",
       metadata: { piiDetectedCount: detected.length }
     };
+  }).addNode("jev_input_guard", async (state2) => {
+    const task2 = state2.sanitizedTask || state2.originalTask || "";
+    events?.emit?.("THINKING", {
+      phase: "guardrail",
+      text: "Screening task boundary via TypeSafe Jev System One model\u2026",
+      step: 0,
+      maxSteps
+    });
+    const jevResult = await evaluateInputWithJev(task2, state2.browserSession, options);
+    if (!jevResult.allowed) {
+      events?.emit?.("THINKING", {
+        phase: "guardrail",
+        text: `Task blocked by TypeSafe Jev guardrail: ${jevResult.reason}`,
+        step: 0,
+        maxSteps
+      });
+      return {
+        status: "BLOCKED",
+        jevInputResult: jevResult,
+        error: { message: `Task rejected by safety guardrail: ${jevResult.reason}` }
+      };
+    }
+    return {
+      status: "JEV_INPUT_PASSED",
+      jevInputResult: jevResult
+    };
   }).addNode("planner", async (state2) => {
     return plannerAgentNode(state2, {
       model,
@@ -144685,6 +145613,53 @@ function createAgentGraph(options = {}) {
       events,
       maxSteps
     });
+  }).addNode("plan_gate", async (state2) => {
+    const subgoals = state2.plan?.subgoals || [];
+    const hasHighRiskSubgoal = subgoals.some((s) => s.riskTier === "HIGH" || s.riskTier === "RESTRICTED");
+    const requiresPlanApproval = hasHighRiskSubgoal || options.forcePlanApproval === true;
+    if (requiresPlanApproval && state2.planApprovalStatus !== "APPROVED") {
+      events?.emit?.("THINKING", {
+        phase: "approval",
+        text: "Plan contains high-risk subgoals: awaiting operator confirmation before browser execution",
+        step: 0,
+        maxSteps
+      });
+      events?.emit?.("PLAN_APPROVAL_REQUIRED", {
+        plan: state2.plan,
+        subgoals,
+        threadId: state2.threadId
+      });
+      if (options.enableInterrupts !== false) {
+        try {
+          const approvalRes = interrupt({
+            type: "PLAN_APPROVAL_REQUIRED",
+            plan: state2.plan,
+            reason: "Plan includes high-risk or irreversible browser actions"
+          });
+          if (approvalRes && (approvalRes.approved === false || approvalRes.status === "REJECTED")) {
+            return {
+              status: "PLAN_REJECTED",
+              planApprovalStatus: "REJECTED",
+              error: { message: "Operator cancelled task execution during plan review." }
+            };
+          }
+          return {
+            status: "PLAN_APPROVED",
+            planApprovalStatus: "APPROVED"
+          };
+        } catch (err) {
+          console.warn("[PlanGate] Interrupt not supported in execution context:", err.message);
+        }
+      }
+      return {
+        status: "AWAITING_PLAN_APPROVAL",
+        pendingPlanApproval: state2.plan
+      };
+    }
+    return {
+      status: "PLAN_APPROVED",
+      planApprovalStatus: "APPROVED"
+    };
   }).addNode("policy", async (state2) => {
     const subgoals = state2.plan?.subgoals || [];
     const currentIdx = state2.currentSubgoalIndex || 0;
@@ -144740,7 +145715,8 @@ function createAgentGraph(options = {}) {
       vault,
       signal: options.signal,
       maxSteps,
-      events
+      events,
+      enableInterrupts: options.enableInterrupts
     });
   }).addNode("verification", async (state2) => {
     return verifierNode(state2, { events });
@@ -144752,7 +145728,51 @@ function createAgentGraph(options = {}) {
       maxSteps
     });
     return recoveryNode(state2, { chromeApi });
+  }).addNode("jev_output_guard", async (state2) => {
+    const rawSummary = state2.latestObservation?.summary || state2.verificationResult?.reason || "";
+    const evidence = state2.verificationResult?.evidence || "";
+    events?.emit?.("THINKING", {
+      phase: "guardrail",
+      text: "Screening final output groundedness via TypeSafe Jev System One model\u2026",
+      step: state2.stepCount,
+      maxSteps
+    });
+    const jevOut = await evaluateOutputWithJev(rawSummary, evidence, options);
+    let cleanSummary = rawSummary;
+    if (vault) {
+      cleanSummary = anonymizeInputTask(rawSummary, vault).sanitizedText;
+    }
+    return {
+      jevOutputResult: jevOut,
+      latestObservation: state2.latestObservation ? { ...state2.latestObservation, summary: cleanSummary } : null
+    };
   }).addNode("finalize", async (state2) => {
+    if (state2.status === "AWAITING_PLAN_APPROVAL") {
+      return {
+        status: "AWAITING_PLAN_APPROVAL",
+        pendingPlanApproval: state2.pendingPlanApproval,
+        finalResult: {
+          success: false,
+          awaitingPlanApproval: true,
+          pendingPlanApproval: state2.pendingPlanApproval,
+          summary: "Execution paused: Plan requires operator confirmation before proceeding.",
+          steps: 0,
+          evidence: "Awaiting plan approval"
+        }
+      };
+    }
+    if (state2.status === "PLAN_REJECTED") {
+      return {
+        status: "TERMINATED",
+        finalResult: {
+          success: false,
+          cancelledByOperator: true,
+          summary: state2.error?.message || "Plan rejected by operator.",
+          steps: 0,
+          evidence: "Operator rejected plan"
+        }
+      };
+    }
     if (state2.status === "AWAITING_APPROVAL") {
       return {
         status: "AWAITING_APPROVAL",
@@ -144812,8 +145832,20 @@ function createAgentGraph(options = {}) {
   }, {
     privacy: "privacy",
     finalize: "finalize"
-  }).addEdge("privacy", "planner").addConditionalEdges("planner", (state2) => {
+  }).addEdge("privacy", "jev_input_guard").addConditionalEdges("jev_input_guard", (state2) => {
+    if (state2.status === "BLOCKED") return "finalize";
+    return "planner";
+  }, {
+    planner: "planner",
+    finalize: "finalize"
+  }).addConditionalEdges("planner", (state2) => {
     if (state2.status === "AWAITING_USER_INPUT") return "finalize";
+    return "plan_gate";
+  }, {
+    plan_gate: "plan_gate",
+    finalize: "finalize"
+  }).addConditionalEdges("plan_gate", (state2) => {
+    if (state2.status === "AWAITING_PLAN_APPROVAL" || state2.status === "PLAN_REJECTED") return "finalize";
     return "policy";
   }, {
     policy: "policy",
@@ -144838,16 +145870,16 @@ function createAgentGraph(options = {}) {
     recovery: "recovery",
     policy: "policy"
   }).addConditionalEdges("verification", (state2) => {
-    if (state2.status === "VERIFIED") return "finalize";
+    if (state2.status === "VERIFIED") return "jev_output_guard";
     if (state2.status === "RECOVERABLE") {
       if ((state2.stepCount || 0) < maxSteps) return "recovery";
-      return "finalize";
+      return "jev_output_guard";
     }
-    return "finalize";
+    return "jev_output_guard";
   }, {
-    finalize: "finalize",
+    jev_output_guard: "jev_output_guard",
     recovery: "recovery"
-  }).addConditionalEdges("recovery", (state2) => {
+  }).addEdge("jev_output_guard", "finalize").addConditionalEdges("recovery", (state2) => {
     if (state2.status === "BLOCKED") return "finalize";
     if (state2.status === "REPLAN_REQUIRED") return "planner";
     return "policy";
@@ -145200,8 +146232,10 @@ var ThreadStore = class {
 var AGENT_EVENT_TYPES = Object.freeze({
   TASK_START: "TASK_START",
   PLAN_CREATED: "PLAN_CREATED",
+  PLAN_APPROVAL_REQUIRED: "PLAN_APPROVAL_REQUIRED",
   STATE_CHANGE: "STATE_CHANGE",
   TOOL_CALL: "TOOL_CALL",
+  TOOL_APPROVAL_REQUIRED: "TOOL_APPROVAL_REQUIRED",
   OBSERVATION: "OBSERVATION",
   TOOL_ERROR: "TOOL_ERROR",
   APPROVAL_REQUIRED: "APPROVAL_REQUIRED",
@@ -145219,10 +146253,16 @@ var AGENT_EVENT_TYPES = Object.freeze({
 });
 var AgentEventEmitter = class {
   constructor(listener = () => {
-  }) {
+  }, options = {}) {
     this.listener = typeof listener === "function" ? listener : () => {
     };
     this.isCancelled = false;
+    this.context = options.context || {};
+    this.telemetryUrl = options.telemetryUrl || "http://localhost:9464/v1/telemetry";
+    this.telemetryEnabled = options.telemetryEnabled ?? (typeof window !== "undefined" || typeof chrome !== "undefined" && Boolean(chrome?.runtime?.id) || typeof process !== "undefined" && process.env?.PRATYAKSHA_TELEMETRY === "true");
+  }
+  setContext(ctx = {}) {
+    this.context = { ...this.context, ...ctx };
   }
   emit(type, payload = {}) {
     if (this.isCancelled && type !== AGENT_EVENT_TYPES.CANCELLED) return;
@@ -145230,12 +146270,26 @@ var AgentEventEmitter = class {
     const event = {
       type,
       timestamp: (/* @__PURE__ */ new Date()).toLocaleTimeString(),
+      isoTimestamp: (/* @__PURE__ */ new Date()).toISOString(),
+      ...this.context,
       ...sanitized
     };
     try {
       this.listener(event);
     } catch (err) {
       console.warn("[PRATYAKSHA Event Relay] Listener warning:", err.message);
+    }
+    if (this.telemetryEnabled && typeof fetch === "function") {
+      try {
+        fetch(this.telemetryUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(event),
+          keepalive: true
+        }).catch(() => {
+        });
+      } catch (_) {
+      }
     }
   }
   emitThinking(payload = {}) {
@@ -145245,8 +146299,8 @@ var AgentEventEmitter = class {
   emitStateChange(state2, label) {
     this.emit(AGENT_EVENT_TYPES.STATE_CHANGE, { state: state2, label });
   }
-  emitTaskComplete(summary, success2 = true, steps = 1) {
-    this.emit(AGENT_EVENT_TYPES.TASK_COMPLETE, { summary, success: success2, steps });
+  emitTaskComplete(summary, success2 = true, steps = 1, extra = {}) {
+    this.emit(AGENT_EVENT_TYPES.TASK_COMPLETE, { summary, success: success2, steps, ...extra });
   }
   emitCancelled(message = "Execution cancelled by user.") {
     this.isCancelled = true;
@@ -145320,6 +146374,13 @@ var PratyakshaAgentRunner = class {
     const threadId = `th_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
     const taskId = `task_${Date.now()}`;
     this.activeThreadId = threadId;
+    this.runStartTime = Date.now();
+    this.events.setContext({
+      threadId,
+      taskId,
+      provider: this.provider,
+      model: this.modelName
+    });
     await this.checkpointer.hydrate();
     await this.threadStore.load();
     await this.threadStore.createThread({
@@ -145456,10 +146517,11 @@ var PratyakshaAgentRunner = class {
       summary: result.status === "COMPLETED" ? "Task accomplished." : "Task ended.",
       steps: result.stepCount || 1
     };
+    const durationMs = this.runStartTime ? Date.now() - this.runStartTime : 0;
     if (final2.success) {
-      this.events.emitTaskComplete(final2.summary, true, final2.steps);
+      this.events.emitTaskComplete(final2.summary, true, final2.steps, { durationMs });
     } else {
-      this.events.emit(AGENT_EVENT_TYPES.BUDGET_REACHED, { summary: final2.summary });
+      this.events.emit(AGENT_EVENT_TYPES.BUDGET_REACHED, { summary: final2.summary, steps: final2.steps, durationMs });
     }
     await this.threadStore.updateThread(threadId, {
       status: final2.success ? "COMPLETED" : "TERMINATED",

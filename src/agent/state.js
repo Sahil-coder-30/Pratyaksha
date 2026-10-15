@@ -58,6 +58,10 @@ export const AgentState = Annotation.Root({
   // Safety & Human-in-the-Loop Approval
   approvalStatus: Annotation({ reducer: replaceReducer, default: () => 'NONE' }),
   pendingApproval: Annotation({ reducer: replaceReducer, default: () => null }),
+  planApprovalStatus: Annotation({ reducer: replaceReducer, default: () => 'NONE' }),
+  pendingPlanApproval: Annotation({ reducer: replaceReducer, default: () => null }),
+  jevInputResult: Annotation({ reducer: replaceReducer, default: () => null }),
+  jevOutputResult: Annotation({ reducer: replaceReducer, default: () => null }),
 
   // Workflow Outcome
   status: Annotation({ reducer: replaceReducer, default: () => 'IDLE' }),

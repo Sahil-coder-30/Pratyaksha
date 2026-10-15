@@ -83,6 +83,15 @@ window.PratyakshaDOM = (function() {
       const rect = el.getBoundingClientRect();
       const x = Math.max(8, Math.min(window.innerWidth - 12, rect.left + rect.width / 2));
       const y = Math.max(8, Math.min(window.innerHeight - 12, rect.top + rect.height / 2));
+
+      // Calculate distance-aware generous human glide (380ms - 520ms)
+      const prevX = parseFloat(cursor.dataset.x) || (window.innerWidth / 2);
+      const prevY = parseFloat(cursor.dataset.y) || (window.innerHeight / 2);
+      const distance = Math.hypot(x - prevX, y - prevY);
+      const duration = Math.min(520, Math.max(380, Math.round(distance * 0.18 + 360)));
+
+      cursor.style.transition = `opacity 140ms ease, transform 160ms cubic-bezier(0.16, 1, 0.3, 1), left ${duration}ms cubic-bezier(0.22, 1, 0.36, 1), top ${duration}ms cubic-bezier(0.22, 1, 0.36, 1)`;
+
       cursor.classList.remove('is-clicking');
       cursor.classList.add('is-visible');
       cursor.dataset.x = String(x);
@@ -91,12 +100,14 @@ window.PratyakshaDOM = (function() {
       cursor.style.top = `${y}px`;
 
       if (click) {
-        cursor.classList.add('is-clicking');
         setTimeout(() => {
-          try { cursor?.classList.remove('is-clicking'); } catch (_) {}
-        }, 200);
+          cursor.classList.add('is-clicking');
+          setTimeout(() => {
+            try { cursor?.classList.remove('is-clicking'); } catch (_) {}
+          }, 350);
+        }, Math.max(40, duration - 60));
       }
-      return { x, y, duration: 160 };
+      return { x, y, duration };
     } catch (err) {
       console.warn('[PRATYAKSHA] moveAgentCursor error:', err);
       return { x: 0, y: 0, duration: 0 };
@@ -511,7 +522,7 @@ window.PratyakshaDOM = (function() {
 
       await this.scrollIntoView(el);
       const { x, y, duration } = moveAgentCursor(el, { click: true });
-      await new Promise(r => setTimeout(r, duration));
+      await new Promise(r => setTimeout(r, duration + 40));
 
       const eventOpts = { bubbles: true, cancelable: true, view: window, clientX: x, clientY: y, screenX: x, screenY: y, button: 0, buttons: 1 };
       el.dispatchEvent(new PointerEvent('pointermove', eventOpts));
@@ -548,12 +559,20 @@ window.PratyakshaDOM = (function() {
 
       await this.scrollIntoView(el);
       const { duration } = moveAgentCursor(el);
-      await new Promise(r => setTimeout(r, duration || 160));
+      await new Promise(r => setTimeout(r, duration || 400));
 
       el.focus();
 
       const shouldClear = options.clearFirst !== false;
       const textToType = String(value ?? '');
+
+      // Target typing speed: ~400 WPM (~30ms per character keystroke)
+      // Clamped to a max of 3000ms total duration for long texts so agent doesn't stall
+      const totalChars = textToType.length;
+      let charDelay = 30;
+      if (totalChars > 0 && totalChars * 30 > 3000) {
+        charDelay = Math.max(10, Math.floor(3000 / totalChars));
+      }
 
       const isContentEditable = el.isContentEditable ||
                                 el.getAttribute('contenteditable') === 'true' ||
@@ -562,15 +581,22 @@ window.PratyakshaDOM = (function() {
       if (isContentEditable) {
         // Rich text editors: Gmail compose body, Slack, Notion, etc.
         try {
-          const sel = window.getSelection();
-          const range = document.createRange();
-          range.selectNodeContents(el);
-          sel.removeAllRanges();
-          sel.addRange(range);
           if (shouldClear) {
+            const sel = window.getSelection();
+            const range = document.createRange();
+            range.selectNodeContents(el);
+            sel.removeAllRanges();
+            sel.addRange(range);
             document.execCommand('delete', false);
           }
-          document.execCommand('insertText', false, textToType);
+          // Type character by character at ~400 WPM cadence
+          for (let i = 0; i < totalChars; i++) {
+            const char = textToType[i];
+            document.execCommand('insertText', false, char);
+            if (charDelay > 0 && i < totalChars - 1) {
+              await new Promise(r => setTimeout(r, charDelay));
+            }
+          }
         } catch (_) {
           if (shouldClear) el.innerHTML = '';
           el.innerText = textToType;
@@ -583,20 +609,31 @@ window.PratyakshaDOM = (function() {
         const proto = isTA ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
         const setter = Object.getOwnPropertyDescriptor(proto, 'value')?.set;
 
+        let baseValue = '';
         if (shouldClear) {
           try {
             if (setter) setter.call(el, ''); else el.value = '';
             el.dispatchEvent(new Event('input', { bubbles: true }));
           } catch (_) { el.value = ''; }
+        } else {
+          baseValue = el.value || '';
         }
 
-        const finalValue = shouldClear ? textToType : (el.value + textToType);
-        if (setter) {
-          setter.call(el, finalValue);
-        } else {
-          el.value = finalValue;
+        // Type character by character at ~400 WPM cadence
+        let runningValue = baseValue;
+        for (let i = 0; i < totalChars; i++) {
+          const char = textToType[i];
+          runningValue += char;
+          if (setter) {
+            setter.call(el, runningValue);
+          } else {
+            el.value = runningValue;
+          }
+          el.dispatchEvent(new InputEvent('input', { bubbles: true, cancelable: true, data: char, inputType: 'insertText' }));
+          if (charDelay > 0 && i < totalChars - 1) {
+            await new Promise(r => setTimeout(r, charDelay));
+          }
         }
-        el.dispatchEvent(new InputEvent('input', { bubbles: true, cancelable: true, data: textToType, inputType: 'insertText' }));
         el.dispatchEvent(new Event('change', { bubbles: true }));
       }
 
