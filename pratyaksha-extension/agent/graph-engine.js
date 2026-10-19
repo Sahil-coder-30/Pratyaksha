@@ -62634,6 +62634,7 @@ var init_constants = __esm({
       SCROLL_PAGE: "scroll_page",
       WAIT_FOR: "wait_for",
       WAIT_SECONDS: "wait_seconds",
+      TINYFISH_RESEARCH: "tinyfish_research",
       FINISH_TASK: "finish_task"
     });
     CANONICAL_SERVICES = Object.freeze([
@@ -62920,6 +62921,10 @@ var init_schemas4 = __esm({
         seconds: external_exports.number().min(0.5).max(300).describe("Seconds to wait (0.5\u2013300)."),
         reason: external_exports.string().optional().describe("Why you are waiting.")
       }),
+      [TOOL_NAMES.TINYFISH_RESEARCH]: external_exports.object({
+        query: external_exports.string().min(1, "Search query is required").describe("Information or factual question to research via isolated TinyFish cloud agent."),
+        goal: external_exports.string().optional().describe("Optional high-level goal or context for the research.")
+      }),
       [TOOL_NAMES.FINISH_TASK]: external_exports.object({
         summary: external_exports.string().min(1, "Summary is required").describe("Detailed summary of what was accomplished."),
         success: external_exports.boolean().describe("true if goal achieved, false only if impossible after exhausting all options.")
@@ -63202,6 +63207,20 @@ var init_schemas4 = __esm({
         }
       },
       {
+        name: TOOL_NAMES.TINYFISH_RESEARCH,
+        description: "Researches questions, prices, facts, or external web information in an isolated cloud browser sandbox using TinyFish. Leaves the current tab and DOM completely untouched (vital when chatting in WhatsApp or composing in Gmail so active sessions are never lost).",
+        category: TOOL_CATEGORIES.READING,
+        defaultRisk: RISK_TIERS.READ_ONLY,
+        parameters: {
+          type: "OBJECT",
+          properties: {
+            query: { type: "STRING", description: "The question, topic, or factual query to research." },
+            goal: { type: "STRING", description: "Optional context on how the result will be used." }
+          },
+          required: ["query"]
+        }
+      },
+      {
         name: TOOL_NAMES.FINISH_TASK,
         description: "Marks the task complete with a detailed summary. Call ONLY when the user goal is fully achieved and verified.",
         category: TOOL_CATEGORIES.COMPLETION,
@@ -63227,6 +63246,91 @@ function isForbiddenUrl(url2) {
     return FORBIDDEN_URL_PROTOCOLS.includes(parsed.protocol);
   } catch {
     return false;
+  }
+}
+function isProtectedWorkspace(url2 = "") {
+  if (!url2 || typeof url2 !== "string") return false;
+  return /(?:web\.whatsapp\.com|mail\.google\.com|slack\.com|discord\.com|teams\.microsoft\.com)/i.test(url2);
+}
+async function executeTinyFishResearch(args = {}, activeTab = {}, options = {}) {
+  const query = (args.query || "").trim();
+  if (!query) {
+    throw new ToolExecutionError("Search query is required for tinyfish_research", { toolName: TOOL_NAMES.TINYFISH_RESEARCH });
+  }
+  let apiKey = options.tinyfishApiKey || options.apiKey;
+  if (!apiKey && typeof chrome !== "undefined" && chrome?.storage?.local) {
+    try {
+      const stored = await chrome.storage.local.get(["tinyfishApiKey"]);
+      apiKey = stored?.tinyfishApiKey;
+    } catch (_) {
+    }
+  }
+  if (!apiKey && typeof process !== "undefined" && process.env?.TINYFISH_API_KEY) {
+    apiKey = process.env.TINYFISH_API_KEY;
+  }
+  if (!apiKey && typeof globalThis !== "undefined" && globalThis.ENV?.TINYFISH_API_KEY) {
+    apiKey = globalThis.ENV.TINYFISH_API_KEY;
+  }
+  if (!apiKey) {
+    apiKey = "sk-tinyfish-S4PTJp3U71cpkZ-QdWjQ4t9eY_gxxJHJ";
+  }
+  const researchGoal = args.goal || `Find accurate, concise factual information to answer: "${query}". Return a clear direct summary.`;
+  const chromeApi = options.chromeApi || (typeof chrome !== "undefined" ? chrome : null);
+  const currentTab = await getTabSafe(activeTab?.id, chromeApi);
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 6e4);
+    if (options.signal) {
+      options.signal.addEventListener("abort", () => controller.abort(), { once: true });
+    }
+    const res = await fetch(`${TINYFISH_API_BASE}/automation/run`, {
+      method: "POST",
+      headers: {
+        "X-API-Key": apiKey,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        url: "https://www.google.com",
+        goal: researchGoal
+      }),
+      signal: controller.signal
+    });
+    clearTimeout(timeout);
+    if (!res.ok) {
+      const errText = await res.text().catch(() => "");
+      throw new Error(`TinyFish API returned status ${res.status}: ${errText || res.statusText}`);
+    }
+    const data = await res.json();
+    let resultText = "";
+    if (data.status === "COMPLETED" && data.result != null) {
+      resultText = typeof data.result === "string" ? data.result : JSON.stringify(data.result, null, 2);
+    } else if (data.status === "FAILED") {
+      throw new Error(data.error?.message || `TinyFish automation failed with status ${data.status}`);
+    } else {
+      resultText = JSON.stringify(data.result || data);
+    }
+    const tabUrl = activeTab?.url || currentTab?.url || "";
+    return createToolResult({
+      toolName: TOOL_NAMES.TINYFISH_RESEARCH,
+      observation: `[TinyFish Isolated Cloud Research Result]:
+Query: "${query}"
+Answer:
+${resultText}
+
+(Note: Your active tab remains untouched on "${tabUrl || "current workspace"}". The chat/workspace session is preserved. Use this factual information to answer the user directly in chat.)`,
+      page: { ...currentTab, url: tabUrl || currentTab.url },
+      metadata: {
+        query,
+        source: "tinyfish",
+        steps: data.num_of_steps,
+        isolated: true
+      }
+    });
+  } catch (err) {
+    if (err.name === "AbortError") {
+      throw new ToolExecutionError(`TinyFish research timed out for query: "${query}"`, { toolName: TOOL_NAMES.TINYFISH_RESEARCH });
+    }
+    throw new ToolExecutionError(`TinyFish research error: ${err.message}`, { toolName: TOOL_NAMES.TINYFISH_RESEARCH, details: err });
   }
 }
 async function executeBrowserTool(toolName, rawArgs = {}, activeTab, options = {}) {
@@ -63264,6 +63368,22 @@ async function executeBrowserTool(toolName, rawArgs = {}, activeTab, options = {
       // ── search_web ──────────────────────────────────────────────────────────
       case TOOL_NAMES.SEARCH_WEB: {
         const q = args.query.trim();
+        const currentTabBefore = await getTabSafe(tabId, chromeApi);
+        const activeUrl = isProtectedWorkspace(activeTab?.url) ? activeTab.url : currentTabBefore?.url || activeTab?.url || "";
+        if (isProtectedWorkspace(activeUrl)) {
+          const research = await executeTinyFishResearch({
+            query: q,
+            goal: `Search and extract concise factual answer for: "${q}"`
+          }, activeTab, options);
+          return createToolResult({
+            toolName: TOOL_NAMES.SEARCH_WEB,
+            observation: `[Protected Workspace Interception: Active tab is on ${activeUrl}. Query was processed in an isolated TinyFish sandbox to keep your active chat/workspace DOM completely intact!]
+
+${research.observation}`,
+            page: { ...currentTabBefore, url: activeUrl },
+            metadata: { query: q, autoRoutedToTinyFish: true, protectedWorkspaceUrl: activeUrl }
+          });
+        }
         const engines = {
           google: `https://www.google.com/search?q=${encodeURIComponent(q)}`,
           bing: `https://www.bing.com/search?q=${encodeURIComponent(q)}`,
@@ -63296,6 +63416,21 @@ ${text}`,
         }
         if (isForbiddenUrl(url2)) {
           throw new PolicyViolationError(`Navigation to internal/restricted URL "${url2}" is blocked.`, { policy: "URL_POLICY" });
+        }
+        const currentTabBefore = await getTabSafe(tabId, chromeApi);
+        if (isProtectedWorkspace(currentTabBefore?.url || activeTab?.url) && !/web\.whatsapp\.com|mail\.google\.com/i.test(url2) && /google\.com|bing\.com|duckduckgo\.com|wikipedia\.org/i.test(url2)) {
+          const research = await executeTinyFishResearch({
+            query: url2,
+            goal: `Extract relevant facts or answers from ${url2}`
+          }, activeTab, options);
+          return createToolResult({
+            toolName: TOOL_NAMES.OPEN_URL,
+            observation: `[Protected Workspace Interception: Active tab is on ${currentTabBefore?.url || activeTab?.url}. External lookup "${url2}" was isolated via TinyFish cloud sandbox to protect the active chat session!]
+
+${research.observation}`,
+            page: currentTabBefore,
+            metadata: { requestedUrl: url2, autoRoutedToTinyFish: true }
+          });
         }
         await chromeApi.tabs.update(tabId, { url: url2 });
         await waitForTabLoad(tabId, 15e3, chromeApi, signal);
@@ -63806,6 +63941,10 @@ ${resultInfo.newContent}` : "";
           summary: args.summary
         });
       }
+      // ── tinyfish_research ───────────────────────────────────────────────────
+      case TOOL_NAMES.TINYFISH_RESEARCH: {
+        return await executeTinyFishResearch(args, activeTab, options);
+      }
       default:
         throw new ToolExecutionError(`Unknown tool: "${toolName}"`, { toolName });
     }
@@ -63933,13 +64072,14 @@ async function ensureContentScript(tabId, chromeApi) {
   } catch (err) {
   }
 }
-var _lastScreenshot;
+var _lastScreenshot, TINYFISH_API_BASE;
 var init_browser_tools = __esm({
   "src/browser/browser-tools.js"() {
     init_constants();
     init_errors6();
     init_schemas4();
     _lastScreenshot = null;
+    TINYFISH_API_BASE = "https://agent.tinyfish.ai/v1";
   }
 });
 
@@ -145010,7 +145150,8 @@ function createLangChainBrowserTools(getSessionContext, options = {}) {
       const result = await executeBrowserTool(toolName, inputArgs, activeTab, {
         vault,
         signal,
-        chromeApi
+        chromeApi,
+        tinyfishApiKey: session?.tinyfishApiKey
       });
       if (result.newTabId && activeTab) {
         activeTab.id = result.newTabId;
@@ -145135,6 +145276,18 @@ function buildActionLog(history = [], maxLines = 25) {
 }
 function detectLoop(history = [], windowSize = 8) {
   const recent = history.slice(-windowSize).filter((h) => h.toolName !== "finish_task");
+  const typeHistory = recent.filter((h) => h.toolName === "type_into_element" && h.args?.text);
+  const textCounts = /* @__PURE__ */ new Map();
+  for (const h of typeHistory) {
+    const trimmedText = String(h.args.text).trim().toLowerCase();
+    if (trimmedText.length > 5) {
+      const count = (textCounts.get(trimmedText) || 0) + 1;
+      textCounts.set(trimmedText, count);
+      if (count >= 2) {
+        return `SPAM / LOOP PREVENTION: You have already typed and sent this exact message ("${String(h.args.text).slice(0, 40)}..."). Do NOT repeat identical messages or spam the chat! If you are awaiting a reply or response from other participants, call wait_for({ wait_for_reply: true, track_dom_changes: true }) to hold execution until a new response is received.`;
+      }
+    }
+  }
   const counts = /* @__PURE__ */ new Map();
   for (const h of recent) {
     const key = `${h.toolName}:${JSON.stringify(h.args || {})}`;
@@ -145326,6 +145479,12 @@ STRICT RULES (follow exactly)
     - Once the incoming reply appears in the DOM, read what was said, formulate an appropriate response, and send it.
     - Repeat this loop for the requested number of iterations.
     - NEVER fabricate or claim that group members or users responded unless their reply was verifiably observed in the DOM.
+13. EXTERNAL KNOWLEDGE & WEB RESEARCH DURING SESSIONS (WhatsApp, Gmail, chat, forms):
+    - When you are inside an active workspace application (WhatsApp Web, Gmail, chat thread, or form) and someone asks a question or a topic comes up requiring external search or factual information (e.g. "Who is dhruv rathee", "What is the price of a German shepherd"):
+    - NEVER call search_web or open_url to navigate away from the workspace! Navigating away drops the WebSocket connection, closes the active chat, destroys the session, and breaks the conversation.
+    - INSTEAD, call tinyfish_research(query="...")!
+    - tinyfish_research executes the search in an isolated cloud browser sandbox, leaving the local WhatsApp/workspace tab completely pristine.
+    - When tinyfish_research returns the factual answer, use that answer directly to type your reply into the active chat input!
 
 FINISHING
 - Call finish_task as soon as the goal is verifiably done on the page. Put the actual result (the answer, the data found, what was sent, or the reply received) in the summary.
@@ -145448,12 +145607,13 @@ async function runTool(tools2, toolCall, rawName) {
     return `ERROR [${toolCall.name} - ${code || "TOOL_ERROR"}]: ${message}`;
   }
 }
-function createActorToolSession({ tabId, url: url2 = "", title = "", vault, signal, chromeApi, exposeAllTools = false }) {
+function createActorToolSession({ tabId, url: url2 = "", title = "", vault, signal, chromeApi, exposeAllTools = false, tinyfishApiKey = "" }) {
   const sessionContext = {
     activeTab: { id: tabId, url: url2, title },
     vault,
     signal,
     chromeApi,
+    tinyfishApiKey,
     lastResult: null
   };
   sessionContext.onToolResult = (res) => {
@@ -145472,6 +145632,7 @@ async function executeApprovedToolCall(pending, options = {}) {
     vault: options.vault,
     signal: options.signal,
     chromeApi: options.chromeApi,
+    tinyfishApiKey: options.tinyfishApiKey,
     exposeAllTools: true
   });
   const observation = await runTool(tools2, pending.toolCall, pending.toolCall.name);
@@ -145546,6 +145707,7 @@ async function browserActorAgentNode(state2, options = {}) {
     vault,
     signal,
     chromeApi,
+    tinyfishApiKey: options.tinyfishApiKey,
     exposeAllTools: options.exposeAllTools
   });
   const modelWithTools = bindModelTools(model, tools2);
@@ -146383,9 +146545,10 @@ function createAgentGraph(options = {}) {
       maxSteps,
       events,
       enableInterrupts: options.enableInterrupts,
-      exposeAllTools: options.exposeAllTools
+      exposeAllTools: options.exposeAllTools,
+      tinyfishApiKey: options.tinyfishApiKey
     });
-  }).addNode("tool_approval", createToolApprovalNode({ ...options, chromeApi, vault, events, checkpointer })).addNode("verification", async (state2) => {
+  }).addNode("tool_approval", createToolApprovalNode({ ...options, chromeApi, vault, events, checkpointer, tinyfishApiKey: options.tinyfishApiKey })).addNode("verification", async (state2) => {
     return verifierNode(state2, { events });
   }).addNode("recovery", async (state2) => {
     events?.emit?.("THINKING", {
@@ -147038,6 +147201,7 @@ var PratyakshaAgentRunner = class {
     this.geminiApiKey = (options.geminiApiKey || "").trim();
     this.openrouterApiKey = (options.openrouterApiKey || "").trim();
     this.mistralApiKey = (options.mistralApiKey || "").trim();
+    this.tinyfishApiKey = (options.tinyfishApiKey || "").trim();
     this.vault = options.vault || globalVault;
     this.maxSteps = options.maxSteps || 100;
     this.useTwoAgentGraph = options.useTwoAgentGraph ?? false;
@@ -147141,7 +147305,8 @@ var PratyakshaAgentRunner = class {
       checkpointer: this.checkpointer,
       signal: this.abortController.signal,
       maxSteps: this.maxSteps,
-      events: this.events
+      events: this.events,
+      tinyfishApiKey: this.tinyfishApiKey
     });
     const initialState = {
       threadId,

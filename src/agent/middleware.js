@@ -220,6 +220,21 @@ export function buildActionLog(history = [], maxLines = 25) {
  */
 export function detectLoop(history = [], windowSize = 8) {
   const recent = history.slice(-windowSize).filter(h => h.toolName !== 'finish_task');
+
+  // Detect duplicate message spam (typing identical text 2+ times in chat/input)
+  const typeHistory = recent.filter(h => h.toolName === 'type_into_element' && h.args?.text);
+  const textCounts = new Map();
+  for (const h of typeHistory) {
+    const trimmedText = String(h.args.text).trim().toLowerCase();
+    if (trimmedText.length > 5) {
+      const count = (textCounts.get(trimmedText) || 0) + 1;
+      textCounts.set(trimmedText, count);
+      if (count >= 2) {
+        return `SPAM / LOOP PREVENTION: You have already typed and sent this exact message ("${String(h.args.text).slice(0, 40)}..."). Do NOT repeat identical messages or spam the chat! If you are awaiting a reply or response from other participants, call wait_for({ wait_for_reply: true, track_dom_changes: true }) to hold execution until a new response is received.`;
+      }
+    }
+  }
+
   const counts = new Map();
   for (const h of recent) {
     const key = `${h.toolName}:${JSON.stringify(h.args || {})}`;

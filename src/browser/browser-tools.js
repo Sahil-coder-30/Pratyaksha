@@ -40,6 +40,112 @@ export function isForbiddenUrl(url) {
 }
 
 /**
+ * Checks whether the current URL represents an active protected workspace application
+ * (such as WhatsApp, Gmail, Slack, Discord, etc.) where navigating the tab would destroy
+ * the live session, clear message forms, and disrupt chat sockets.
+ */
+export function isProtectedWorkspace(url = '') {
+  if (!url || typeof url !== 'string') return false;
+  return /(?:web\.whatsapp\.com|mail\.google\.com|slack\.com|discord\.com|teams\.microsoft\.com)/i.test(url);
+}
+
+const TINYFISH_API_BASE = 'https://agent.tinyfish.ai/v1';
+
+/**
+ * Executes an isolated web search/research task via the TinyFish Cloud Browser Agent.
+ * This runs completely in an isolated cloud sandbox, leaving the local tab/session 100% undisturbed.
+ *
+ * @param {Object} args { query: string, goal?: string }
+ * @param {Object} activeTab Current browser tab
+ * @param {Object} [options]
+ * @returns {Promise<Object>} ToolResult
+ */
+export async function executeTinyFishResearch(args = {}, activeTab = {}, options = {}) {
+  const query = (args.query || '').trim();
+  if (!query) {
+    throw new ToolExecutionError('Search query is required for tinyfish_research', { toolName: TOOL_NAMES.TINYFISH_RESEARCH });
+  }
+
+  // Retrieve API Key with cascading fallbacks
+  let apiKey = options.tinyfishApiKey || options.apiKey;
+  if (!apiKey && typeof chrome !== 'undefined' && chrome?.storage?.local) {
+    try {
+      const stored = await chrome.storage.local.get(['tinyfishApiKey']);
+      apiKey = stored?.tinyfishApiKey;
+    } catch (_) {}
+  }
+  if (!apiKey && typeof process !== 'undefined' && process.env?.TINYFISH_API_KEY) {
+    apiKey = process.env.TINYFISH_API_KEY;
+  }
+  if (!apiKey && typeof globalThis !== 'undefined' && globalThis.ENV?.TINYFISH_API_KEY) {
+    apiKey = globalThis.ENV.TINYFISH_API_KEY;
+  }
+  if (!apiKey) {
+    apiKey = 'sk-tinyfish-S4PTJp3U71cpkZ-QdWjQ4t9eY_gxxJHJ';
+  }
+
+  const researchGoal = args.goal || `Find accurate, concise factual information to answer: "${query}". Return a clear direct summary.`;
+
+  const chromeApi = options.chromeApi || (typeof chrome !== 'undefined' ? chrome : null);
+  const currentTab = await getTabSafe(activeTab?.id, chromeApi);
+
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 60000);
+    if (options.signal) {
+      options.signal.addEventListener('abort', () => controller.abort(), { once: true });
+    }
+
+    const res = await fetch(`${TINYFISH_API_BASE}/automation/run`, {
+      method: 'POST',
+      headers: {
+        'X-API-Key': apiKey,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        url: 'https://www.google.com',
+        goal: researchGoal
+      }),
+      signal: controller.signal
+    });
+    clearTimeout(timeout);
+
+    if (!res.ok) {
+      const errText = await res.text().catch(() => '');
+      throw new Error(`TinyFish API returned status ${res.status}: ${errText || res.statusText}`);
+    }
+
+    const data = await res.json();
+    let resultText = '';
+    if (data.status === 'COMPLETED' && data.result != null) {
+      resultText = typeof data.result === 'string' ? data.result : JSON.stringify(data.result, null, 2);
+    } else if (data.status === 'FAILED') {
+      throw new Error(data.error?.message || `TinyFish automation failed with status ${data.status}`);
+    } else {
+      resultText = JSON.stringify(data.result || data);
+    }
+
+    const tabUrl = activeTab?.url || currentTab?.url || '';
+    return createToolResult({
+      toolName: TOOL_NAMES.TINYFISH_RESEARCH,
+      observation: `[TinyFish Isolated Cloud Research Result]:\nQuery: "${query}"\nAnswer:\n${resultText}\n\n(Note: Your active tab remains untouched on "${tabUrl || 'current workspace'}". The chat/workspace session is preserved. Use this factual information to answer the user directly in chat.)`,
+      page: { ...currentTab, url: tabUrl || currentTab.url },
+      metadata: {
+        query,
+        source: 'tinyfish',
+        steps: data.num_of_steps,
+        isolated: true
+      }
+    });
+  } catch (err) {
+    if (err.name === 'AbortError') {
+      throw new ToolExecutionError(`TinyFish research timed out for query: "${query}"`, { toolName: TOOL_NAMES.TINYFISH_RESEARCH });
+    }
+    throw new ToolExecutionError(`TinyFish research error: ${err.message}`, { toolName: TOOL_NAMES.TINYFISH_RESEARCH, details: err });
+  }
+}
+
+/**
  * Executes a browser operation against the active tab.
  *
  * @param {string} toolName
@@ -94,6 +200,27 @@ export async function executeBrowserTool(toolName, rawArgs = {}, activeTab, opti
       // ── search_web ──────────────────────────────────────────────────────────
       case TOOL_NAMES.SEARCH_WEB: {
         const q = args.query.trim();
+
+        // Protected Workspace Interception:
+        // If the agent is on WhatsApp Web, Gmail, Slack, etc., navigating the active tab
+        // drops the live chat session and corrupts DOM context.
+        // We automatically route through TinyFish isolated cloud research!
+        const currentTabBefore = await getTabSafe(tabId, chromeApi);
+        const activeUrl = isProtectedWorkspace(activeTab?.url) ? activeTab.url : (currentTabBefore?.url || activeTab?.url || '');
+        if (isProtectedWorkspace(activeUrl)) {
+          const research = await executeTinyFishResearch({
+            query: q,
+            goal: `Search and extract concise factual answer for: "${q}"`
+          }, activeTab, options);
+
+          return createToolResult({
+            toolName: TOOL_NAMES.SEARCH_WEB,
+            observation: `[Protected Workspace Interception: Active tab is on ${activeUrl}. Query was processed in an isolated TinyFish sandbox to keep your active chat/workspace DOM completely intact!]\n\n${research.observation}`,
+            page: { ...currentTabBefore, url: activeUrl },
+            metadata: { query: q, autoRoutedToTinyFish: true, protectedWorkspaceUrl: activeUrl }
+          });
+        }
+
         const engines = {
           google:     `https://www.google.com/search?q=${encodeURIComponent(q)}`,
           bing:       `https://www.bing.com/search?q=${encodeURIComponent(q)}`,
@@ -132,6 +259,23 @@ export async function executeBrowserTool(toolName, rawArgs = {}, activeTab, opti
 
         if (isForbiddenUrl(url)) {
           throw new PolicyViolationError(`Navigation to internal/restricted URL "${url}" is blocked.`, { policy: 'URL_POLICY' });
+        }
+
+        const currentTabBefore = await getTabSafe(tabId, chromeApi);
+        if (isProtectedWorkspace(currentTabBefore?.url || activeTab?.url) &&
+            !/web\.whatsapp\.com|mail\.google\.com/i.test(url) &&
+            /google\.com|bing\.com|duckduckgo\.com|wikipedia\.org/i.test(url)) {
+          const research = await executeTinyFishResearch({
+            query: url,
+            goal: `Extract relevant facts or answers from ${url}`
+          }, activeTab, options);
+
+          return createToolResult({
+            toolName: TOOL_NAMES.OPEN_URL,
+            observation: `[Protected Workspace Interception: Active tab is on ${currentTabBefore?.url || activeTab?.url}. External lookup "${url}" was isolated via TinyFish cloud sandbox to protect the active chat session!]\n\n${research.observation}`,
+            page: currentTabBefore,
+            metadata: { requestedUrl: url, autoRoutedToTinyFish: true }
+          });
         }
 
         await chromeApi.tabs.update(tabId, { url });
@@ -691,6 +835,11 @@ export async function executeBrowserTool(toolName, rawArgs = {}, activeTab, opti
           success: args.success,
           summary: args.summary
         });
+      }
+
+      // ── tinyfish_research ───────────────────────────────────────────────────
+      case TOOL_NAMES.TINYFISH_RESEARCH: {
+        return await executeTinyFishResearch(args, activeTab, options);
       }
 
       default:

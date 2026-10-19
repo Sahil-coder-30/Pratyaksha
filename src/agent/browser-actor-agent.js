@@ -64,6 +64,12 @@ STRICT RULES (follow exactly)
     - Once the incoming reply appears in the DOM, read what was said, formulate an appropriate response, and send it.
     - Repeat this loop for the requested number of iterations.
     - NEVER fabricate or claim that group members or users responded unless their reply was verifiably observed in the DOM.
+13. EXTERNAL KNOWLEDGE & WEB RESEARCH DURING SESSIONS (WhatsApp, Gmail, chat, forms):
+    - When you are inside an active workspace application (WhatsApp Web, Gmail, chat thread, or form) and someone asks a question or a topic comes up requiring external search or factual information (e.g. "Who is dhruv rathee", "What is the price of a German shepherd"):
+    - NEVER call search_web or open_url to navigate away from the workspace! Navigating away drops the WebSocket connection, closes the active chat, destroys the session, and breaks the conversation.
+    - INSTEAD, call tinyfish_research(query="...")!
+    - tinyfish_research executes the search in an isolated cloud browser sandbox, leaving the local WhatsApp/workspace tab completely pristine.
+    - When tinyfish_research returns the factual answer, use that answer directly to type your reply into the active chat input!
 
 FINISHING
 - Call finish_task as soon as the goal is verifiably done on the page. Put the actual result (the answer, the data found, what was sent, or the reply received) in the summary.
@@ -227,12 +233,13 @@ export function createBrowserActorAgent(options = {}) {
 /**
  * Builds the tool suite + session context used by both the actor and the approval node.
  */
-export function createActorToolSession({ tabId, url = '', title = '', vault, signal, chromeApi, exposeAllTools = false }) {
+export function createActorToolSession({ tabId, url = '', title = '', vault, signal, chromeApi, exposeAllTools = false, tinyfishApiKey = '' }) {
   const sessionContext = {
     activeTab: { id: tabId, url, title },
     vault,
     signal,
     chromeApi,
+    tinyfishApiKey,
     lastResult: null
   };
   sessionContext.onToolResult = (res) => {
@@ -255,6 +262,7 @@ export async function executeApprovedToolCall(pending, options = {}) {
     vault: options.vault,
     signal: options.signal,
     chromeApi: options.chromeApi,
+    tinyfishApiKey: options.tinyfishApiKey,
     exposeAllTools: true
   });
   const observation = await runTool(tools, pending.toolCall, pending.toolCall.name);
@@ -340,6 +348,7 @@ export async function browserActorAgentNode(state, options = {}) {
     vault,
     signal,
     chromeApi,
+    tinyfishApiKey: options.tinyfishApiKey,
     exposeAllTools: options.exposeAllTools
   });
   const modelWithTools = bindModelTools(model, tools);

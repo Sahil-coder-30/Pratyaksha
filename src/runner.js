@@ -28,6 +28,7 @@ export class PratyakshaAgentRunner {
     this.geminiApiKey = (options.geminiApiKey || '').trim();
     this.openrouterApiKey = (options.openrouterApiKey || '').trim();
     this.mistralApiKey = (options.mistralApiKey || '').trim();
+    this.tinyfishApiKey = (options.tinyfishApiKey || '').trim();
     this.vault = options.vault || globalVault;
     this.maxSteps = options.maxSteps || 100;
     this.useTwoAgentGraph = options.useTwoAgentGraph ?? false;
@@ -140,7 +141,8 @@ export class PratyakshaAgentRunner {
       checkpointer: this.checkpointer,
       signal: this.abortController.signal,
       maxSteps: this.maxSteps,
-      events: this.events
+      events: this.events,
+      tinyfishApiKey: this.tinyfishApiKey
     });
 
     const initialState = {

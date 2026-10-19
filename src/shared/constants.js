@@ -41,6 +41,7 @@ export const TOOL_NAMES = Object.freeze({
   SCROLL_PAGE: 'scroll_page',
   WAIT_FOR: 'wait_for',
   WAIT_SECONDS: 'wait_seconds',
+  TINYFISH_RESEARCH: 'tinyfish_research',
   FINISH_TASK: 'finish_task'
 });
 

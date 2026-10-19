@@ -469,6 +469,7 @@ async function handleRunPrompt() {
         mistralApiKey: (settings.mistralApiKey || config.mistralApiKey || '').trim(),
         geminiApiKey: (settings.geminiApiKey || config.geminiApiKey || '').trim(),
         openrouterApiKey: (settings.openrouterApiKey || config.openrouterApiKey || '').trim(),
+        tinyfishApiKey: (settings.tinyfishApiKey || config.tinyfishApiKey || '').trim(),
         onEvent: handleAgentEvent
       });
 

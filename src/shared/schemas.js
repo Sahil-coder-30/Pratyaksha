@@ -126,6 +126,11 @@ export const TOOL_ZOD_SCHEMAS = {
     reason: z.string().optional().describe('Why you are waiting.')
   }),
 
+  [TOOL_NAMES.TINYFISH_RESEARCH]: z.object({
+    query: z.string().min(1, 'Search query is required').describe('Information or factual question to research via isolated TinyFish cloud agent.'),
+    goal: z.string().optional().describe('Optional high-level goal or context for the research.')
+  }),
+
   [TOOL_NAMES.FINISH_TASK]: z.object({
     summary: z.string().min(1, 'Summary is required').describe('Detailed summary of what was accomplished.'),
     success: z.boolean().describe('true if goal achieved, false only if impossible after exhausting all options.')
@@ -133,7 +138,7 @@ export const TOOL_ZOD_SCHEMAS = {
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 2. AUTHORITATIVE TOOL SPECIFICATIONS REGISTRY (21 TOOLS)
+// 2. AUTHORITATIVE TOOL SPECIFICATIONS REGISTRY (22 TOOLS)
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const BROWSER_TOOL_SPECS = [
@@ -410,6 +415,20 @@ export const BROWSER_TOOL_SPECS = [
         reason: { type: 'STRING', description: 'Why you are waiting.' }
       },
       required: ['seconds']
+    }
+  },
+  {
+    name: TOOL_NAMES.TINYFISH_RESEARCH,
+    description: 'Researches questions, prices, facts, or external web information in an isolated cloud browser sandbox using TinyFish. Leaves the current tab and DOM completely untouched (vital when chatting in WhatsApp or composing in Gmail so active sessions are never lost).',
+    category: TOOL_CATEGORIES.READING,
+    defaultRisk: RISK_TIERS.READ_ONLY,
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        query: { type: 'STRING', description: 'The question, topic, or factual query to research.' },
+        goal: { type: 'STRING', description: 'Optional context on how the result will be used.' }
+      },
+      required: ['query']
     }
   },
   {

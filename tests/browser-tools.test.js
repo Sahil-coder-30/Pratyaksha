@@ -4,7 +4,7 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { executeBrowserTool, isForbiddenUrl } from '../src/browser/browser-tools.js';
+import { executeBrowserTool, isForbiddenUrl, isProtectedWorkspace } from '../src/browser/browser-tools.js';
 import { detectTargetService, buildDOMTable } from '../src/browser/page-context.js';
 import { createMockChrome } from './helpers/mock-chrome.js';
 import { TOOL_NAMES } from '../src/shared/constants.js';
@@ -212,4 +212,88 @@ test('Browser Tools - click_element Send button confirms email dispatch', async 
   assert.equal(res.ok, true);
   assert.ok(res.observation.includes('Send confirmed'));
   assert.equal(res.metadata?.sendConfirmed, true);
+});
+
+test('Protected Workspace Policy - Detection & Interception', () => {
+  assert.equal(isProtectedWorkspace('https://web.whatsapp.com/'), true);
+  assert.equal(isProtectedWorkspace('https://mail.google.com/mail/u/0'), true);
+  assert.equal(isProtectedWorkspace('https://app.slack.com/client'), true);
+  assert.equal(isProtectedWorkspace('https://discord.com/channels'), true);
+  assert.equal(isProtectedWorkspace('https://www.google.com/'), false);
+  assert.equal(isProtectedWorkspace('https://en.wikipedia.org/'), false);
+});
+
+test('Browser Tools - search_web on Protected Workspace routes to TinyFish without tab navigation', async () => {
+  const chromeApi = createMockChrome({
+    tabs: [{ id: 1, windowId: 1, url: 'https://web.whatsapp.com', title: 'WhatsApp', active: true }]
+  });
+  const activeTab = { id: 1, url: 'https://web.whatsapp.com', title: 'WhatsApp' };
+
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (url, opts) => {
+    assert.ok(url.includes('agent.tinyfish.ai'));
+    return {
+      ok: true,
+      json: async () => ({
+        status: 'COMPLETED',
+        result: 'A German Shepherd costs between $1,500 and $4,500.',
+        num_of_steps: 3
+      })
+    };
+  };
+
+  try {
+    const res = await executeBrowserTool(
+      TOOL_NAMES.SEARCH_WEB,
+      { query: 'price of german shepherd' },
+      activeTab,
+      { chromeApi }
+    );
+
+    assert.equal(res.ok, true);
+    assert.ok(res.observation.includes('Protected Workspace Interception'));
+    assert.ok(res.observation.includes('German Shepherd'));
+    // Tab URL must NOT have navigated away from WhatsApp!
+    assert.equal(res.page.url, 'https://web.whatsapp.com');
+    assert.equal(chromeApi._state.tabs.get(1).url, 'https://web.whatsapp.com');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('Browser Tools - tinyfish_research executes in cloud sandbox leaving tab pristine', async () => {
+  const chromeApi = createMockChrome({
+    tabs: [{ id: 1, windowId: 1, url: 'https://web.whatsapp.com', title: 'WhatsApp', active: true }]
+  });
+  const activeTab = { id: 1, url: 'https://web.whatsapp.com', title: 'WhatsApp' };
+
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (url, opts) => {
+    assert.ok(url.includes('agent.tinyfish.ai'));
+    return {
+      ok: true,
+      json: async () => ({
+        status: 'COMPLETED',
+        result: 'Dhruv Rathee is an Indian YouTuber and educator.',
+        num_of_steps: 4
+      })
+    };
+  };
+
+  try {
+    const res = await executeBrowserTool(
+      TOOL_NAMES.TINYFISH_RESEARCH,
+      { query: 'who is dhruv rathee' },
+      activeTab,
+      { chromeApi }
+    );
+
+    assert.equal(res.ok, true);
+    assert.ok(res.observation.includes('TinyFish Isolated Cloud Research Result'));
+    assert.ok(res.observation.includes('Dhruv Rathee is an Indian YouTuber'));
+    assert.equal(res.page.url, 'https://web.whatsapp.com');
+    assert.equal(res.metadata.isolated, true);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });
