@@ -195,7 +195,8 @@ function setupEventListeners() {
     rejectApprovalBtn.addEventListener('click', async () => {
       if (approvalModal) approvalModal.style.display = 'none';
       if (activeAgent) {
-        await activeAgent.rejectAction('Action rejected by user.');
+        const result = await activeAgent.rejectAction('Action rejected by user.');
+        if (result?.summary) finishAgentMessage(result.summary, false);
       }
     });
   }
@@ -435,7 +436,10 @@ async function handleRunPrompt() {
         // Stopped cleanly via 1-click stopBtn handler
         return;
       }
-      if (result.awaitingUserInput) {
+      if (result.awaitingApproval) {
+        // Paused for the approval modal: the resumed run reports completion via agent events
+        log(`Task awaiting approval: ${result.summary}`, 'warn');
+      } else if (result.awaitingUserInput) {
         log(`Task awaiting input: ${result.summary}`, 'warn');
         finishAgentMessage(result.summary, false);
       } else if (result.success) {

@@ -101,7 +101,7 @@ export async function recoveryNode(state, options = {}) {
   }
 
   const lastObs = state.latestObservation;
-  const lastAction = lastObs ? { toolName: lastObs.toolName, args: lastObs.metadata || {} } : null;
+  const lastAction = lastObs ? { toolName: lastObs.toolName, args: { ...(lastObs.metadata || {}), ...(lastObs.args || {}) } } : null;
 
   const strategy = decideRecoveryStrategy({
     consecutiveFailures: newRecoveryCount,
@@ -109,9 +109,16 @@ export async function recoveryNode(state, options = {}) {
     lastAction
   });
 
+  // Element IDs are stable per DOM node, so a target that fails twice is a genuine dead end.
+  // A single failure is often timing (menu still opening), so it is not blacklisted yet.
+  const failedTargets = { ...(state.failedTargets || {}) };
   const blacklisted = [...(state.blacklistedTargets || [])];
-  if (strategy.blacklistedId && !blacklisted.includes(strategy.blacklistedId)) {
-    blacklisted.push(strategy.blacklistedId);
+  if (strategy.blacklistedId) {
+    const key = String(strategy.blacklistedId);
+    failedTargets[key] = (failedTargets[key] || 0) + 1;
+    if (failedTargets[key] >= 2 && !blacklisted.includes(strategy.blacklistedId)) {
+      blacklisted.push(strategy.blacklistedId);
+    }
   }
 
   // Execute mechanical recovery operations if necessary
@@ -127,6 +134,7 @@ export async function recoveryNode(state, options = {}) {
   return {
     recoveryCount: newRecoveryCount,
     blacklistedTargets: blacklisted,
+    failedTargets,
     status: strategy.decision === RECOVERY_DECISIONS.REPLAN ? 'REPLAN_REQUIRED' : 'RECOVERED'
   };
 }

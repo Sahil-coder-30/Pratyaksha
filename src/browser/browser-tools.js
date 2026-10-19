@@ -355,12 +355,21 @@ export async function executeBrowserTool(toolName, rawArgs = {}, activeTab, opti
           throw new ToolExecutionError(resp?.error || `Could not click [#${targetId || '?'}] "${hint}"`, { toolName });
         }
 
-        await sleepMs(100, signal);
-        const currentTab = await getTabSafe(tabId, chromeApi);
+        let currentTab = await getTabSafe(tabId, chromeApi);
+        const navigated = !!currentTab.url && currentTab.url !== initialTab.url;
+        if (navigated) {
+          await waitForTabLoad(tabId, 12000, chromeApi, signal);
+          await ensureContentScript(tabId, chromeApi);
+          currentTab = await getTabSafe(tabId, chromeApi);
+        }
+        const info = resp.result && typeof resp.result === 'object' ? resp.result : {};
+        const what = info.clicked || `[#${targetId || '?'}] "${hint}"`;
+        const change = navigated ? `page navigated to ${currentTab.url}` : (info.change || 'no URL change');
         return createToolResult({
           toolName,
-          observation: `Clicked [#${targetId || '?'}] "${hint}" — DOM settled.`,
-          page: currentTab
+          observation: `Clicked ${what} — ${change}.`,
+          page: currentTab,
+          metadata: { navigated, previousUrl: initialTab.url, target_id: targetId }
         });
       }
 
@@ -375,37 +384,49 @@ export async function executeBrowserTool(toolName, rawArgs = {}, activeTab, opti
           text = vault.rehydrate(text) ?? text;
         }
 
-        const resp = await sendToTab(tabId, {
-          type: 'EXECUTE_ACTION',
-          payload: {
-            action: 'TYPE',
-            target_id: targetId,
-            semantic_hint: hint,
-            value: text,
-            clear_first: !!args.clear_first
+        const initialTab = await getTabSafe(tabId, chromeApi);
+        let resp;
+        try {
+          resp = await sendToTab(tabId, {
+            type: 'EXECUTE_ACTION',
+            payload: {
+              action: 'TYPE',
+              target_id: targetId,
+              semantic_hint: hint,
+              value: text,
+              clear_first: args.clear_first !== false,
+              press_enter: !!args.press_enter
+            }
+          }, 10000, chromeApi);
+        } catch (err) {
+          // Enter submitted a form and the page unloaded mid-response
+          if (args.press_enter && (err instanceof ChannelClosedError || err.message?.includes('message channel closed'))) {
+            resp = { success: true, result: {} };
+          } else {
+            throw err;
           }
-        }, 8000, chromeApi);
+        }
 
         if (!resp?.success) {
           throw new ToolExecutionError(resp?.error || `Could not type into [#${targetId || '?'}] "${hint}"`, { toolName });
         }
 
-        if (args.press_enter) {
-          await sleepMs(150, signal);
-          await sendToTab(tabId, {
-            type: 'EXECUTE_ACTION',
-            payload: { action: 'PRESS_ENTER', target_id: targetId, semantic_hint: hint }
-          }, 3000, chromeApi).catch(() => {});
-          await sleepMs(150, signal);
+        let currentTab = await getTabSafe(tabId, chromeApi);
+        const navigated = !!currentTab.url && currentTab.url !== initialTab.url;
+        if (navigated) {
+          await waitForTabLoad(tabId, 12000, chromeApi, signal);
+          await ensureContentScript(tabId, chromeApi);
+          currentTab = await getTabSafe(tabId, chromeApi);
         }
-
-        const currentTab = await getTabSafe(tabId, chromeApi);
-        const desc = targetId ? `[#${targetId}]` : `"${hint}"`;
+        const info = resp.result && typeof resp.result === 'object' ? resp.result : {};
+        const desc = info.typedInto || (targetId ? `[#${targetId}]` : `"${hint}"`);
+        // Read-back lets the model confirm the field really holds the text (scrubbed before it reaches the model)
+        const valueNote = typeof info.value === 'string' ? ` Field now contains: "${info.value}".` : '';
         return createToolResult({
           toolName,
-          observation: `Typed into ${desc}${args.press_enter ? ' + Enter' : ''}.`,
+          observation: `Typed into ${desc}${args.press_enter ? ' + Enter' : ''}.${valueNote}${navigated ? ` Page navigated to ${currentTab.url}.` : ''}`,
           page: currentTab,
-          metadata: { pressEnter: !!args.press_enter }
+          metadata: { pressEnter: !!args.press_enter, navigated, target_id: targetId }
         });
       }
 
@@ -481,18 +502,79 @@ export async function executeBrowserTool(toolName, rawArgs = {}, activeTab, opti
         else if (dir === 'bottom') deltaY = 999999;
         else deltaY = (dir === 'up' ? -1 : 1) * (args.pixels || 600);
 
-        await sendToTab(tabId, {
+        const resp = await sendToTab(tabId, {
           type: 'EXECUTE_ACTION',
-          payload: { action: 'SCROLL', deltaY }
+          payload: { action: 'SCROLL', deltaY, target_id: args.target_id }
         }, 5000, chromeApi);
 
-        await sleepMs(100, signal);
+        const currentTab = await getTabSafe(tabId, chromeApi);
+        const info = resp?.result && typeof resp.result === 'object' ? resp.result : null;
+        let observation = dir === 'top' || dir === 'bottom'
+          ? `Scrolled to ${dir} of page.`
+          : `Scrolled ${dir} ${Math.abs(deltaY)}px.`;
+        if (info && info.scrolled === 0) {
+          observation = `Scroll ${dir} had no effect (already at the ${dir === 'up' || dir === 'top' ? 'top' : 'bottom'} or nothing scrollable).`;
+        }
+        return createToolResult({
+          toolName,
+          observation,
+          page: currentTab
+        });
+      }
+
+      // ── select_option ───────────────────────────────────────────────────────
+      case TOOL_NAMES.SELECT_OPTION: {
+        const resp = await sendToTab(tabId, {
+          type: 'EXECUTE_ACTION',
+          payload: {
+            action: 'SELECT_OPTION',
+            target_id: args.target_id,
+            semantic_hint: args.semantic_hint,
+            option: args.option
+          }
+        }, 8000, chromeApi);
+
+        if (!resp?.success) {
+          throw new ToolExecutionError(resp?.error || `Could not select "${args.option}"`, { toolName });
+        }
         const currentTab = await getTabSafe(tabId, chromeApi);
         return createToolResult({
           toolName,
-          observation: dir === 'top' || dir === 'bottom'
-            ? `Scrolled to ${dir} of page.`
-            : `Scrolled ${dir} ${Math.abs(deltaY)}px.`,
+          observation: `Selected "${resp.result?.selected || args.option}" in [#${args.target_id || '?'}].`,
+          page: currentTab,
+          metadata: { target_id: args.target_id }
+        });
+      }
+
+      // ── press_key ───────────────────────────────────────────────────────────
+      case TOOL_NAMES.PRESS_KEY: {
+        const initialTab = await getTabSafe(tabId, chromeApi);
+        let resp;
+        try {
+          resp = await sendToTab(tabId, {
+            type: 'EXECUTE_ACTION',
+            payload: { action: 'PRESS_KEY', key: args.key, target_id: args.target_id }
+          }, 5000, chromeApi);
+        } catch (err) {
+          if (err instanceof ChannelClosedError || err.message?.includes('message channel closed')) {
+            resp = { success: true, result: {} };
+          } else {
+            throw err;
+          }
+        }
+        if (!resp?.success) {
+          throw new ToolExecutionError(resp?.error || `Could not press ${args.key}`, { toolName });
+        }
+        let currentTab = await getTabSafe(tabId, chromeApi);
+        if (currentTab.url && currentTab.url !== initialTab.url) {
+          await waitForTabLoad(tabId, 12000, chromeApi, signal);
+          await ensureContentScript(tabId, chromeApi);
+          currentTab = await getTabSafe(tabId, chromeApi);
+        }
+        const change = resp.result?.change;
+        return createToolResult({
+          toolName,
+          observation: `Pressed ${args.key}${args.target_id ? ` on [#${args.target_id}]` : ''}${change ? ` — ${change}` : ''}.`,
           page: currentTab
         });
       }

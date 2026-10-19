@@ -9,11 +9,12 @@
  */
 
 import { StateGraph, START, END, interrupt } from '@langchain/langgraph';
+import { ToolMessage } from '@langchain/core/messages';
 import { AgentState } from './state.js';
-import { anonymizeInputTask } from '../safety/privacy.js';
+import { anonymizeInputTask, sanitizeObservationForModel } from '../safety/privacy.js';
 import { evaluateInputWithJev, evaluateOutputWithJev } from '../safety/jev-guard.js';
 import { plannerAgentNode, createPlannerAgent } from './planner-agent.js';
-import { browserActorAgentNode, createBrowserActorAgent } from './browser-actor-agent.js';
+import { browserActorAgentNode, createBrowserActorAgent, executeApprovedToolCall } from './browser-actor-agent.js';
 import { classifyAction } from '../safety/action-policy.js';
 import { createApprovalRequest } from '../safety/approval.js';
 import { verifierNode } from './verifier.js';
@@ -21,6 +22,106 @@ import { recoveryNode } from './recovery.js';
 import { TOOL_NAMES } from '../shared/constants.js';
 
 export { createPlannerAgent, createBrowserActorAgent };
+
+/**
+ * Builds the human-approval node for a tool call the actor proposed.
+ * The node only interrupts and executes, so when LangGraph re-runs it on resume
+ * nothing expensive or non-deterministic (DOM scan, LLM call) is repeated.
+ */
+function createToolApprovalNode(options = {}) {
+  const { chromeApi, vault, events, checkpointer } = options;
+
+  return async (state) => {
+    const pending = state.pendingToolCall;
+    if (!pending?.toolCall) {
+      return { pendingToolCall: null, status: 'ACTING' };
+    }
+
+    let decision = null;
+    if (checkpointer) {
+      const request = createApprovalRequest({
+        threadId: state.threadId || 'thread_local',
+        action: { toolName: pending.toolCall.name, args: pending.toolCall.args },
+        reason: pending.reason,
+        pageContext: { url: pending.url, title: pending.title }
+      });
+      decision = interrupt({
+        type: 'TOOL_APPROVAL_REQUIRED',
+        request,
+        action: pending.toolCall,
+        reason: pending.reason,
+        riskTier: pending.riskTier,
+        summary: pending.summary
+      });
+    }
+
+    const approved = decision === true || decision?.approved === true || decision?.status === 'APPROVED';
+    if (!approved) {
+      const why = decision?.reason || (checkpointer ? 'User denied the action.' : 'Approval channel unavailable.');
+      events?.emit?.('THINKING', {
+        phase: 'approval',
+        text: `Action rejected: ${pending.toolCall.name} (${why})`,
+        step: state.stepCount
+      });
+      return {
+        messages: [new ToolMessage({
+          tool_call_id: pending.toolCall.id,
+          name: pending.rawName || pending.toolCall.name,
+          content: `REJECTED_BY_OPERATOR: The user did not allow ${pending.toolCall.name}. Reason: ${why} Do not retry this action; choose a safe alternative or finish the task explaining it was not permitted.`
+        })],
+        pendingToolCall: null,
+        approvalStatus: 'REJECTED',
+        status: decision?.terminate ? 'OPERATOR_REJECTED' : 'ACTING'
+      };
+    }
+
+    events?.emit?.('THINKING', {
+      phase: 'action',
+      text: `Executing approved ${pending.toolCall.name}`,
+      toolName: pending.toolCall.name,
+      args: pending.toolCall.args,
+      step: state.stepCount
+    });
+
+    const { observation, result, activeTab } = await executeApprovedToolCall(pending, {
+      chromeApi,
+      vault,
+      signal: options.signal
+    });
+    const failed = /^(ERROR|BLOCKED)/.test(observation || '');
+
+    events?.emit?.('OBSERVATION', { observation, toolName: pending.toolCall.name, step: state.stepCount });
+
+    return {
+      messages: [new ToolMessage({
+        tool_call_id: pending.toolCall.id,
+        name: pending.rawName || pending.toolCall.name,
+        content: sanitizeObservationForModel(observation, vault)
+      })],
+      pendingToolCall: null,
+      approvalStatus: 'APPROVED',
+      latestObservation: result ? { ...result, args: pending.toolCall.args } : null,
+      browserSession: {
+        tabId: activeTab?.id ?? state.browserSession?.tabId,
+        url: result?.page?.url || state.browserSession?.url || '',
+        title: result?.page?.title || state.browserSession?.title || ''
+      },
+      status: result?.isFinished ? 'TASK_FINISHED_SIGNAL' : (failed ? 'TOOL_ERROR' : 'ACTING')
+    };
+  };
+}
+
+/**
+ * Shared routing after an acting step (browser_agent or tool_approval).
+ */
+function routeAfterAct(state, maxSteps) {
+  if (state.status === 'AWAITING_TOOL_APPROVAL') return 'tool_approval';
+  if (state.status === 'TERMINATED' || state.status === 'OPERATOR_REJECTED') return 'finalize';
+  if (state.latestObservation?.isFinished || state.status === 'TASK_FINISHED_SIGNAL') return 'verification';
+  if ((state.stepCount || 0) >= maxSteps) return 'verification';
+  if (state.status === 'TOOL_ERROR') return 'recovery';
+  return 'browser_agent';
+}
 
 /**
  * Creates and compiles the complete LangGraph agent workflow.
@@ -158,6 +259,8 @@ export function createAgentGraph(options = {}) {
               planApprovalStatus: 'APPROVED'
             };
           } catch (err) {
+            // interrupt() pauses the graph by throwing: never swallow it
+            if (err?.name === 'GraphInterrupt' || err?.constructor?.name === 'GraphInterrupt') throw err;
             console.warn('[PlanGate] Interrupt not supported in execution context:', err.message);
           }
         }
@@ -242,9 +345,13 @@ export function createAgentGraph(options = {}) {
         signal: options.signal,
         maxSteps,
         events,
-        enableInterrupts: options.enableInterrupts
+        enableInterrupts: options.enableInterrupts,
+        exposeAllTools: options.exposeAllTools
       });
     })
+
+    // ── 5b. TOOL APPROVAL NODE (Human-in-the-Loop) ───────────────────────────
+    .addNode('tool_approval', createToolApprovalNode({ ...options, chromeApi, vault, events, checkpointer }))
 
     // ── 6. VERIFICATION NODE ──────────────────────────────────────────────────
     .addNode('verification', async (state) => {
@@ -335,6 +442,19 @@ export function createAgentGraph(options = {}) {
         };
       }
 
+      if (state.status === 'OPERATOR_REJECTED') {
+        return {
+          status: 'TERMINATED',
+          finalResult: {
+            success: false,
+            cancelledByOperator: true,
+            summary: 'Action rejected by user.',
+            steps: state.stepCount || 1,
+            evidence: 'Operator rejected a pending action'
+          }
+        };
+      }
+
       if (state.status === 'AWAITING_USER_INPUT') {
         const missing = state.plan?.missingInformation?.join('; ') || 'Required details missing';
         return {
@@ -357,7 +477,9 @@ export function createAgentGraph(options = {}) {
       if (isSuccess) {
         summary = state.latestObservation?.summary || state.verificationResult?.reason || 'Goal accomplished successfully.';
       } else {
-        if (state.error?.message) {
+        if (state.latestObservation?.isFinished && state.latestObservation?.success === false && state.latestObservation?.summary) {
+          summary = state.latestObservation.summary;
+        } else if (state.error?.message) {
           summary = state.error.message;
         } else if (state.verificationResult?.reason) {
           summary = state.verificationResult.reason;
@@ -423,22 +545,22 @@ export function createAgentGraph(options = {}) {
       finalize: 'finalize'
     })
 
-    .addConditionalEdges('browser_agent', (state) => {
-      if ((state.stepCount || 0) >= maxSteps) return 'verification';
-
-      if (state.latestObservation?.isFinished || state.status === 'TASK_FINISHED_SIGNAL') {
-        return 'verification';
-      }
-
-      if (state.status === 'TOOL_ERROR') {
-        return 'recovery';
-      }
-
-      return 'policy';
-    }, {
+    // The actor loops on itself: per-tool policy/approval runs inside the actor and the
+    // approval node, so no extra graph hop (and checkpoint write) happens between steps.
+    .addConditionalEdges('browser_agent', (state) => routeAfterAct(state, maxSteps), {
+      tool_approval: 'tool_approval',
       verification: 'verification',
       recovery: 'recovery',
-      policy: 'policy'
+      browser_agent: 'browser_agent',
+      finalize: 'finalize'
+    })
+
+    .addConditionalEdges('tool_approval', (state) => routeAfterAct(state, maxSteps), {
+      tool_approval: 'tool_approval',
+      verification: 'verification',
+      recovery: 'recovery',
+      browser_agent: 'browser_agent',
+      finalize: 'finalize'
     })
 
     .addConditionalEdges('verification', (state) => {
@@ -458,11 +580,11 @@ export function createAgentGraph(options = {}) {
     .addConditionalEdges('recovery', (state) => {
       if (state.status === 'BLOCKED') return 'finalize';
       if (state.status === 'REPLAN_REQUIRED') return 'planner';
-      return 'policy';
+      return 'browser_agent';
     }, {
       finalize: 'finalize',
       planner: 'planner',
-      policy: 'policy'
+      browser_agent: 'browser_agent'
     })
 
     .addEdge('finalize', END);
@@ -501,9 +623,12 @@ export function createTwoAgentGraph(options = {}) {
         vault,
         signal: options.signal,
         maxSteps,
-        events
+        events,
+        enableInterrupts: options.enableInterrupts,
+        exposeAllTools: options.exposeAllTools
       });
     })
+    .addNode('tool_approval', createToolApprovalNode({ ...options, chromeApi, vault, events, checkpointer }))
     .addNode('finalize', async (state) => {
       const isSuccess = state.latestObservation?.isFinished && state.latestObservation?.success;
       return {
@@ -526,7 +651,20 @@ export function createTwoAgentGraph(options = {}) {
       finalize: 'finalize'
     })
     .addConditionalEdges('browser_agent', (state) => {
-      if ((state.stepCount || 0) >= maxSteps || state.latestObservation?.isFinished || state.status === 'TASK_FINISHED_SIGNAL') {
+      if (state.status === 'AWAITING_TOOL_APPROVAL') return 'tool_approval';
+      if ((state.stepCount || 0) >= maxSteps || state.latestObservation?.isFinished ||
+          state.status === 'TASK_FINISHED_SIGNAL' || state.status === 'TERMINATED') {
+        return 'finalize';
+      }
+      return 'browser_agent';
+    }, {
+      tool_approval: 'tool_approval',
+      browser_agent: 'browser_agent',
+      finalize: 'finalize'
+    })
+    .addConditionalEdges('tool_approval', (state) => {
+      if (state.status === 'OPERATOR_REJECTED' || state.latestObservation?.isFinished ||
+          (state.stepCount || 0) >= maxSteps) {
         return 'finalize';
       }
       return 'browser_agent';

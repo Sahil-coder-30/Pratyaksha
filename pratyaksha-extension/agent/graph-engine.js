@@ -62626,6 +62626,8 @@ var init_constants = __esm({
       EXTRACT_STRUCTURED: "extract_structured",
       CLICK_ELEMENT: "click_element",
       TYPE_INTO_ELEMENT: "type_into_element",
+      SELECT_OPTION: "select_option",
+      PRESS_KEY: "press_key",
       EXECUTE_JS: "execute_js",
       INSPECT_DOM: "inspect_dom",
       SCREENSHOT: "screenshot",
@@ -62749,7 +62751,13 @@ function normalizeToolInvocation(toolName = "", rawArgs = {}) {
     finish: TOOL_NAMES.FINISH_TASK,
     complete: TOOL_NAMES.FINISH_TASK,
     done: TOOL_NAMES.FINISH_TASK,
-    finishtask: TOOL_NAMES.FINISH_TASK
+    finishtask: TOOL_NAMES.FINISH_TASK,
+    select: TOOL_NAMES.SELECT_OPTION,
+    select_dropdown_option: TOOL_NAMES.SELECT_OPTION,
+    selectoption: TOOL_NAMES.SELECT_OPTION,
+    key: TOOL_NAMES.PRESS_KEY,
+    send_keys: TOOL_NAMES.PRESS_KEY,
+    presskey: TOOL_NAMES.PRESS_KEY
   };
   const lower = String(toolName || "").toLowerCase().trim();
   const canonicalName = TOOL_ALIASES[lower] || toolName;
@@ -62787,6 +62795,12 @@ function normalizeToolInvocation(toolName = "", rawArgs = {}) {
     if (args.text === void 0 && args.value !== void 0) {
       args.text = String(args.value);
     }
+  } else if (canonicalName === TOOL_NAMES.SELECT_OPTION) {
+    if (args.target_id === void 0) {
+      const rawTarget = args.id ?? args.target ?? args.element_id ?? args.index;
+      if (rawTarget !== void 0 && Number.isFinite(Number(rawTarget))) args.target_id = Number(rawTarget);
+    }
+    if (args.option === void 0) args.option = args.text ?? args.value ?? args.label;
   } else if (canonicalName === TOOL_NAMES.OPEN_URL) {
     if (!args.url && args.link) args.url = args.link;
     if (!args.url && args.destination) args.url = args.destination;
@@ -62860,10 +62874,21 @@ var init_schemas4 = __esm({
         target_id: external_exports.union([external_exports.number().int(), external_exports.string().regex(/^\d+$/)]).optional().describe("Numeric [ID] from the DOM elements table."),
         semantic_hint: external_exports.string().optional().describe("Fallback: describe the field."),
         text: external_exports.string().describe("The exact text to type."),
-        clear_first: external_exports.boolean().default(false).optional().describe("Clear existing content before typing (default false)."),
+        clear_first: external_exports.boolean().default(true).optional().describe("Replace existing content (default true). Set false to append."),
         press_enter: external_exports.boolean().default(false).optional().describe("Press Enter after typing (for search bars and forms).")
       }).refine((data) => data.target_id !== void 0 || !!data.semantic_hint, {
         message: "type_into_element requires either target_id or semantic_hint"
+      }),
+      [TOOL_NAMES.SELECT_OPTION]: external_exports.object({
+        target_id: external_exports.union([external_exports.number().int(), external_exports.string().regex(/^\d+$/)]).optional().describe("Numeric [ID] of the dropdown from the element list."),
+        semantic_hint: external_exports.string().optional().describe("Fallback: describe the dropdown."),
+        option: external_exports.string().min(1, "Option text is required").describe("Visible text (or value) of the option to choose.")
+      }).refine((data) => data.target_id !== void 0 || !!data.semantic_hint, {
+        message: "select_option requires either target_id or semantic_hint"
+      }),
+      [TOOL_NAMES.PRESS_KEY]: external_exports.object({
+        key: external_exports.enum(["Enter", "Escape", "Tab", "Backspace", "Delete", "ArrowDown", "ArrowUp", "ArrowLeft", "ArrowRight", "Space", "PageDown", "PageUp", "Home", "End"]).describe("Key to press."),
+        target_id: external_exports.union([external_exports.number().int(), external_exports.string().regex(/^\d+$/)]).optional().describe("Optional element [ID] to press the key on (default: focused element).")
       }),
       [TOOL_NAMES.EXECUTE_JS]: external_exports.object({
         code: external_exports.string().min(1, "JavaScript code cannot be empty").describe("JavaScript expression or statement to execute in page context."),
@@ -62877,7 +62902,8 @@ var init_schemas4 = __esm({
       [TOOL_NAMES.SCREENSHOT]: external_exports.object({}).describe("Captures a screenshot of the current visible viewport."),
       [TOOL_NAMES.SCROLL_PAGE]: external_exports.object({
         direction: external_exports.enum(["down", "up", "top", "bottom"]).describe("Scroll direction."),
-        pixels: external_exports.number().min(1).max(5e3).default(600).optional().describe('Pixels to scroll (for "down"/"up"). Default 600.')
+        pixels: external_exports.number().min(1).max(5e3).default(600).optional().describe('Pixels to scroll (for "down"/"up"). Default 600.'),
+        target_id: external_exports.union([external_exports.number().int(), external_exports.string().regex(/^\d+$/)]).optional().describe("Optional [ID] of a scrollable panel to scroll instead of the page.")
       }),
       [TOOL_NAMES.WAIT_FOR]: external_exports.object({
         selector: external_exports.string().optional().describe("CSS selector to wait for."),
@@ -62955,7 +62981,7 @@ var init_schemas4 = __esm({
       },
       {
         name: TOOL_NAMES.READ_PAGE,
-        description: "Reads and extracts the visible text content of the current page. Optionally focus on a specific CSS region.",
+        description: "Returns the main text content of the whole page (not only the viewport). Use it to read articles, results or answers before reporting them. Optionally scope with a CSS selector.",
         category: TOOL_CATEGORIES.READING,
         defaultRisk: RISK_TIERS.READ_ONLY,
         parameters: {
@@ -63030,7 +63056,7 @@ var init_schemas4 = __esm({
       },
       {
         name: TOOL_NAMES.CLICK_ELEMENT,
-        description: "Clicks an interactive element \u2014 buttons, links, tabs, checkboxes. Use target_id from the DOM table for accuracy.",
+        description: "Clicks a button, link, tab, checkbox, menu item or other control. Pass target_id = an [ID] from the CURRENT element list. Not for <select> dropdowns (use select_option).",
         category: TOOL_CATEGORIES.INTERACTION,
         defaultRisk: RISK_TIERS.REVERSIBLE,
         parameters: {
@@ -63044,7 +63070,7 @@ var init_schemas4 = __esm({
       },
       {
         name: TOOL_NAMES.TYPE_INTO_ELEMENT,
-        description: "Types text into any input, search bar, textarea, or rich-text editor. Use target_id from the DOM table.",
+        description: "Types text into an input, search box, textarea or rich-text editor (replaces existing text by default). Pass target_id from the CURRENT element list. Set press_enter=true to submit a search box.",
         category: TOOL_CATEGORIES.INTERACTION,
         defaultRisk: RISK_TIERS.SENSITIVE,
         parameters: {
@@ -63053,10 +63079,39 @@ var init_schemas4 = __esm({
             target_id: { type: "NUMBER", description: "Numeric [ID] from the DOM elements table." },
             semantic_hint: { type: "STRING", description: "Fallback: describe the field." },
             text: { type: "STRING", description: "The exact text to type." },
-            clear_first: { type: "BOOLEAN", description: "Clear existing content before typing (default false)." },
+            clear_first: { type: "BOOLEAN", description: "Replace existing content (default true). Set false to append." },
             press_enter: { type: "BOOLEAN", description: "Press Enter after typing." }
           },
           required: ["text"]
+        }
+      },
+      {
+        name: TOOL_NAMES.SELECT_OPTION,
+        description: "Chooses an option in a dropdown (native <select> or custom listbox) by its visible text. Use instead of clicking dropdown options one by one.",
+        category: TOOL_CATEGORIES.INTERACTION,
+        defaultRisk: RISK_TIERS.REVERSIBLE,
+        parameters: {
+          type: "OBJECT",
+          properties: {
+            target_id: { type: "NUMBER", description: "Numeric [ID] of the dropdown from the element list." },
+            semantic_hint: { type: "STRING", description: "Fallback: describe the dropdown." },
+            option: { type: "STRING", description: "Visible text (or value) of the option to choose." }
+          },
+          required: ["option"]
+        }
+      },
+      {
+        name: TOOL_NAMES.PRESS_KEY,
+        description: "Presses a keyboard key: Escape closes popups/menus, Enter submits, Tab/Arrow keys move through suggestions.",
+        category: TOOL_CATEGORIES.INTERACTION,
+        defaultRisk: RISK_TIERS.REVERSIBLE,
+        parameters: {
+          type: "OBJECT",
+          properties: {
+            key: { type: "STRING", enum: ["Enter", "Escape", "Tab", "Backspace", "Delete", "ArrowDown", "ArrowUp", "ArrowLeft", "ArrowRight", "Space", "PageDown", "PageUp", "Home", "End"], description: "Key to press." },
+            target_id: { type: "NUMBER", description: "Optional element [ID] to press the key on (default: focused element)." }
+          },
+          required: ["key"]
         }
       },
       {
@@ -63104,7 +63159,8 @@ var init_schemas4 = __esm({
           type: "OBJECT",
           properties: {
             direction: { type: "STRING", enum: ["down", "up", "top", "bottom"], description: "Direction to scroll." },
-            pixels: { type: "NUMBER", description: 'Pixels to scroll (for "down"/"up"). Default 600.' }
+            pixels: { type: "NUMBER", description: 'Pixels to scroll (for "down"/"up"). Default 600.' },
+            target_id: { type: "NUMBER", description: "Optional [ID] of a scrollable panel to scroll instead of the page." }
           },
           required: ["direction"]
         }
@@ -63423,12 +63479,12 @@ ${JSON.stringify(data, null, 2)}`,
             await sleepMs(200, signal);
             await ensureContentScript(tabId, chromeApi);
             const afterTab = await getTabSafe(tabId, chromeApi);
-            const navigated = afterTab.url !== initialTab.url;
+            const navigated2 = afterTab.url !== initialTab.url;
             return createToolResult({
               toolName,
-              observation: navigated ? `Clicked [#${targetId || "?"}] "${hint}" \u2014 page navigated to ${afterTab.url}.` : `Clicked [#${targetId || "?"}] "${hint}" \u2014 channel closed, page refreshed.`,
+              observation: navigated2 ? `Clicked [#${targetId || "?"}] "${hint}" \u2014 page navigated to ${afterTab.url}.` : `Clicked [#${targetId || "?"}] "${hint}" \u2014 channel closed, page refreshed.`,
               page: afterTab,
-              metadata: { navigated, previousUrl: initialTab.url }
+              metadata: { navigated: navigated2, previousUrl: initialTab.url }
             });
           }
           throw err;
@@ -63436,12 +63492,21 @@ ${JSON.stringify(data, null, 2)}`,
         if (!resp?.success) {
           throw new ToolExecutionError(resp?.error || `Could not click [#${targetId || "?"}] "${hint}"`, { toolName });
         }
-        await sleepMs(100, signal);
-        const currentTab = await getTabSafe(tabId, chromeApi);
+        let currentTab = await getTabSafe(tabId, chromeApi);
+        const navigated = !!currentTab.url && currentTab.url !== initialTab.url;
+        if (navigated) {
+          await waitForTabLoad(tabId, 12e3, chromeApi, signal);
+          await ensureContentScript(tabId, chromeApi);
+          currentTab = await getTabSafe(tabId, chromeApi);
+        }
+        const info = resp.result && typeof resp.result === "object" ? resp.result : {};
+        const what = info.clicked || `[#${targetId || "?"}] "${hint}"`;
+        const change = navigated ? `page navigated to ${currentTab.url}` : info.change || "no URL change";
         return createToolResult({
           toolName,
-          observation: `Clicked [#${targetId || "?"}] "${hint}" \u2014 DOM settled.`,
-          page: currentTab
+          observation: `Clicked ${what} \u2014 ${change}.`,
+          page: currentTab,
+          metadata: { navigated, previousUrl: initialTab.url, target_id: targetId }
         });
       }
       // ── type_into_element ───────────────────────────────────────────────────
@@ -63452,35 +63517,45 @@ ${JSON.stringify(data, null, 2)}`,
         if (vault?.rehydrate) {
           text = vault.rehydrate(text) ?? text;
         }
-        const resp = await sendToTab(tabId, {
-          type: "EXECUTE_ACTION",
-          payload: {
-            action: "TYPE",
-            target_id: targetId,
-            semantic_hint: hint,
-            value: text,
-            clear_first: !!args.clear_first
+        const initialTab = await getTabSafe(tabId, chromeApi);
+        let resp;
+        try {
+          resp = await sendToTab(tabId, {
+            type: "EXECUTE_ACTION",
+            payload: {
+              action: "TYPE",
+              target_id: targetId,
+              semantic_hint: hint,
+              value: text,
+              clear_first: args.clear_first !== false,
+              press_enter: !!args.press_enter
+            }
+          }, 1e4, chromeApi);
+        } catch (err) {
+          if (args.press_enter && (err instanceof ChannelClosedError || err.message?.includes("message channel closed"))) {
+            resp = { success: true, result: {} };
+          } else {
+            throw err;
           }
-        }, 8e3, chromeApi);
+        }
         if (!resp?.success) {
           throw new ToolExecutionError(resp?.error || `Could not type into [#${targetId || "?"}] "${hint}"`, { toolName });
         }
-        if (args.press_enter) {
-          await sleepMs(150, signal);
-          await sendToTab(tabId, {
-            type: "EXECUTE_ACTION",
-            payload: { action: "PRESS_ENTER", target_id: targetId, semantic_hint: hint }
-          }, 3e3, chromeApi).catch(() => {
-          });
-          await sleepMs(150, signal);
+        let currentTab = await getTabSafe(tabId, chromeApi);
+        const navigated = !!currentTab.url && currentTab.url !== initialTab.url;
+        if (navigated) {
+          await waitForTabLoad(tabId, 12e3, chromeApi, signal);
+          await ensureContentScript(tabId, chromeApi);
+          currentTab = await getTabSafe(tabId, chromeApi);
         }
-        const currentTab = await getTabSafe(tabId, chromeApi);
-        const desc = targetId ? `[#${targetId}]` : `"${hint}"`;
+        const info = resp.result && typeof resp.result === "object" ? resp.result : {};
+        const desc = info.typedInto || (targetId ? `[#${targetId}]` : `"${hint}"`);
+        const valueNote = typeof info.value === "string" ? ` Field now contains: "${info.value}".` : "";
         return createToolResult({
           toolName,
-          observation: `Typed into ${desc}${args.press_enter ? " + Enter" : ""}.`,
+          observation: `Typed into ${desc}${args.press_enter ? " + Enter" : ""}.${valueNote}${navigated ? ` Page navigated to ${currentTab.url}.` : ""}`,
           page: currentTab,
-          metadata: { pressEnter: !!args.press_enter }
+          metadata: { pressEnter: !!args.press_enter, navigated, target_id: targetId }
         });
       }
       // ── execute_js ──────────────────────────────────────────────────────────
@@ -63547,15 +63622,73 @@ URL: ${currentTab.url}`,
         if (dir === "top") deltaY = -999999;
         else if (dir === "bottom") deltaY = 999999;
         else deltaY = (dir === "up" ? -1 : 1) * (args.pixels || 600);
-        await sendToTab(tabId, {
+        const resp = await sendToTab(tabId, {
           type: "EXECUTE_ACTION",
-          payload: { action: "SCROLL", deltaY }
+          payload: { action: "SCROLL", deltaY, target_id: args.target_id }
         }, 5e3, chromeApi);
-        await sleepMs(100, signal);
+        const currentTab = await getTabSafe(tabId, chromeApi);
+        const info = resp?.result && typeof resp.result === "object" ? resp.result : null;
+        let observation = dir === "top" || dir === "bottom" ? `Scrolled to ${dir} of page.` : `Scrolled ${dir} ${Math.abs(deltaY)}px.`;
+        if (info && info.scrolled === 0) {
+          observation = `Scroll ${dir} had no effect (already at the ${dir === "up" || dir === "top" ? "top" : "bottom"} or nothing scrollable).`;
+        }
+        return createToolResult({
+          toolName,
+          observation,
+          page: currentTab
+        });
+      }
+      // ── select_option ───────────────────────────────────────────────────────
+      case TOOL_NAMES.SELECT_OPTION: {
+        const resp = await sendToTab(tabId, {
+          type: "EXECUTE_ACTION",
+          payload: {
+            action: "SELECT_OPTION",
+            target_id: args.target_id,
+            semantic_hint: args.semantic_hint,
+            option: args.option
+          }
+        }, 8e3, chromeApi);
+        if (!resp?.success) {
+          throw new ToolExecutionError(resp?.error || `Could not select "${args.option}"`, { toolName });
+        }
         const currentTab = await getTabSafe(tabId, chromeApi);
         return createToolResult({
           toolName,
-          observation: dir === "top" || dir === "bottom" ? `Scrolled to ${dir} of page.` : `Scrolled ${dir} ${Math.abs(deltaY)}px.`,
+          observation: `Selected "${resp.result?.selected || args.option}" in [#${args.target_id || "?"}].`,
+          page: currentTab,
+          metadata: { target_id: args.target_id }
+        });
+      }
+      // ── press_key ───────────────────────────────────────────────────────────
+      case TOOL_NAMES.PRESS_KEY: {
+        const initialTab = await getTabSafe(tabId, chromeApi);
+        let resp;
+        try {
+          resp = await sendToTab(tabId, {
+            type: "EXECUTE_ACTION",
+            payload: { action: "PRESS_KEY", key: args.key, target_id: args.target_id }
+          }, 5e3, chromeApi);
+        } catch (err) {
+          if (err instanceof ChannelClosedError || err.message?.includes("message channel closed")) {
+            resp = { success: true, result: {} };
+          } else {
+            throw err;
+          }
+        }
+        if (!resp?.success) {
+          throw new ToolExecutionError(resp?.error || `Could not press ${args.key}`, { toolName });
+        }
+        let currentTab = await getTabSafe(tabId, chromeApi);
+        if (currentTab.url && currentTab.url !== initialTab.url) {
+          await waitForTabLoad(tabId, 12e3, chromeApi, signal);
+          await ensureContentScript(tabId, chromeApi);
+          currentTab = await getTabSafe(tabId, chromeApi);
+        }
+        const change = resp.result?.change;
+        return createToolResult({
+          toolName,
+          observation: `Pressed ${args.key}${args.target_id ? ` on [#${args.target_id}]` : ""}${change ? ` \u2014 ${change}` : ""}.`,
           page: currentTab
         });
       }
@@ -63771,35 +63904,80 @@ function detectTargetService(task2 = "") {
   }
   return null;
 }
-function buildDOMTable(elements = [], max = 35, blacklistedTargets = /* @__PURE__ */ new Set()) {
+function quote(str, max) {
+  const clean = String(str || "").replace(/\s+/g, " ").trim();
+  return clean.length > max ? `${clean.slice(0, max - 1)}\u2026` : clean;
+}
+function formatElementLine(el, isBlacklisted = false) {
+  const kind = el.type && el.type !== el.tag ? ` ${el.role ? "role" : "type"}=${el.type}` : "";
+  const label = quote(el.label || el.text || el.placeholder || "", 70);
+  const parts = [`${el.isNew ? "*" : ""}[${el.id}] <${el.tag || "?"}${kind}>`];
+  if (isBlacklisted) {
+    parts.push(`"[FAILED/DO-NOT-USE] ${label}" \u26A0\uFE0F BLACKLISTED`);
+    return parts.join(" ");
+  }
+  if (label) parts.push(`"${label}"`);
+  if (el.value) parts.push(`value="${quote(el.value, 30)}"`);
+  if (el.placeholder && el.placeholder !== el.label) parts.push(`placeholder="${quote(el.placeholder, 30)}"`);
+  if (el.href) parts.push(`\u2192 ${el.href}`);
+  if (Array.isArray(el.options) && el.options.length) parts.push(`options=[${el.options.slice(0, 8).map((o) => quote(o, 20)).join(" | ")}]`);
+  const flags = [];
+  if (el.disabled) flags.push("disabled");
+  if (el.checked) flags.push("checked");
+  if (el.selected) flags.push("selected");
+  if (el.expanded === true) flags.push("expanded");
+  if (el.expanded === false) flags.push("collapsed");
+  if (el.inDialog) flags.push("dialog");
+  if (flags.length) parts.push(`(${flags.join(", ")})`);
+  return parts.join(" ");
+}
+function buildDOMTable(elements = [], max = 150, blacklistedTargets = /* @__PURE__ */ new Set(), options = {}) {
   if (!elements.length) return "No interactive elements detected.";
-  const header = "[ID]  TAG            TYPE/ROLE     LABEL / PLACEHOLDER / TEXT                     STATUS/VAL";
-  const sep = "\u2500".repeat(header.length);
-  const sorted = [...elements].sort((a, b) => {
-    const isBlA = blacklistedTargets.has(Number(a.id));
-    const isBlB = blacklistedTargets.has(Number(b.id));
-    if (isBlA && !isBlB) return 1;
-    if (!isBlA && isBlB) return -1;
-    const isInputA = /input|textarea|textbox|combobox/i.test(`${a.tag} ${a.type} ${a.role}`);
-    const isInputB = /input|textarea|textbox|combobox/i.test(`${b.tag} ${b.type} ${b.role}`);
-    if (isInputA && !isInputB) return -1;
-    if (!isInputA && isInputB) return 1;
-    return 0;
-  });
-  const rows = sorted.slice(0, max).map((el) => {
-    const isBl = blacklistedTargets.has(Number(el.id));
-    const id = String(el.id || "").padStart(4, " ");
-    const tag = `<${el.tag || "?"}>`.padEnd(14, " ");
-    const type = (el.type || el.role || "").padEnd(13, " ");
-    let label = (el.label || el.text || "").replace(/\s+/g, " ").slice(0, 46);
-    if (isBl) {
-      label = `[FAILED/DO-NOT-USE] ${label}`.slice(0, 46);
+  const maxChars = options.maxChars || 7e3;
+  const isBl = (el) => blacklistedTargets.has(Number(el.id));
+  const usable = elements.filter((el) => !isBl(el));
+  const blacklisted = elements.filter(isBl);
+  const inView = usable.filter((el) => el.inViewport !== false);
+  const offView = usable.filter((el) => el.inViewport === false);
+  const lines = [];
+  let used = 0;
+  let shown = 0;
+  let omitted = 0;
+  const push2 = (line) => {
+    if (shown >= max || used + line.length > maxChars) {
+      omitted++;
+      return;
     }
-    label = label.padEnd(46, " ");
-    const val = isBl ? "\u26A0\uFE0F BLACKLISTED" : el.value ? `"${el.value.slice(0, 20)}"` : "";
-    return `[${id}]  ${tag} ${type} ${label} ${val}`;
-  });
-  return [header, sep, ...rows].join("\n");
+    lines.push(line);
+    used += line.length + 1;
+    shown++;
+  };
+  inView.forEach((el) => push2(formatElementLine(el)));
+  if (offView.length) {
+    lines.push("-- below/above the viewport (scroll to reach) --");
+    offView.forEach((el) => push2(formatElementLine(el)));
+  }
+  blacklisted.forEach((el) => push2(formatElementLine(el, true)));
+  if (omitted > 0) lines.push(`(\u2026 ${omitted} more elements not shown \u2014 scroll or use find_on_page to reach them)`);
+  return lines.join("\n");
+}
+function buildPageObservation({ elements = [], page = null, blacklistedTargets = /* @__PURE__ */ new Set(), maxElements = 150 } = {}) {
+  const sections = [];
+  if (page) {
+    const scroll = [];
+    scroll.push(page.pixelsAbove > 0 ? `${page.pixelsAbove}px above` : "at top");
+    scroll.push(page.pixelsBelow > 0 ? `${page.pixelsBelow}px more below` : "at bottom");
+    sections.push(`Scroll: ${scroll.join(", ")}.`);
+    if (page.dialogOpen) {
+      sections.push(`A dialog/modal is open${page.dialogLabel ? ` ("${quote(page.dialogLabel, 50)}")` : ""}. Elements marked (dialog) are inside it; finish or close it before using the page behind.`);
+    }
+  }
+  sections.push(buildDOMTable(elements, maxElements, blacklistedTargets));
+  if (page?.visibleText) {
+    sections.push(`VISIBLE TEXT (viewport, truncated):
+${quote(page.visibleText, 1500)}`);
+  }
+  return sections.join("\n");
 }
 async function getPageContext(tabId, options = {}) {
   const chromeApi = options.chromeApi || (typeof chrome !== "undefined" ? chrome : null);
@@ -63810,7 +63988,7 @@ async function getPageContext(tabId, options = {}) {
     if (signal?.aborted) break;
     try {
       const resp = await new Promise((resolve, reject) => {
-        const timer = setTimeout(() => reject(new Error("GET_PAGE_CONTEXT timeout")), 4e3);
+        const timer = setTimeout(() => reject(new Error("GET_PAGE_CONTEXT timeout")), 5e3);
         chromeApi.tabs.sendMessage(tabId, { type: "GET_PAGE_CONTEXT" }, (r) => {
           clearTimeout(timer);
           chromeApi.runtime?.lastError ? reject(new Error(chromeApi.runtime.lastError.message)) : resolve(r);
@@ -63820,7 +63998,8 @@ async function getPageContext(tabId, options = {}) {
         return {
           url: resp.url || tab.url,
           title: resp.title || tab.title,
-          elements: resp.elements
+          elements: resp.elements,
+          page: resp.page || null
         };
       }
     } catch {
@@ -63828,7 +64007,7 @@ async function getPageContext(tabId, options = {}) {
       await new Promise((r) => setTimeout(r, 400));
     }
   }
-  return { url: tab.url, title: tab.title, elements: [] };
+  return { url: tab.url, title: tab.title, elements: [], page: null };
 }
 var init_page_context = __esm({
   "src/browser/page-context.js"() {
@@ -99974,10 +100153,10 @@ var WorkloadIdentityAuth = class _WorkloadIdentityAuth {
       redirect: "manual"
     });
     if (!response.ok) {
-      const errorText = await response.text();
+      const errorText2 = await response.text();
       let body2 = void 0;
       try {
-        body2 = JSON.parse(errorText);
+        body2 = JSON.parse(errorText2);
       } catch {
       }
       if (response.status === 400 || response.status === 401 || response.status === 403) {
@@ -144229,6 +144408,10 @@ var AgentState = Annotation.Root({
   stepCount: Annotation({ reducer: (current, update) => typeof update === "number" ? update : (current || 0) + 1, default: () => 0 }),
   // Safety & Human-in-the-Loop Approval
   approvalStatus: Annotation({ reducer: replaceReducer, default: () => "NONE" }),
+  // Tool call proposed by the actor that is waiting on a human decision (null = none)
+  pendingToolCall: Annotation({ reducer: replaceReducer, default: () => null }),
+  // Consecutive failure count per element ID, used to blacklist only repeat offenders
+  failedTargets: Annotation({ reducer: replaceReducer, default: () => ({}) }),
   pendingApproval: Annotation({ reducer: replaceReducer, default: () => null }),
   planApprovalStatus: Annotation({ reducer: replaceReducer, default: () => "NONE" }),
   pendingPlanApproval: Annotation({ reducer: replaceReducer, default: () => null }),
@@ -144663,9 +144846,10 @@ init_browser_tools();
 init_constants();
 function createLangChainBrowserTools(getSessionContext, options = {}) {
   const includeFinish = options.includeFinishTask !== false;
+  const excluded = new Set(options.exclude || []);
   const tools2 = [];
   for (const spec of BROWSER_TOOL_SPECS) {
-    if (spec.name === TOOL_NAMES.FINISH_TASK && !includeFinish) {
+    if (spec.name === TOOL_NAMES.FINISH_TASK && !includeFinish || excluded.has(spec.name)) {
       continue;
     }
     const schema = TOOL_ZOD_SCHEMAS[spec.name];
@@ -144704,31 +144888,6 @@ function createLangChainBrowserTools(getSessionContext, options = {}) {
 }
 
 // src/agent/middleware.js
-function pruneContext(messages = [], options = {}) {
-  if (!Array.isArray(messages) || messages.length <= 4) {
-    return messages;
-  }
-  const maxRecent = options.maxRecentMessages || 12;
-  const maxObsLen = options.maxObservationLength || 500;
-  const cutoffIndex = Math.max(0, messages.length - maxRecent);
-  const olderMessages = messages.slice(0, cutoffIndex);
-  const recentMessages = messages.slice(cutoffIndex);
-  const compactedOlder = olderMessages.map((msg) => {
-    if (msg instanceof ToolMessage || msg?._getType?.() === "tool") {
-      const content = typeof msg.content === "string" ? msg.content : JSON.stringify(msg.content);
-      if (content.length > maxObsLen) {
-        const truncated = content.slice(0, maxObsLen) + "\u2026 [observation pruned for context]";
-        return new ToolMessage({
-          tool_call_id: msg.tool_call_id,
-          name: msg.name,
-          content: truncated
-        });
-      }
-    }
-    return msg;
-  });
-  return [...compactedOlder, ...recentMessages];
-}
 function validateToolCall(toolCall, blacklistedTargets = []) {
   if (!toolCall || !toolCall.name) {
     return { valid: false, reason: "Invalid or missing tool call specification" };
@@ -144748,6 +144907,149 @@ function validateToolCall(toolCall, blacklistedTargets = []) {
     };
   }
   return { valid: true };
+}
+function getMessageType(msg) {
+  if (!msg) return "unknown";
+  if (typeof msg._getType === "function") return msg._getType();
+  if (typeof msg.getType === "function") return msg.getType();
+  if (msg.type) return msg.type;
+  if (msg._type) return msg._type;
+  if (msg.role) {
+    if (msg.role === "assistant") return "ai";
+    if (msg.role === "user") return "human";
+    return msg.role;
+  }
+  const ctor = msg.constructor?.name || "";
+  if (ctor.startsWith("AIMessage")) return "ai";
+  if (ctor.startsWith("HumanMessage")) return "human";
+  if (ctor.startsWith("SystemMessage")) return "system";
+  if (ctor === "ToolMessage") return "tool";
+  return "unknown";
+}
+function getToolCalls(msg) {
+  const list = msg?.tool_calls || msg?.additional_kwargs?.tool_calls;
+  return Array.isArray(list) ? list : [];
+}
+function contentToString(content) {
+  if (typeof content === "string") return content;
+  if (Array.isArray(content)) {
+    return content.map((part) => typeof part === "string" ? part : part?.text || "").join("");
+  }
+  return content ? JSON.stringify(content) : "";
+}
+function extractActionHistory(messages = []) {
+  const results = /* @__PURE__ */ new Map();
+  for (const msg of messages) {
+    if (getMessageType(msg) === "tool" && msg.tool_call_id) {
+      results.set(msg.tool_call_id, contentToString(msg.content));
+    }
+  }
+  const history = [];
+  for (const msg of messages) {
+    if (getMessageType(msg) !== "ai") continue;
+    for (const tc of getToolCalls(msg)) {
+      const name = tc.name || tc.function?.name || "unknown";
+      let args = tc.args;
+      if (!args && typeof tc.function?.arguments === "string") {
+        try {
+          args = JSON.parse(tc.function.arguments);
+        } catch (_) {
+          args = {};
+        }
+      }
+      const observation = results.get(tc.id) ?? "";
+      const ok = !!observation && !/^(ERROR|BLOCKED|SKIPPED|REJECTED)/.test(observation);
+      const navMatch = observation.match(/navigated to (\S+)/i);
+      const url2 = args && (args.url || null) || (navMatch ? navMatch[1].replace(/[.,]$/, "") : null);
+      history.push({ toolName: name, args: args || {}, ok, observation, url: url2 });
+    }
+  }
+  return history;
+}
+function describeArgs(args = {}) {
+  const parts = [];
+  if (args.target_id !== void 0) parts.push(`#${args.target_id}`);
+  if (args.semantic_hint) parts.push(`"${String(args.semantic_hint).slice(0, 30)}"`);
+  if (args.text !== void 0) parts.push(`text="${String(args.text).slice(0, 40)}"`);
+  if (args.option) parts.push(`option="${String(args.option).slice(0, 30)}"`);
+  if (args.key) parts.push(args.key);
+  if (args.url) parts.push(String(args.url).slice(0, 80));
+  if (args.query) parts.push(`"${String(args.query).slice(0, 60)}"`);
+  if (args.direction) parts.push(args.direction);
+  if (args.summary) parts.push(`"${String(args.summary).slice(0, 40)}"`);
+  return parts.join(" ");
+}
+function buildActionLog(history = [], maxLines = 25) {
+  if (!history.length) return "";
+  const start = Math.max(0, history.length - maxLines);
+  const lines = [];
+  if (start > 0) lines.push(`(${start} earlier actions omitted)`);
+  history.slice(start).forEach((h, i) => {
+    const firstLine = (h.observation || "").split("\n")[0].replace(/\s+/g, " ");
+    const outcome = h.ok ? "OK" : "FAILED";
+    lines.push(`${start + i + 1}. ${h.toolName}(${describeArgs(h.args)}) \u2192 ${outcome}: ${firstLine.slice(0, 140)}`);
+  });
+  return lines.join("\n");
+}
+function detectLoop(history = [], windowSize = 8) {
+  const recent = history.slice(-windowSize).filter((h) => h.toolName !== "finish_task");
+  const counts = /* @__PURE__ */ new Map();
+  for (const h of recent) {
+    const key = `${h.toolName}:${JSON.stringify(h.args || {})}`;
+    counts.set(key, (counts.get(key) || 0) + 1);
+  }
+  for (const [key, count] of counts) {
+    if (count >= 3) {
+      const name = key.split(":")[0];
+      return `You repeated the same ${name} action ${count} times without progress. It is NOT working. Do something different: pick another element, scroll, press Escape to close an overlay, go back, or use a different route to the goal.`;
+    }
+  }
+  const lastThree = history.slice(-3);
+  if (lastThree.length === 3 && lastThree.every((h) => !h.ok)) {
+    return "Your last 3 actions failed. Stop and re-read the CURRENT element list and visible text before acting; use only IDs that appear in it.";
+  }
+  return "";
+}
+function buildModelHistory(messages = [], options = {}) {
+  const maxTurns = options.maxTurns ?? 6;
+  const recentObsChars = options.recentObservationChars ?? 2500;
+  const olderObsChars = options.olderObservationChars ?? 300;
+  const clean = messages.filter((m) => getMessageType(m) !== "system");
+  const turns = [];
+  for (const msg of clean) {
+    const type = getMessageType(msg);
+    if (type === "tool") {
+      if (turns.length && turns[turns.length - 1].ai) turns[turns.length - 1].tools.push(msg);
+      continue;
+    }
+    if (type === "ai") turns.push({ ai: msg, tools: [] });
+    else turns.push({ other: msg });
+  }
+  const aiTurnIdx = turns.map((t, i) => t.ai ? i : -1).filter((i) => i >= 0);
+  const cutAt = aiTurnIdx.length > maxTurns ? aiTurnIdx[aiTurnIdx.length - maxTurns] : 0;
+  const kept = turns.slice(cutAt);
+  const recentBoundary = aiTurnIdx.length >= 2 ? aiTurnIdx[aiTurnIdx.length - 2] - cutAt : 0;
+  const out = [];
+  kept.forEach((turn, idx) => {
+    if (turn.other) {
+      out.push(turn.other);
+      return;
+    }
+    out.push(turn.ai);
+    const limit3 = idx >= recentBoundary ? recentObsChars : olderObsChars;
+    const seen = /* @__PURE__ */ new Set();
+    for (const tm of turn.tools) {
+      seen.add(tm.tool_call_id);
+      const content = contentToString(tm.content);
+      out.push(content.length > limit3 ? new ToolMessage({ tool_call_id: tm.tool_call_id, name: tm.name, content: `${content.slice(0, limit3)}\u2026 [truncated]` }) : tm);
+    }
+    for (const tc of getToolCalls(turn.ai)) {
+      if (tc.id && !seen.has(tc.id)) {
+        out.push(new ToolMessage({ tool_call_id: tc.id, name: tc.name || "tool", content: "No result recorded." }));
+      }
+    }
+  });
+  return out;
 }
 
 // src/agent/browser-actor-agent.js
@@ -144846,31 +145148,51 @@ function classifyAction(toolName, args = {}, pageContext = {}) {
 
 // src/agent/browser-actor-agent.js
 init_errors6();
-var BROWSER_ACTOR_SYSTEM_PROMPT = `You are PRATYAKSHA Core Browser Agent \u2014 an autonomous visual browser execution actor.
-You control live web applications, dynamic single-page apps (SPAs), chats, and web forms to accomplish user objectives.
-You perceive live page interactive elements, evaluate dynamic changes on the website, and execute actions using your tools.
+init_constants();
+var BROWSER_ACTOR_SYSTEM_PROMPT = `You are PRATYAKSHA Core Browser Agent, an autonomous agent that completes tasks in a live web browser by calling tools.
 
-CRITICAL EXECUTION PRINCIPLES:
-1. DO NOT OPERATE IN A RIGID ONE-WAY FLOW:
-   Websites and chat applications are dynamic, asynchronous, and reactive. Never execute a predetermined script blindly.
-   After performing each step, observe and identify what changed on the website before deciding the next move.
+HOW EACH STEP WORKS
+- Every step you get a FRESH snapshot of the page: URL, scroll position, the interactive element list, and visible text.
+- Read it, decide the next action(s), call the tool(s). Then you get a new snapshot showing the result.
 
-2. SENSE \u2192 ANALYZE CHANGES \u2192 ACT ITERATIVE CYCLE:
-   In each iteration:
-   - SENSE: Read the latest INTERACTIVE ELEMENTS table and previous tool observation.
-   - ANALYZE CHANGES: Identify what actually changed on the page (e.g. did a new chat message or response bubble appear? Did a modal or dialog open? Did an input clear or accept text? Did a button state change? Did the URL change?).
-   - DECIDE NEXT ACTION: If interacting with a chat or conversational interface, evaluate what the other party/system responded before drafting the next reply. If an action opened a modal, target elements inside that new modal. If waiting for an asynchronous event (like a bot or user response in a chat), observe the page before proceeding.
-   - ONLY FINISH WHEN TRUE GOAL IS ATTAINED: In chat/multi-turn workflows, do NOT call finish_task prematurely after just sending one message unless the full conversation goal specified by the user is completely achieved.
+ELEMENT LIST FORMAT
+- One element per line: [ID] <tag> "label" plus value/placeholder/link/state.
+- A leading * marks an element that is NEW since the last step (e.g. a menu, dialog, suggestion list or result that just appeared). Look at these first.
+- "(dialog)" means the element is inside an open modal; act inside the modal first.
 
-3. DOM TARGETING:
-   - Target elements by numeric [ID] from the provided interactive elements table for guaranteed accuracy.
-   - For text inputs, search boxes, or chat fields, always use type_into_element before clicking send/submit.
+STRICT RULES (follow exactly)
+1. Only use [ID]s that appear in the CURRENT element list. Never invent, guess or reuse an ID that is not listed now.
+2. Never state facts you did not read on the page. Answers must come from VISIBLE TEXT or read_page output.
+3. If what you need is not listed: scroll_page, or use find_on_page, or open a better URL. Do not click random elements.
+4. Text fields: type_into_element (it replaces existing text). For search boxes set press_enter=true. Dropdowns: select_option. Popups/menus: press_key Escape.
+5. Cookie banners, sign-up popups or overlays blocking the page: close or accept-necessary them first.
+6. If an action fails, read the error and change approach. Never repeat the same failing action.
+7. You may call several tools in one step only when they do not depend on each other's result (e.g. fill 3 form fields, then click Submit). After a click that navigates, the remaining calls are skipped automatically.
+8. Do not ask the user questions like "Shall I proceed?". Act. If the task truly needs information you do not have (password, missing recipient), call finish_task with success=false and say what is missing.
+9. If you hit a login wall, CAPTCHA, or payment step you are not authorized for, stop with finish_task(success=false) and explain.
 
-4. NO CONVERSATIONAL CONFIRMATION DRIFT:
-   - NEVER ask meta questions like "Shall I proceed?", "Would you like me to continue?", or "Shall I proceed with sending?". You are an autonomous browser actor\u2014perform the browser actions directly on the page.
-
-5. COMPLETION CRITERIA:
-   - When the user's ultimate goal has been verified on the page (e.g., chat completed, search results extracted, email sent and confirmed), call finish_task immediately with a clear summary.`;
+FINISHING
+- Call finish_task as soon as the goal is verifiably done on the page. Put the actual result (the answer, the data found, what was sent) in the summary.
+- For information tasks, read the page first, then finish with the answer. Do not finish without the answer.
+- Do not call finish_task for a multi-step goal (chat, form, email) until the final step is confirmed on the page.`;
+var DEFAULT_HIDDEN_TOOLS = Object.freeze([
+  TOOL_NAMES.SCREENSHOT,
+  TOOL_NAMES.GET_PAGE_METADATA,
+  TOOL_NAMES.INSPECT_DOM,
+  TOOL_NAMES.GO_FORWARD,
+  TOOL_NAMES.EXECUTE_JS
+]);
+var NAVIGATING_TOOLS = /* @__PURE__ */ new Set([
+  TOOL_NAMES.CLICK_ELEMENT,
+  TOOL_NAMES.OPEN_URL,
+  TOOL_NAMES.SEARCH_WEB,
+  TOOL_NAMES.GO_BACK,
+  TOOL_NAMES.GO_FORWARD,
+  TOOL_NAMES.SWITCH_TAB,
+  TOOL_NAMES.TYPE_INTO_ELEMENT,
+  TOOL_NAMES.PRESS_KEY,
+  TOOL_NAMES.SELECT_OPTION
+]);
 function buildBrowserActorPrompt({
   taskObjective = "",
   currentPlan = null,
@@ -144879,62 +145201,33 @@ function buildBrowserActorPrompt({
   currentTitle = "",
   stepCount = 1,
   maxSteps = 100,
-  blacklistedTargets = []
+  blacklistedTargets = [],
+  actionLog = "",
+  warnings = []
 }) {
-  let planSection = "";
+  const sections = [BROWSER_ACTOR_SYSTEM_PROMPT, "", `TASK: ${taskObjective}`, `STEP: ${stepCount} of ${maxSteps}`];
   if (currentPlan?.subgoals?.length) {
-    const items = currentPlan.subgoals.map((s) => `  ${s.id}. ${s.description} [${s.riskTier}] \u2192 Evidence: ${s.completionEvidence}`).join("\n");
-    planSection = `
-STRUCTURED EXECUTION PLAN:
-${items}
-`;
+    const items = currentPlan.subgoals.map((s) => `  ${s.id}. ${s.description}`).join("\n");
+    sections.push(`SUGGESTED APPROACH (a hint only; follow the real page if it differs):
+${items}`);
   }
-  let blacklistSection = "";
+  if (actionLog) {
+    sections.push(`ACTIONS SO FAR:
+${actionLog}`);
+  }
   if (blacklistedTargets.length > 0) {
-    blacklistSection = `
-\u26A0\uFE0F AVOID ELEMENTS: [${blacklistedTargets.join(", ")}] (Previously failed/dead ends)
-`;
+    sections.push(`AVOID ELEMENTS: [${blacklistedTargets.join(", ")}] (they failed repeatedly)`);
   }
-  let iterationNotice = "";
-  if (stepCount > 1) {
-    iterationNotice = `
-\u26A1 ITERATION ${stepCount}/${maxSteps} NOTICE:
-The INTERACTIVE ELEMENTS table below shows the LIVE, UPDATED DOM following your previous action.
-1. Identify what CHANGED on the website (new messages/replies, new modals, modified inputs, or state changes).
-2. Analyze the newly appeared elements carefully.
-3. Formulate and execute your next action based on this fresh state rather than assuming previous assumptions.
-`;
+  if (warnings.length) {
+    sections.push(`\u26A0\uFE0F WARNING:
+${warnings.map((w) => `- ${w}`).join("\n")}`);
   }
-  return `${BROWSER_ACTOR_SYSTEM_PROMPT}
-
-CURRENT OBJECTIVE: ${taskObjective}
-STEP: ${stepCount} of ${maxSteps}
-CURRENT PAGE:
+  sections.push(`CURRENT PAGE:
   URL  : ${currentUrl || "unknown"}
-  Title: ${currentTitle || "unknown"}
-${iterationNotice}
-INTERACTIVE ELEMENTS:
-${domTable}
-${planSection}${blacklistSection}`;
-}
-function getMessageType(msg) {
-  if (!msg) return "unknown";
-  if (typeof msg._getType === "function") return msg._getType();
-  if (typeof msg.getType === "function") return msg.getType();
-  if (msg.type) return msg.type;
-  if (msg._type) return msg._type;
-  if (msg.role) {
-    if (msg.role === "assistant") return "ai";
-    if (msg.role === "user") return "human";
-    return msg.role;
-  }
-  if (msg.constructor && msg.constructor.name) {
-    if (msg.constructor.name === "AIMessage" || msg.constructor.name === "AIMessageChunk") return "ai";
-    if (msg.constructor.name === "HumanMessage" || msg.constructor.name === "HumanMessageChunk") return "human";
-    if (msg.constructor.name === "SystemMessage" || msg.constructor.name === "SystemMessageChunk") return "system";
-    if (msg.constructor.name === "ToolMessage") return "tool";
-  }
-  return "unknown";
+  Title: ${currentTitle || "unknown"}`);
+  sections.push(`INTERACTIVE ELEMENTS:
+${domTable}`);
+  return sections.join("\n\n");
 }
 function formatArgsSummary(args) {
   if (!args || typeof args !== "object") return "";
@@ -144943,6 +145236,8 @@ function formatArgsSummary(args) {
   if (args.semantic_hint) parts.push(`"${args.semantic_hint}"`);
   if (args.url) parts.push(`url: "${args.url}"`);
   if (args.text) parts.push(`text: "${args.text.slice(0, 30)}${args.text.length > 30 ? "\u2026" : ""}"`);
+  if (args.option) parts.push(`option: "${args.option}"`);
+  if (args.key) parts.push(`key: ${args.key}`);
   if (args.summary) parts.push(`"${args.summary.slice(0, 40)}"`);
   if (parts.length === 0) {
     const json3 = JSON.stringify(args);
@@ -144955,6 +145250,75 @@ function truncateString(str, max = 120) {
   const clean = str.replace(/\s+/g, " ").trim();
   return clean.length > max ? clean.slice(0, max) + "\u2026" : clean;
 }
+function errorText(err, fallback) {
+  const envelope = formatError3(err);
+  const errInfo = envelope.error || envelope;
+  const msg = errInfo.message && !errInfo.message.includes("Our team has been notified") ? errInfo.message : err?.message || fallback || String(err);
+  return { code: errInfo.code, message: msg };
+}
+function bindModelTools(model, tools2) {
+  if (typeof model.bindTools === "function") return model.bindTools(tools2);
+  if (model.primaryModel && typeof model.primaryModel.bindTools === "function") return model.primaryModel.bindTools(tools2);
+  if (model.runnable && typeof model.runnable.bindTools === "function") return model.runnable.bindTools(tools2);
+  return model;
+}
+function trailingTextOnlyTurns(messages = []) {
+  let count = 0;
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const type = getMessageType(messages[i]);
+    if (type === "human") continue;
+    if (type !== "ai") break;
+    const calls = messages[i].tool_calls || messages[i].additional_kwargs?.tool_calls;
+    if (Array.isArray(calls) && calls.length) break;
+    count++;
+  }
+  return count;
+}
+async function runTool(tools2, toolCall, rawName) {
+  const matchingTool = tools2.find((t) => t.name === toolCall.name) || tools2.find((t) => t.name === rawName);
+  if (!matchingTool) {
+    const { code, message } = errorText(
+      new NotFoundError3(`Tool "${toolCall.name}" is not registered in the browser suite`),
+      `Tool "${toolCall.name}" is not registered in the browser suite`
+    );
+    return `ERROR [${toolCall.name} - ${code || "NOT_FOUND"}]: ${message}`;
+  }
+  try {
+    return await matchingTool.invoke(toolCall.args);
+  } catch (err) {
+    const { code, message } = errorText(err);
+    return `ERROR [${toolCall.name} - ${code || "TOOL_ERROR"}]: ${message}`;
+  }
+}
+function createActorToolSession({ tabId, url: url2 = "", title = "", vault, signal, chromeApi, exposeAllTools = false }) {
+  const sessionContext = {
+    activeTab: { id: tabId, url: url2, title },
+    vault,
+    signal,
+    chromeApi,
+    lastResult: null
+  };
+  sessionContext.onToolResult = (res) => {
+    sessionContext.lastResult = res;
+  };
+  const tools2 = createLangChainBrowserTools(() => sessionContext, {
+    exclude: exposeAllTools ? [] : DEFAULT_HIDDEN_TOOLS
+  });
+  return { sessionContext, tools: tools2 };
+}
+async function executeApprovedToolCall(pending, options = {}) {
+  const { sessionContext, tools: tools2 } = createActorToolSession({
+    tabId: pending.tabId,
+    url: pending.url,
+    title: pending.title,
+    vault: options.vault,
+    signal: options.signal,
+    chromeApi: options.chromeApi,
+    exposeAllTools: true
+  });
+  const observation = await runTool(tools2, pending.toolCall, pending.toolCall.name);
+  return { observation, result: sessionContext.lastResult, activeTab: sessionContext.activeTab };
+}
 async function browserActorAgentNode(state2, options = {}) {
   const model = options.model;
   const chromeApi = options.chromeApi;
@@ -144962,6 +145326,7 @@ async function browserActorAgentNode(state2, options = {}) {
   const signal = options.signal;
   const events = options.events;
   const maxSteps = options.maxSteps || 100;
+  const interruptsEnabled = options.enableInterrupts !== false;
   if (!model) {
     return {
       stepCount: (state2.stepCount || 0) + 1,
@@ -144973,20 +145338,37 @@ async function browserActorAgentNode(state2, options = {}) {
   const task2 = state2.sanitizedTask || state2.originalTask || "";
   const stepCount = (state2.stepCount || 0) + 1;
   const blacklistedTargets = state2.blacklistedTargets || [];
-  let pageCtx = { url: state2.browserSession?.url || "", title: state2.browserSession?.title || "", elements: [] };
+  const priorMessages = state2.messages || [];
+  let pageCtx = { url: state2.browserSession?.url || "", title: state2.browserSession?.title || "", elements: [], page: null };
   if (tabId) {
     try {
       pageCtx = await getPageContext(tabId, { chromeApi, signal });
     } catch (_) {
     }
   }
+  let hostname3 = "page";
+  try {
+    if (pageCtx.url) hostname3 = new URL(pageCtx.url).hostname;
+  } catch (_) {
+  }
   events?.emit?.("THINKING", {
     phase: "perceive",
-    text: `Scanning DOM on ${pageCtx.url ? new URL(pageCtx.url).hostname : "page"} (${pageCtx.elements?.length || 0} interactive elements discovered)`,
+    text: `Scanning DOM on ${hostname3} (${pageCtx.elements?.length || 0} interactive elements discovered)`,
     step: stepCount,
     maxSteps
   });
-  const domTable = buildDOMTable(pageCtx.elements, 35, new Set(blacklistedTargets));
+  const blacklistSet = new Set(blacklistedTargets.map(Number));
+  const domTable = sanitizeObservationForModel(
+    buildPageObservation({ elements: pageCtx.elements || [], page: pageCtx.page, blacklistedTargets: blacklistSet }),
+    vault
+  ) || "No interactive elements detected.";
+  const actionHistory = extractActionHistory(priorMessages);
+  const warnings = [];
+  const loopWarning = detectLoop(actionHistory);
+  if (loopWarning) warnings.push(loopWarning);
+  if (stepCount >= maxSteps - 2) {
+    warnings.push(`Only ${maxSteps - stepCount + 1} steps left. Finish now with what you have (finish_task).`);
+  }
   const systemPrompt = buildBrowserActorPrompt({
     taskObjective: task2,
     currentPlan: state2.plan,
@@ -144995,71 +145377,29 @@ async function browserActorAgentNode(state2, options = {}) {
     currentTitle: pageCtx.title,
     stepCount,
     maxSteps,
-    blacklistedTargets
+    blacklistedTargets,
+    actionLog: buildActionLog(actionHistory),
+    warnings
   });
-  const sessionContext = {
-    activeTab: { id: tabId, url: pageCtx.url, title: pageCtx.title },
+  const { sessionContext, tools: tools2 } = createActorToolSession({
+    tabId,
+    url: pageCtx.url,
+    title: pageCtx.title,
     vault,
     signal,
-    chromeApi
-  };
-  const tools2 = createLangChainBrowserTools(() => sessionContext);
-  let latestObservation = null;
-  sessionContext.onToolResult = (res) => {
-    latestObservation = res;
-  };
-  let modelWithTools;
-  if (typeof model.bindTools === "function") {
-    modelWithTools = model.bindTools(tools2);
-  } else if (model.primaryModel && typeof model.primaryModel.bindTools === "function") {
-    modelWithTools = model.primaryModel.bindTools(tools2);
-  } else if (model.runnable && typeof model.runnable.bindTools === "function") {
-    modelWithTools = model.runnable.bindTools(tools2);
-  } else {
-    modelWithTools = model;
-  }
-  const prunedHistory = pruneContext(state2.messages || []);
-  const cleanHistory = prunedHistory.filter((msg) => getMessageType(msg) !== "system");
-  const pairedHistory = [];
-  for (let i = 0; i < cleanHistory.length; i++) {
-    const msg = cleanHistory[i];
-    pairedHistory.push(msg);
-    const tcList = msg?.tool_calls || msg?.additional_kwargs?.tool_calls;
-    if (Array.isArray(tcList) && tcList.length > 0) {
-      const neededIds = new Set(tcList.map((tc) => tc.id).filter(Boolean));
-      let j = i + 1;
-      while (j < cleanHistory.length) {
-        const next = cleanHistory[j];
-        if (getMessageType(next) === "tool") {
-          neededIds.delete(next.tool_call_id);
-          j++;
-        } else {
-          break;
-        }
-      }
-      for (const missingId of neededIds) {
-        pairedHistory.push(new ToolMessage({
-          tool_call_id: missingId,
-          name: "tool_execution",
-          content: "Observation recorded."
-        }));
-      }
-    }
-  }
-  const messages = [
-    new SystemMessage(systemPrompt),
-    ...pairedHistory
-  ];
-  if (pairedHistory.length === 0) {
-    messages.push(new HumanMessage(`Complete this task: ${task2}`));
-  } else {
-    const lastMsg = messages[messages.length - 1];
-    const lastType = getMessageType(lastMsg);
-    if (lastType === "ai" || lastType === "assistant" || lastType !== "human" && lastType !== "user" && lastType !== "tool") {
-      messages.push(new HumanMessage(
-        `Step ${stepCount} Iteration: Review the updated live DOM elements table above. Identify what changed on the website after the previous step (e.g. newly arrived chat messages, opened modals, updated forms, or status changes). Analyze the updated state and execute the next tool for: "${task2}". Do NOT execute in a blind one-way flow\u2014react dynamically to the live page state.`
-      ));
-    }
+    chromeApi,
+    exposeAllTools: options.exposeAllTools
+  });
+  const modelWithTools = bindModelTools(model, tools2);
+  const history = buildModelHistory(priorMessages, { maxTurns: options.maxHistoryTurns ?? 6 });
+  const messages = [new SystemMessage(systemPrompt), new HumanMessage(`Task: ${task2}`), ...history];
+  const lastType = getMessageType(messages[messages.length - 1]);
+  if (lastType === "ai") {
+    messages.push(new HumanMessage(
+      `You replied without calling a tool. Look at the current page above and call the next tool. If the task is already complete, call finish_task with the result.`
+    ));
+  } else if (history.length > 0 && lastType === "tool") {
+    messages.push(new HumanMessage(`Step ${stepCount}: the page snapshot in the system message is fresh. Check what changed (elements marked *), then call the next tool.`));
   }
   events?.emit?.("THINKING", {
     phase: "reason",
@@ -145067,165 +145407,132 @@ async function browserActorAgentNode(state2, options = {}) {
     step: stepCount,
     maxSteps
   });
-  const aiResponse = await modelWithTools.invoke(messages);
+  const aiResponse = await modelWithTools.invoke(messages, signal ? { signal } : void 0);
   const newMessages = [aiResponse];
-  if (typeof aiResponse.content === "string" && aiResponse.content.trim()) {
+  const thoughtText = typeof aiResponse.content === "string" ? aiResponse.content.trim() : Array.isArray(aiResponse.content) ? aiResponse.content.map((p) => p?.text || "").join("").trim() : "";
+  if (thoughtText) {
+    events?.emit?.("THINKING", { phase: "thought", text: thoughtText, step: stepCount, maxSteps });
+  }
+  let hasToolError = false;
+  let latestObservation = null;
+  let pendingToolCall = null;
+  const stepStartUrl = pageCtx.url;
+  const toolCalls = Array.isArray(aiResponse.tool_calls) ? aiResponse.tool_calls : [];
+  let skipReason = "";
+  for (const rawToolCall of toolCalls) {
+    const callId = rawToolCall.id || `call_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+    const { toolName: normalizedName, args: normalizedArgs } = normalizeToolInvocation(rawToolCall.name, rawToolCall.args);
+    const toolCall = { ...rawToolCall, id: callId, name: normalizedName, args: normalizedArgs };
+    if (signal?.aborted) {
+      newMessages.push(new ToolMessage({ tool_call_id: callId, name: rawToolCall.name, content: "ABORTED: Operation cancelled by user." }));
+      continue;
+    }
+    if (skipReason) {
+      newMessages.push(new ToolMessage({ tool_call_id: callId, name: rawToolCall.name, content: `SKIPPED: ${skipReason}` }));
+      continue;
+    }
     events?.emit?.("THINKING", {
-      phase: "thought",
-      text: aiResponse.content.trim(),
+      phase: "action",
+      text: `Executing ${toolCall.name}(${formatArgsSummary(toolCall.args)})`,
+      toolName: toolCall.name,
+      args: toolCall.args,
       step: stepCount,
       maxSteps
     });
-  }
-  let hasToolError = false;
-  if (Array.isArray(aiResponse.tool_calls) && aiResponse.tool_calls.length > 0) {
-    for (const rawToolCall of aiResponse.tool_calls) {
-      if (signal?.aborted) {
-        newMessages.push(new ToolMessage({
-          tool_call_id: rawToolCall.id || `call_${Date.now()}`,
-          name: rawToolCall.name,
-          content: "ABORTED: Operation cancelled by user."
-        }));
+    events?.emit?.("TOOL_CALL", { toolName: toolCall.name, args: toolCall.args, step: stepCount });
+    let observationText = "";
+    const validation = validateToolCall(
+      { ...toolCall, args: { ...toolCall.args, index: toolCall.args.target_id ?? toolCall.args.index } },
+      blacklistedTargets
+    );
+    if (!validation.valid) {
+      const { code, message } = errorText(new PolicyViolationError(validation.reason, { toolName: toolCall.name }), validation.reason);
+      observationText = `BLOCKED [${toolCall.name} - ${code || "POLICY_VIOLATION"}]: ${message}`;
+    } else {
+      const policyDecision = classifyAction(toolCall.name, toolCall.args, pageCtx);
+      if (policyDecision.requiresApproval && interruptsEnabled) {
+        events?.emit?.("THINKING", {
+          phase: "approval",
+          text: `Tool intercepted: requires operator confirmation (${policyDecision.reason})`,
+          step: stepCount,
+          maxSteps
+        });
+        events?.emit?.("TOOL_APPROVAL_REQUIRED", {
+          toolName: toolCall.name,
+          args: toolCall.args,
+          reason: policyDecision.reason,
+          riskTier: policyDecision.riskTier,
+          step: stepCount
+        });
+        pendingToolCall = {
+          toolCall: { id: callId, name: toolCall.name, args: toolCall.args },
+          rawName: rawToolCall.name,
+          reason: policyDecision.reason,
+          riskTier: policyDecision.riskTier,
+          summary: policyDecision.summary,
+          tabId: sessionContext.activeTab.id,
+          url: pageCtx.url,
+          title: pageCtx.title
+        };
+        skipReason = "waiting for user approval of a previous action in this step; re-issue it next step if still needed.";
         continue;
       }
-      const { toolName: normalizedName, args: normalizedArgs } = normalizeToolInvocation(rawToolCall.name, rawToolCall.args);
-      const toolCall = {
-        ...rawToolCall,
-        name: normalizedName,
-        args: normalizedArgs
-      };
-      events?.emit?.("THINKING", {
-        phase: "action",
-        text: `Executing ${toolCall.name}(${formatArgsSummary(toolCall.args)})`,
-        toolName: toolCall.name,
-        args: toolCall.args,
-        step: stepCount,
-        maxSteps
-      });
-      events?.emit?.("TOOL_CALL", {
-        toolName: toolCall.name,
-        args: toolCall.args,
-        step: stepCount
-      });
-      const validation = validateToolCall(toolCall, blacklistedTargets);
-      let observationText = "";
-      if (!validation.valid) {
-        hasToolError = true;
-        const polErr = new PolicyViolationError(validation.reason, { toolName: toolCall.name });
-        const envelope = formatError3(polErr);
-        const errInfo = envelope.error || envelope;
-        const exactMsg = errInfo.message && !errInfo.message.includes("Our team has been notified") ? errInfo.message : validation.reason;
-        observationText = `BLOCKED [${toolCall.name} - ${errInfo.code || "POLICY_VIOLATION"}]: ${exactMsg}`;
-      } else {
-        const policyDecision = classifyAction(toolCall.name, toolCall.args, pageCtx);
-        let operatorApproved = true;
-        if (policyDecision.requiresApproval) {
-          events?.emit?.("THINKING", {
-            phase: "approval",
-            text: `Tool intercepted: requires operator confirmation (${policyDecision.reason})`,
-            step: stepCount,
-            maxSteps
-          });
-          events?.emit?.("TOOL_APPROVAL_REQUIRED", {
-            toolName: toolCall.name,
-            args: toolCall.args,
-            reason: policyDecision.reason,
-            riskTier: policyDecision.riskTier,
-            step: stepCount
-          });
-          if (options.enableInterrupts !== false) {
-            try {
-              const approvalRes = interrupt({
-                type: "TOOL_APPROVAL_REQUIRED",
-                action: toolCall,
-                reason: policyDecision.reason,
-                riskTier: policyDecision.riskTier,
-                summary: policyDecision.summary
-              });
-              if (approvalRes && (approvalRes.approved === false || approvalRes.status === "REJECTED")) {
-                operatorApproved = false;
-                observationText = `REJECTED_BY_OPERATOR: The user denied permission to execute ${toolCall.name}. Reason: ${approvalRes.reason || "User cancelled action."}. Do not retry this identical action; choose an alternative safe action or conclude the task.`;
-              }
-            } catch (err) {
-              console.warn("[BrowserActor] Tool interrupt skipped or unsupported in execution context:", err.message);
-            }
-          }
-        }
-        if (operatorApproved) {
-          const matchingTool = tools2.find((t) => t.name === toolCall.name) || tools2.find((t) => t.name === rawToolCall.name);
-          if (matchingTool) {
-            try {
-              observationText = await matchingTool.invoke(toolCall.args);
-            } catch (err) {
-              hasToolError = true;
-              const envelope = formatError3(err);
-              const errInfo = envelope.error || envelope;
-              const exactMsg = errInfo.message && !errInfo.message.includes("Our team has been notified") ? errInfo.message : err?.message || String(err);
-              observationText = `ERROR [${toolCall.name} - ${errInfo.code || "TOOL_ERROR"}]: ${exactMsg}`;
-            }
-          } else {
-            hasToolError = true;
-            const nfErr = new NotFoundError3(`Tool "${toolCall.name}" is not registered in the browser suite`);
-            const envelope = formatError3(nfErr);
-            const errInfo = envelope.error || envelope;
-            const exactMsg = errInfo.message && !errInfo.message.includes("Our team has been notified") ? errInfo.message : `Tool "${toolCall.name}" is not registered in the browser suite`;
-            observationText = `ERROR [${toolCall.name} - ${errInfo.code || "NOT_FOUND"}]: ${exactMsg}`;
-          }
-        }
+      sessionContext.lastResult = null;
+      observationText = await runTool(tools2, toolCall, rawToolCall.name);
+      if (sessionContext.lastResult) {
+        latestObservation = { ...sessionContext.lastResult, args: toolCall.args };
       }
-      if (observationText.startsWith("ERROR") || observationText.startsWith("BLOCKED")) {
-        hasToolError = true;
-      }
-      events?.emit?.("THINKING", {
-        phase: "observation",
-        text: `Observation: ${truncateString(observationText, 140)}`,
-        toolName: toolCall.name,
-        step: stepCount,
-        maxSteps
-      });
-      events?.emit?.("OBSERVATION", {
-        observation: observationText,
-        toolName: toolCall.name,
-        step: stepCount
-      });
-      const scrubbedObservation = sanitizeObservationForModel(observationText, vault);
-      newMessages.push(new ToolMessage({
-        tool_call_id: rawToolCall.id || `call_${Date.now()}`,
-        name: rawToolCall.name,
-        content: scrubbedObservation
-      }));
     }
-  } else {
-    const text = (typeof aiResponse.content === "string" ? aiResponse.content : "").toLowerCase();
-    const isDone = text.includes("task complete") || text.includes("completed the task") || text.includes("finished the task") || text.includes("email has been sent") || text.includes("message has been sent") || text.includes("email was successfully sent") || text.includes("successfully sent");
-    if (isDone) {
-      latestObservation = {
-        isFinished: true,
-        success: true,
-        summary: aiResponse.content || "Task completed.",
-        steps: stepCount
-      };
-      events?.emit?.("THINKING", {
-        phase: "finish",
-        text: `Model signaled completion: ${latestObservation.summary}`,
-        step: stepCount,
-        maxSteps
-      });
+    if (/^(ERROR|BLOCKED)/.test(observationText)) {
+      hasToolError = true;
+      latestObservation = latestObservation && latestObservation.toolName === toolCall.name ? latestObservation : { ok: false, toolName: toolCall.name, args: toolCall.args, observation: observationText, error: { message: observationText } };
+    }
+    events?.emit?.("THINKING", {
+      phase: "observation",
+      text: `Observation: ${truncateString(observationText, 140)}`,
+      toolName: toolCall.name,
+      step: stepCount,
+      maxSteps
+    });
+    events?.emit?.("OBSERVATION", { observation: observationText, toolName: toolCall.name, step: stepCount });
+    newMessages.push(new ToolMessage({
+      tool_call_id: callId,
+      name: rawToolCall.name,
+      content: sanitizeObservationForModel(observationText, vault)
+    }));
+    if (latestObservation?.isFinished) {
+      skipReason = "task already finished.";
+      continue;
+    }
+    const afterUrl = latestObservation?.page?.url || "";
+    const switchedTab = !!latestObservation?.newTabId;
+    if (NAVIGATING_TOOLS.has(toolCall.name) && (switchedTab || afterUrl && stepStartUrl && afterUrl !== stepStartUrl)) {
+      skipReason = "the page changed after the previous action. Re-check the new page snapshot before acting.";
     }
   }
-  return {
+  if (toolCalls.length === 0) {
+    const consecutive = trailingTextOnlyTurns(priorMessages) + 1;
+    if (consecutive >= 2 && thoughtText) {
+      latestObservation = { isFinished: true, success: true, summary: thoughtText, steps: stepCount };
+      events?.emit?.("THINKING", { phase: "finish", text: `Model answered without tools: ${truncateString(thoughtText, 120)}`, step: stepCount, maxSteps });
+    }
+  }
+  const finalPage = latestObservation?.page?.url ? latestObservation.page : null;
+  const update = {
     messages: newMessages,
     stepCount,
     browserSession: {
       tabId: sessionContext.activeTab.id,
-      url: sessionContext.activeTab.url,
-      title: sessionContext.activeTab.title
+      url: finalPage?.url || pageCtx.url || sessionContext.activeTab.url,
+      title: finalPage?.title || pageCtx.title || sessionContext.activeTab.title
     },
     domTable,
     latestObservation,
     recoveryCount: hasToolError ? state2.recoveryCount || 0 : 0,
-    status: latestObservation?.isFinished ? "TASK_FINISHED_SIGNAL" : hasToolError ? "TOOL_ERROR" : "ACTING"
+    status: latestObservation?.isFinished ? "TASK_FINISHED_SIGNAL" : pendingToolCall ? "AWAITING_TOOL_APPROVAL" : hasToolError ? "TOOL_ERROR" : "ACTING"
   };
+  if (pendingToolCall) update.pendingToolCall = pendingToolCall;
+  return update;
 }
 
 // src/safety/approval.js
@@ -145305,6 +145612,7 @@ function consumeApproval(token) {
 
 // src/agent/verifier.js
 init_errors6();
+var MAIL_HOST_REGEX = /mail\.google\.com|outlook\.(live|office|office365)\.com|mail\.yahoo\.com|mail\.proton\.me|proton\.me\/mail|mail\.zoho\.|\bmail\./i;
 var VERIFICATION_OUTCOMES = Object.freeze({
   VERIFIED_SUCCESS: "VERIFIED_SUCCESS",
   INCOMPLETE_RECOVERABLE: "INCOMPLETE_RECOVERABLE",
@@ -145323,15 +145631,17 @@ function verifyTaskOutcome({
   const history = Array.isArray(actionHistory) ? actionHistory : [];
   const isEmailTask = /\b(mail|email|send\s+email)\b/i.test(task2);
   if (isEmailTask) {
-    const visitedEmail = history.some((h) => /mail\.google\.com/i.test(h.url || "")) || /mail\.google\.com/i.test(currentUrl);
+    const visitedEmail = history.some((h) => MAIL_HOST_REGEX.test(h.url || "")) || MAIL_HOST_REGEX.test(currentUrl);
     const typedInputs = history.filter((h) => h.toolName === "type_into_element");
     const clickedActions = history.filter((h) => h.toolName === "click_element");
-    const clickedSend = clickedActions.some((c) => /send/i.test(c.args?.semantic_hint || ""));
+    const clickedSend = clickedActions.some(
+      (c) => /send/i.test(c.args?.semantic_hint || "") || /\bsend\b/i.test(c.observation || "")
+    ) || history.some((h) => h.toolName === "press_key" && /enter/i.test(h.args?.key || "") && /send/i.test(h.observation || ""));
     if (!visitedEmail) {
       return {
         outcome: VERIFICATION_OUTCOMES.INCOMPLETE_RECOVERABLE,
         verified: false,
-        reason: "Target email service (mail.google.com) was never visited.",
+        reason: "Target email service (e.g. mail.google.com) was never visited.",
         evidence: `Current URL: ${currentUrl}`
       };
     }
@@ -145412,11 +145722,24 @@ async function verifierNode(state2, options = {}) {
     text: "Evaluating browser evidence & DOM state against objective\u2026",
     step: state2.stepCount
   });
+  if (state2.latestObservation?.isFinished && state2.latestObservation?.success === false) {
+    const reason = state2.latestObservation.summary || "Agent reported the task could not be completed.";
+    events?.emit?.("THINKING", { phase: "verify", text: `Agent stopped: ${reason}`, step: state2.stepCount });
+    return {
+      verificationResult: {
+        outcome: VERIFICATION_OUTCOMES.FAILED,
+        verified: false,
+        reason,
+        evidence: `Current page: ${state2.browserSession?.url || ""}`
+      },
+      status: "FAILED"
+    };
+  }
   const result = verifyTaskOutcome({
     task: state2.sanitizedTask || state2.originalTask,
     plan: state2.plan,
     browserSession: state2.browserSession,
-    actionHistory: state2.messages?.filter((m) => m._getType && m._getType() === "tool")?.map((m) => ({ toolName: m.name, ok: !m.content?.startsWith("ERROR") })) || [],
+    actionHistory: extractActionHistory(state2.messages || []),
     latestObservation: state2.latestObservation
   });
   if (result.verified) {
@@ -145433,11 +145756,19 @@ async function verifierNode(state2, options = {}) {
     });
   }
   const failureErr = !result.verified ? new VerificationFailureError(result.reason, { criteria: [result.evidence] }) : null;
-  return {
+  const recoverable = !result.verified && result.outcome === VERIFICATION_OUTCOMES.INCOMPLETE_RECOVERABLE;
+  const update = {
     verificationResult: result,
     error: failureErr ? formatError3(failureErr) : null,
-    status: result.verified ? "VERIFIED" : result.outcome === VERIFICATION_OUTCOMES.INCOMPLETE_RECOVERABLE ? "RECOVERABLE" : "FAILED"
+    status: result.verified ? "VERIFIED" : recoverable ? "RECOVERABLE" : "FAILED"
   };
+  if (recoverable) {
+    update.latestObservation = null;
+    update.messages = [new HumanMessage(
+      `Your finish_task was rejected by verification: ${result.reason} The task is NOT complete yet. Continue from the current page and finish only after this is done.`
+    )];
+  }
+  return update;
 }
 
 // src/agent/recovery.js
@@ -145511,15 +145842,20 @@ async function recoveryNode(state2, options = {}) {
     };
   }
   const lastObs = state2.latestObservation;
-  const lastAction = lastObs ? { toolName: lastObs.toolName, args: lastObs.metadata || {} } : null;
+  const lastAction = lastObs ? { toolName: lastObs.toolName, args: { ...lastObs.metadata || {}, ...lastObs.args || {} } } : null;
   const strategy = decideRecoveryStrategy({
     consecutiveFailures: newRecoveryCount,
     lastError: state2.error || (lastObs?.ok === false ? lastObs.error : null),
     lastAction
   });
+  const failedTargets = { ...state2.failedTargets || {} };
   const blacklisted = [...state2.blacklistedTargets || []];
-  if (strategy.blacklistedId && !blacklisted.includes(strategy.blacklistedId)) {
-    blacklisted.push(strategy.blacklistedId);
+  if (strategy.blacklistedId) {
+    const key = String(strategy.blacklistedId);
+    failedTargets[key] = (failedTargets[key] || 0) + 1;
+    if (failedTargets[key] >= 2 && !blacklisted.includes(strategy.blacklistedId)) {
+      blacklisted.push(strategy.blacklistedId);
+    }
   }
   if (strategy.decision === RECOVERY_DECISIONS.BACKTRACK_HISTORY && state2.browserSession?.tabId) {
     try {
@@ -145532,12 +145868,96 @@ async function recoveryNode(state2, options = {}) {
   return {
     recoveryCount: newRecoveryCount,
     blacklistedTargets: blacklisted,
+    failedTargets,
     status: strategy.decision === RECOVERY_DECISIONS.REPLAN ? "REPLAN_REQUIRED" : "RECOVERED"
   };
 }
 
 // src/agent/graph.js
 init_constants();
+function createToolApprovalNode(options = {}) {
+  const { chromeApi, vault, events, checkpointer } = options;
+  return async (state2) => {
+    const pending = state2.pendingToolCall;
+    if (!pending?.toolCall) {
+      return { pendingToolCall: null, status: "ACTING" };
+    }
+    let decision = null;
+    if (checkpointer) {
+      const request = createApprovalRequest({
+        threadId: state2.threadId || "thread_local",
+        action: { toolName: pending.toolCall.name, args: pending.toolCall.args },
+        reason: pending.reason,
+        pageContext: { url: pending.url, title: pending.title }
+      });
+      decision = interrupt({
+        type: "TOOL_APPROVAL_REQUIRED",
+        request,
+        action: pending.toolCall,
+        reason: pending.reason,
+        riskTier: pending.riskTier,
+        summary: pending.summary
+      });
+    }
+    const approved = decision === true || decision?.approved === true || decision?.status === "APPROVED";
+    if (!approved) {
+      const why = decision?.reason || (checkpointer ? "User denied the action." : "Approval channel unavailable.");
+      events?.emit?.("THINKING", {
+        phase: "approval",
+        text: `Action rejected: ${pending.toolCall.name} (${why})`,
+        step: state2.stepCount
+      });
+      return {
+        messages: [new ToolMessage({
+          tool_call_id: pending.toolCall.id,
+          name: pending.rawName || pending.toolCall.name,
+          content: `REJECTED_BY_OPERATOR: The user did not allow ${pending.toolCall.name}. Reason: ${why} Do not retry this action; choose a safe alternative or finish the task explaining it was not permitted.`
+        })],
+        pendingToolCall: null,
+        approvalStatus: "REJECTED",
+        status: decision?.terminate ? "OPERATOR_REJECTED" : "ACTING"
+      };
+    }
+    events?.emit?.("THINKING", {
+      phase: "action",
+      text: `Executing approved ${pending.toolCall.name}`,
+      toolName: pending.toolCall.name,
+      args: pending.toolCall.args,
+      step: state2.stepCount
+    });
+    const { observation, result, activeTab } = await executeApprovedToolCall(pending, {
+      chromeApi,
+      vault,
+      signal: options.signal
+    });
+    const failed = /^(ERROR|BLOCKED)/.test(observation || "");
+    events?.emit?.("OBSERVATION", { observation, toolName: pending.toolCall.name, step: state2.stepCount });
+    return {
+      messages: [new ToolMessage({
+        tool_call_id: pending.toolCall.id,
+        name: pending.rawName || pending.toolCall.name,
+        content: sanitizeObservationForModel(observation, vault)
+      })],
+      pendingToolCall: null,
+      approvalStatus: "APPROVED",
+      latestObservation: result ? { ...result, args: pending.toolCall.args } : null,
+      browserSession: {
+        tabId: activeTab?.id ?? state2.browserSession?.tabId,
+        url: result?.page?.url || state2.browserSession?.url || "",
+        title: result?.page?.title || state2.browserSession?.title || ""
+      },
+      status: result?.isFinished ? "TASK_FINISHED_SIGNAL" : failed ? "TOOL_ERROR" : "ACTING"
+    };
+  };
+}
+function routeAfterAct(state2, maxSteps) {
+  if (state2.status === "AWAITING_TOOL_APPROVAL") return "tool_approval";
+  if (state2.status === "TERMINATED" || state2.status === "OPERATOR_REJECTED") return "finalize";
+  if (state2.latestObservation?.isFinished || state2.status === "TASK_FINISHED_SIGNAL") return "verification";
+  if ((state2.stepCount || 0) >= maxSteps) return "verification";
+  if (state2.status === "TOOL_ERROR") return "recovery";
+  return "browser_agent";
+}
 function createAgentGraph(options = {}) {
   const model = options.model;
   const chromeApi = options.chromeApi;
@@ -145648,6 +146068,7 @@ function createAgentGraph(options = {}) {
             planApprovalStatus: "APPROVED"
           };
         } catch (err) {
+          if (err?.name === "GraphInterrupt" || err?.constructor?.name === "GraphInterrupt") throw err;
           console.warn("[PlanGate] Interrupt not supported in execution context:", err.message);
         }
       }
@@ -145716,9 +146137,10 @@ function createAgentGraph(options = {}) {
       signal: options.signal,
       maxSteps,
       events,
-      enableInterrupts: options.enableInterrupts
+      enableInterrupts: options.enableInterrupts,
+      exposeAllTools: options.exposeAllTools
     });
-  }).addNode("verification", async (state2) => {
+  }).addNode("tool_approval", createToolApprovalNode({ ...options, chromeApi, vault, events, checkpointer })).addNode("verification", async (state2) => {
     return verifierNode(state2, { events });
   }).addNode("recovery", async (state2) => {
     events?.emit?.("THINKING", {
@@ -145787,6 +146209,18 @@ function createAgentGraph(options = {}) {
         }
       };
     }
+    if (state2.status === "OPERATOR_REJECTED") {
+      return {
+        status: "TERMINATED",
+        finalResult: {
+          success: false,
+          cancelledByOperator: true,
+          summary: "Action rejected by user.",
+          steps: state2.stepCount || 1,
+          evidence: "Operator rejected a pending action"
+        }
+      };
+    }
     if (state2.status === "AWAITING_USER_INPUT") {
       const missing = state2.plan?.missingInformation?.join("; ") || "Required details missing";
       return {
@@ -145806,7 +146240,9 @@ function createAgentGraph(options = {}) {
     if (isSuccess) {
       summary = state2.latestObservation?.summary || state2.verificationResult?.reason || "Goal accomplished successfully.";
     } else {
-      if (state2.error?.message) {
+      if (state2.latestObservation?.isFinished && state2.latestObservation?.success === false && state2.latestObservation?.summary) {
+        summary = state2.latestObservation.summary;
+      } else if (state2.error?.message) {
         summary = state2.error.message;
       } else if (state2.verificationResult?.reason) {
         summary = state2.verificationResult.reason;
@@ -145856,19 +146292,18 @@ function createAgentGraph(options = {}) {
   }, {
     browser_agent: "browser_agent",
     finalize: "finalize"
-  }).addConditionalEdges("browser_agent", (state2) => {
-    if ((state2.stepCount || 0) >= maxSteps) return "verification";
-    if (state2.latestObservation?.isFinished || state2.status === "TASK_FINISHED_SIGNAL") {
-      return "verification";
-    }
-    if (state2.status === "TOOL_ERROR") {
-      return "recovery";
-    }
-    return "policy";
-  }, {
+  }).addConditionalEdges("browser_agent", (state2) => routeAfterAct(state2, maxSteps), {
+    tool_approval: "tool_approval",
     verification: "verification",
     recovery: "recovery",
-    policy: "policy"
+    browser_agent: "browser_agent",
+    finalize: "finalize"
+  }).addConditionalEdges("tool_approval", (state2) => routeAfterAct(state2, maxSteps), {
+    tool_approval: "tool_approval",
+    verification: "verification",
+    recovery: "recovery",
+    browser_agent: "browser_agent",
+    finalize: "finalize"
   }).addConditionalEdges("verification", (state2) => {
     if (state2.status === "VERIFIED") return "jev_output_guard";
     if (state2.status === "RECOVERABLE") {
@@ -145882,11 +146317,11 @@ function createAgentGraph(options = {}) {
   }).addEdge("jev_output_guard", "finalize").addConditionalEdges("recovery", (state2) => {
     if (state2.status === "BLOCKED") return "finalize";
     if (state2.status === "REPLAN_REQUIRED") return "planner";
-    return "policy";
+    return "browser_agent";
   }, {
     finalize: "finalize",
     planner: "planner",
-    policy: "policy"
+    browser_agent: "browser_agent"
   }).addEdge("finalize", END);
   return workflow.compile({
     checkpointer
@@ -145913,9 +146348,11 @@ function createTwoAgentGraph(options = {}) {
       vault,
       signal: options.signal,
       maxSteps,
-      events
+      events,
+      enableInterrupts: options.enableInterrupts,
+      exposeAllTools: options.exposeAllTools
     });
-  }).addNode("finalize", async (state2) => {
+  }).addNode("tool_approval", createToolApprovalNode({ ...options, chromeApi, vault, events, checkpointer })).addNode("finalize", async (state2) => {
     const isSuccess = state2.latestObservation?.isFinished && state2.latestObservation?.success;
     return {
       status: isSuccess ? "COMPLETED" : "TERMINATED",
@@ -145933,7 +146370,17 @@ function createTwoAgentGraph(options = {}) {
     browser_agent: "browser_agent",
     finalize: "finalize"
   }).addConditionalEdges("browser_agent", (state2) => {
-    if ((state2.stepCount || 0) >= maxSteps || state2.latestObservation?.isFinished || state2.status === "TASK_FINISHED_SIGNAL") {
+    if (state2.status === "AWAITING_TOOL_APPROVAL") return "tool_approval";
+    if ((state2.stepCount || 0) >= maxSteps || state2.latestObservation?.isFinished || state2.status === "TASK_FINISHED_SIGNAL" || state2.status === "TERMINATED") {
+      return "finalize";
+    }
+    return "browser_agent";
+  }, {
+    tool_approval: "tool_approval",
+    browser_agent: "browser_agent",
+    finalize: "finalize"
+  }).addConditionalEdges("tool_approval", (state2) => {
+    if (state2.status === "OPERATOR_REJECTED" || state2.latestObservation?.isFinished || (state2.stepCount || 0) >= maxSteps) {
       return "finalize";
     }
     return "browser_agent";
@@ -146006,7 +146453,9 @@ var ChromeStorageSaver = class extends MemorySaver {
     this.storageKey = options.storageKey || "pratyaksha_checkpoints";
     this.isHydrated = false;
     this.asyncFlush = options.asyncFlush !== void 0 ? options.asyncFlush : true;
+    this.flushDebounceMs = options.flushDebounceMs ?? 1500;
     this._flushPromise = null;
+    this._flushTimer = null;
   }
   /**
    * Loads existing persisted checkpoints from storage into memory.
@@ -146049,6 +146498,10 @@ var ChromeStorageSaver = class extends MemorySaver {
    */
   async flush() {
     if (!this.persistentStorage) return;
+    if (this._flushTimer) {
+      clearTimeout(this._flushTimer);
+      this._flushTimer = null;
+    }
     if (this.storage && typeof this.storage === "object") {
       for (const [threadId, checkpoints] of Object.entries(this.storage)) {
         if (Array.isArray(checkpoints) && checkpoints.length > 10) {
@@ -146083,15 +146536,35 @@ var ChromeStorageSaver = class extends MemorySaver {
   }
   /**
    * Non-blocking background flush trigger.
+   * Throttled: LangGraph writes a checkpoint after every node, and serializing the whole
+   * store to chrome.storage on each write was a major per-step cost. The first write
+   * flushes at once; a burst within `flushDebounceMs` collapses into one trailing write.
+   * runner.flush() at the end of a run still persists immediately.
    */
   flushAsync() {
     if (!this.persistentStorage) return;
-    if (this._flushPromise) return this._flushPromise;
-    this._flushPromise = this.flush().catch(() => {
-    }).finally(() => {
-      this._flushPromise = null;
-    });
-    return this._flushPromise;
+    if (this._flushTimer) return;
+    const run = () => {
+      this._lastFlushAt = Date.now();
+      this._flushPromise = this.flush().catch(() => {
+      }).finally(() => {
+        this._flushPromise = null;
+      });
+    };
+    const elapsed2 = Date.now() - (this._lastFlushAt || 0);
+    if (!this._flushPromise && elapsed2 >= this.flushDebounceMs) {
+      run();
+      return;
+    }
+    this._flushTimer = setTimeout(() => {
+      this._flushTimer = null;
+      if (this._flushPromise) {
+        this._flushPromise.finally(() => this.flushAsync());
+        return;
+      }
+      run();
+    }, Math.max(50, this.flushDebounceMs - elapsed2));
+    this._flushTimer?.unref?.();
   }
   /**
    * Puts a checkpoint into memory and queues storage flush.
@@ -146474,6 +146947,10 @@ var PratyakshaAgentRunner = class {
       await this._clearHighlights();
       return { success: false, summary: "Agent stopped immediately by user.", steps: result.stepCount || 1 };
     }
+    const interrupts = Array.isArray(result.__interrupt__) ? result.__interrupt__ : [];
+    if (interrupts.length > 0) {
+      return this._handleInterrupt(interrupts[0].value || {}, result, threadId);
+    }
     if (result.status === "AWAITING_APPROVAL" || result.finalResult?.awaitingApproval) {
       const pendingReq = result.pendingApproval || result.finalResult?.pendingApproval;
       this.pendingApproval = pendingReq;
@@ -146536,6 +147013,40 @@ var PratyakshaAgentRunner = class {
     };
   }
   /**
+   * Surfaces a paused graph (interrupt) to the UI as an approval request.
+   */
+  async _handleInterrupt(value, result, threadId) {
+    let request = value.request;
+    if (!request) {
+      const isPlan = value.type === "PLAN_APPROVAL_REQUIRED";
+      request = createApprovalRequest({
+        threadId,
+        action: isPlan ? { toolName: "approve_plan", args: { subgoals: (value.plan?.subgoals || []).map((sg) => sg.description) } } : { toolName: value.action?.name || value.action?.toolName || "browser_action", args: value.action?.args || {} },
+        reason: value.reason || "Sensitive operation requires user confirmation",
+        pageContext: result.browserSession || this.activeTab || {}
+      });
+    }
+    this.pendingApproval = { ...request, viaInterrupt: true };
+    this.events.emit(AGENT_EVENT_TYPES.APPROVAL_REQUIRED, {
+      request,
+      threadId,
+      toolName: request.action?.toolName,
+      reason: request.reason,
+      riskTier: value.riskTier
+    });
+    await this.threadStore.updateThread(threadId, {
+      status: "AWAITING_APPROVAL",
+      summary: `Action requires approval: ${request.reason}`
+    });
+    return {
+      success: false,
+      awaitingApproval: true,
+      pendingApproval: request,
+      summary: `Action requires approval: ${request.reason}`,
+      steps: result.stepCount || 1
+    };
+  }
+  /**
    * Resumes graph execution following explicit human approval.
    */
   async approveAction(token) {
@@ -146547,7 +147058,8 @@ var PratyakshaAgentRunner = class {
       token: approvalToken,
       threadId: this.activeThreadId,
       currentAction: this.pendingApproval.action,
-      currentPageUrl: this.activeTab?.url
+      // Bind to the page the request was created on (the tab may have moved since the run started)
+      currentPageUrl: this.pendingApproval.page?.url ?? this.activeTab?.url
     });
     if (!verify.valid) {
       throw new Error(`Approval validation failed: ${verify.reason}`);
@@ -146557,7 +147069,8 @@ var PratyakshaAgentRunner = class {
     if (!this.app || !this.graphConfig) {
       throw new Error("Graph execution context unavailable to resume.");
     }
-    const resumeState = {
+    const viaInterrupt = !!this.pendingApproval.viaInterrupt;
+    const resumeInput = viaInterrupt ? new Command({ resume: { approved: true, token: approvalToken } }) : {
       ...this.lastState,
       status: "POLICY_ALLOWED",
       approvalStatus: "APPROVED",
@@ -146566,7 +147079,7 @@ var PratyakshaAgentRunner = class {
     this.pendingApproval = null;
     this.events.emitStateChange("ACTING", `Executing approved action\u2026`);
     try {
-      const result = await this.app.invoke(resumeState, this.graphConfig);
+      const result = await this.app.invoke(resumeInput, this.graphConfig);
       return await this._handleResult(result, this.activeThreadId);
     } catch (err) {
       await this._clearHighlights();
@@ -146590,7 +147103,14 @@ var PratyakshaAgentRunner = class {
   async rejectAction(reason = "Action rejected by user.") {
     if (!this.pendingApproval) return;
     this.events.emit(AGENT_EVENT_TYPES.APPROVAL_REJECTED, { reason });
+    const viaInterrupt = !!this.pendingApproval.viaInterrupt;
     this.pendingApproval = null;
+    if (viaInterrupt && this.app && this.graphConfig) {
+      try {
+        await this.app.invoke(new Command({ resume: { approved: false, terminate: true, reason } }), this.graphConfig);
+      } catch (_) {
+      }
+    }
     if (this.activeThreadId) {
       await this.threadStore.updateThread(this.activeThreadId, {
         status: "TERMINATED",
