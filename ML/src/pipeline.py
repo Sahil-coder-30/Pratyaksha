@@ -31,7 +31,8 @@ Adapt the detector adapters if your existing modules use different APIs.
 #             python -m ML.src.pipeline
 
 
-from __future__ import annotations 
+from __future__ import annotations
+from unittest import result 
 
 from ML.src.workers.cv import CVDetector as cvdect
 from ML.src.workers.ner import NERDetector as nerdect
@@ -338,6 +339,20 @@ def main():
     image_path = r"D:\Honey\Fun\Pratyaksh\Pratyaksha\APAAR ID Kushagra.png"
 
     result = pipeline.run(image_path)
+
+    print("\n--- Detection summary ---")
+
+    for source, detections in result["by_source"].items():
+        print(f"\n{source.upper()}: {len(detections)} detections")
+
+    for detection in detections:
+        # Avoid printing raw text from real identity documents.
+        safe_record = {
+            key: value
+            for key, value in detection.items()
+            if key not in {"text"}
+        }
+        print(safe_record)
 
     print("Detection pipeline completed.")
     print("Detection count:", len(result["detections"]))
