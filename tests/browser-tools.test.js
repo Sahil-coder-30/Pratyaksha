@@ -161,3 +161,55 @@ test('Page Context - buildDOMTable with Target Blacklisting', () => {
   assert.ok(table.includes('[FAILED/DO-NOT-USE] Dead Link'));
   assert.ok(table.includes('⚠️ BLACKLISTED'));
 });
+
+test('Browser Tools - wait_for holds process and confirms incoming reply in DOM', async () => {
+  const chromeApi = createMockChrome();
+  const activeTab = { id: 1, url: 'https://mail.google.com', title: 'Gmail' };
+
+  chromeApi._setNextMessageResponse({
+    success: true,
+    result: {
+      found: true,
+      detail: 'New reply message appeared in thread (1 new message container(s))',
+      newContent: 'Sounds good! See you at 3pm.'
+    }
+  });
+
+  const res = await executeBrowserTool(
+    TOOL_NAMES.WAIT_FOR,
+    { wait_for_reply: true, timeout_seconds: 10 },
+    activeTab,
+    { chromeApi }
+  );
+
+  assert.equal(res.ok, true);
+  assert.ok(res.observation.includes('Condition met'));
+  assert.ok(res.observation.includes('New reply message appeared'));
+  assert.ok(res.observation.includes('Sounds good! See you at 3pm.'));
+  assert.equal(res.metadata?.met, true);
+});
+
+test('Browser Tools - click_element Send button confirms email dispatch', async () => {
+  const chromeApi = createMockChrome();
+  const activeTab = { id: 1, url: 'https://mail.google.com', title: 'Gmail' };
+
+  chromeApi._setNextMessageResponse({
+    success: true,
+    result: {
+      clicked: '[4] <button> "Send"',
+      change: 'email dispatched',
+      sendConfirmed: true
+    }
+  });
+
+  const res = await executeBrowserTool(
+    TOOL_NAMES.CLICK_ELEMENT,
+    { target_id: 4, semantic_hint: 'Send' },
+    activeTab,
+    { chromeApi }
+  );
+
+  assert.equal(res.ok, true);
+  assert.ok(res.observation.includes('Send confirmed'));
+  assert.equal(res.metadata?.sendConfirmed, true);
+});

@@ -50,11 +50,27 @@ STRICT RULES (follow exactly)
 7. You may call several tools in one step only when they do not depend on each other's result (e.g. fill 3 form fields, then click Submit). After a click that navigates, the remaining calls are skipped automatically.
 8. Do not ask the user questions like "Shall I proceed?". Act. If the task truly needs information you do not have (password, missing recipient), call finish_task with success=false and say what is missing.
 9. If you hit a login wall, CAPTCHA, or payment step you are not authorized for, stop with finish_task(success=false) and explain.
+10. If the task requires sending an email, message, or prompt AND waiting for a reply or response from the other user:
+    - After clicking Send, DO NOT call finish_task immediately!
+    - Call wait_for with wait_for_reply=true and timeout_seconds (e.g. 180 or 300) to hold the execution process until the other user responds. The tool tracks live DOM changes and returns when the reply arrives.
+    - Once the reply appears in the DOM, read the response and only then call finish_task with the received reply summary.
+11. When asked to message or open a specific contact or group (e.g. "Silicon Valley ke 14" on WhatsApp):
+    - DO NOT type into whatever chat is currently open on the screen!
+    - First find and open the target chat: locate the search input (e.g. "Search or start new chat" or "Search input textbox"), type the contact/group name with press_enter=true, or click the matching contact/group in the chat list.
+    - Verify that the active chat header displays the requested group/contact name before sending messages.
+12. When the user requests a multi-turn conversation or multiple iterations (e.g. "chat for 20 iterations", "await reply and respond"):
+    - NEVER call finish_task after sending a single message!
+    - After sending a message, call wait_for(wait_for_reply=true) to hold execution until an incoming response arrives.
+    - Once the incoming reply appears in the DOM, read what was said, formulate an appropriate response, and send it.
+    - Repeat this loop for the requested number of iterations.
+    - NEVER fabricate or claim that group members or users responded unless their reply was verifiably observed in the DOM.
 
 FINISHING
-- Call finish_task as soon as the goal is verifiably done on the page. Put the actual result (the answer, the data found, what was sent) in the summary.
+- Call finish_task as soon as the goal is verifiably done on the page. Put the actual result (the answer, the data found, what was sent, or the reply received) in the summary.
 - For information tasks, read the page first, then finish with the answer. Do not finish without the answer.
-- Do not call finish_task for a multi-step goal (chat, form, email) until the final step is confirmed on the page.`;
+- Do not call finish_task for a multi-step goal (chat, form, email) until the final step is confirmed on the page.
+- Never finish an email or messaging task that requested waiting for a reply until that reply has actually been observed and confirmed in the DOM.
+- Never finish a multi-iteration task prematurely before completing the requested conversation cycles.`;
 
 /**
  * Tools hidden from the model by default: they either return nothing a text model

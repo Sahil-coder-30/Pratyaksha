@@ -198,13 +198,14 @@ export const BROWSER_TOOL_DECLARATIONS = [
   },
   {
     name: 'wait_for',
-    description: 'Waits until a specific element appears in the DOM or specific text becomes visible on the page. More precise than wait_seconds for dynamic content.',
+    description: 'Waits until a specific element appears in the DOM or specific text becomes visible on the page. Use wait_for_reply=true after sending an email/message to hold execution until the recipient replies (monitors DOM for new incoming message content). Supports long waits up to 300 seconds.',
     parameters: {
       type: 'OBJECT',
       properties: {
         selector: { type: 'STRING', description: 'CSS selector to wait for (e.g. ".search-results", "#compose-window").' },
         text_contains: { type: 'STRING', description: 'Text that must appear on the page (e.g. "Results for").' },
-        timeout_seconds: { type: 'NUMBER', description: 'Max seconds to wait (default 8, max 30).' }
+        timeout_seconds: { type: 'NUMBER', description: 'Max seconds to wait (default 15, max 300 for reply waiting).' },
+        wait_for_reply: { type: 'BOOLEAN', description: 'Set true when waiting for an email/message reply. Monitors the DOM for new incoming message content and holds execution until a reply appears or timeout is reached.' }
       }
     }
   },
@@ -214,7 +215,7 @@ export const BROWSER_TOOL_DECLARATIONS = [
     parameters: {
       type: 'OBJECT',
       properties: {
-        seconds: { type: 'NUMBER', description: 'Seconds to wait (1–5).' },
+        seconds: { type: 'NUMBER', description: 'Seconds to wait (1–30).' },
         reason: { type: 'STRING', description: 'Why you are waiting.' }
       },
       required: ['seconds']
@@ -573,10 +574,54 @@ export async function executeBrowserTool(toolName, args = {}, activeTab, vault) 
       return { observation: `Scrolled ${dir} ${Math.abs(deltaY)}px.` };
     }
 
-    // ── wait_for ─────────────────────────────────────────────────────────────
+    // -- wait_for --
     case 'wait_for': {
-      if (!args.selector && !args.text_contains) throw new Error('wait_for requires selector or text_contains.');
-      const timeoutMs = Math.min((args.timeout_seconds || 8) * 1000, 30000);
+      const waitForReply = !!args.wait_for_reply;
+      const maxAllowedMs = waitForReply ? 300000 : 60000;
+      const requestedMs = (args.timeout_seconds || (waitForReply ? 180 : 15)) * 1000;
+      const timeoutMs = Math.min(requestedMs, maxAllowedMs);
+
+      if (!args.selector && !args.text_contains && !waitForReply) {
+        throw new Error('wait_for requires selector, text_contains, or wait_for_reply=true.');
+      }
+
+      if (waitForReply) {
+        let beforeSnapshot = '';
+        try {
+          const snapResp = await sendToTab(tabId, {
+            type: 'EXECUTE_ACTION',
+            payload: { action: 'READ_PAGE', selector: args.selector || null, maxChars: 8000 }
+          }, 5000);
+          beforeSnapshot = snapResp?.result || '';
+        } catch (_) {}
+        const pollIntervalMs = 3000;
+        const deadline = Date.now() + timeoutMs;
+        let replyFound = false;
+        let replyText = '';
+        while (Date.now() < deadline) {
+          await sleepMs(pollIntervalMs);
+          let currentSnapshot = '';
+          try {
+            const pollResp = await sendToTab(tabId, {
+              type: 'EXECUTE_ACTION',
+              payload: { action: 'READ_PAGE', selector: args.selector || null, maxChars: 8000 }
+            }, 5000);
+            currentSnapshot = pollResp?.result || '';
+          } catch (_) { continue; }
+          if (currentSnapshot.length > beforeSnapshot.length + 20) {
+            const added = currentSnapshot.replace(beforeSnapshot, '').trim();
+            if (added.length > 10) { replyFound = true; replyText = added.slice(0, 500); break; }
+          }
+          if (args.text_contains && currentSnapshot.includes(args.text_contains)) {
+            replyFound = true; replyText = 'Detected: ' + args.text_contains; break;
+          }
+        }
+        if (!replyFound) {
+          return { observation: 'wait_for_reply: no new reply detected after ' + (timeoutMs / 1000) + 's. Recipient may not have responded yet.' };
+        }
+        return { observation: 'Reply detected in DOM. New content: ' + replyText };
+      }
+
       const resp = await sendToTab(tabId, {
         type: 'EXECUTE_ACTION',
         payload: {
@@ -585,17 +630,17 @@ export async function executeBrowserTool(toolName, args = {}, activeTab, vault) 
           textContains: args.text_contains || null,
           timeoutMs
         }
-      }, timeoutMs + 2000);  // outer timeout slightly larger
+      }, timeoutMs + 3000);
 
       if (!resp?.result?.found) {
-        return { observation: `wait_for timed out after ${timeoutMs / 1000}s — condition not met.` };
+        return { observation: `wait_for timed out after ${timeoutMs / 1000}s -- condition not met.` };
       }
       return { observation: `Condition met: ${resp.result.detail || 'element appeared.'}` };
     }
 
-    // ── wait_seconds ─────────────────────────────────────────────────────────
+    // -- wait_seconds --
     case 'wait_seconds': {
-      const ms = Math.min(Math.max((args.seconds || 1) * 1000, 500), 5000);
+      const ms = Math.min(Math.max((args.seconds || 1) * 1000, 500), 30000);
       await sleepMs(ms);
       return { observation: `Waited ${ms / 1000}s${args.reason ? ` (${args.reason})` : ''}.` };
     }

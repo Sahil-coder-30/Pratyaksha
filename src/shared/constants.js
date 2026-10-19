@@ -45,6 +45,7 @@ export const TOOL_NAMES = Object.freeze({
 });
 
 export const CANONICAL_SERVICES = Object.freeze([
+  { pattern: /\b(whatsapp|wa\.me)\b/i, url: 'https://web.whatsapp.com', name: 'WhatsApp', hostMatch: /web\.whatsapp\.com/i },
   { pattern: /\bgmail\b/i, url: 'https://mail.google.com', name: 'Gmail', hostMatch: /mail\.google\.com/i },
   { pattern: /\byoutube\b/i, url: 'https://www.youtube.com', name: 'YouTube', hostMatch: /youtube\.com/i },
   { pattern: /\bgithub\b/i, url: 'https://github.com', name: 'GitHub', hostMatch: /github\.com/i },

@@ -323,13 +323,15 @@ export async function executeBrowserTool(toolName, rawArgs = {}, activeTab, opti
         const targetId = args.target_id;
         const hint = args.semantic_hint || '';
         const initialTab = await getTabSafe(tabId, chromeApi);
+        const isSendOrSubmit = /(^|\b)(send|submit|dispatch)\b/i.test(hint);
+        const clickTimeout = isSendOrSubmit ? 45000 : 35000;
 
         let resp;
         try {
           resp = await sendToTab(tabId, {
             type: 'EXECUTE_ACTION',
             payload: { action: 'CLICK', target_id: targetId, semantic_hint: hint }
-          }, 8000, chromeApi);
+          }, clickTimeout, chromeApi);
         } catch (err) {
           // If channel closed, verify whether navigation actually started
           if (err instanceof ChannelClosedError || err.message?.includes('message channel closed')) {
@@ -365,11 +367,12 @@ export async function executeBrowserTool(toolName, rawArgs = {}, activeTab, opti
         const info = resp.result && typeof resp.result === 'object' ? resp.result : {};
         const what = info.clicked || `[#${targetId || '?'}] "${hint}"`;
         const change = navigated ? `page navigated to ${currentTab.url}` : (info.change || 'no URL change');
+        const sendStatus = info.sendConfirmed ? ' (Email dispatched & Send confirmed in DOM)' : '';
         return createToolResult({
           toolName,
-          observation: `Clicked ${what} — ${change}.`,
+          observation: `Clicked ${what} — ${change}${sendStatus}.`,
           page: currentTab,
-          metadata: { navigated, previousUrl: initialTab.url, target_id: targetId }
+          metadata: { navigated, previousUrl: initialTab.url, target_id: targetId, sendConfirmed: !!info.sendConfirmed }
         });
       }
 
@@ -581,42 +584,95 @@ export async function executeBrowserTool(toolName, rawArgs = {}, activeTab, opti
 
       // ── wait_for ─────────────────────────────────────────────────────────────
       case TOOL_NAMES.WAIT_FOR: {
-        const timeoutMs = Math.min((args.timeout_seconds || 8) * 1000, 30000);
-        const resp = await sendToTab(tabId, {
-          type: 'EXECUTE_ACTION',
-          payload: {
-            action: 'WAIT_FOR',
-            selector: args.selector || null,
-            textContains: args.text_contains || null,
-            timeoutMs
+        const timeoutSeconds = Math.min(Math.max(args.timeout_seconds || 60, 1), 600);
+        const timeoutMs = timeoutSeconds * 1000;
+        const trackerId = `track_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+        const sliceMs = 3000;
+        const startTime = Date.now();
+        let lastReportedSec = 0;
+        let found = false;
+        let resultInfo = null;
+
+        while (Date.now() - startTime < timeoutMs) {
+          if (signal?.aborted) {
+            return createToolResult({
+              toolName,
+              observation: 'wait_for aborted by user.',
+              page: await getTabSafe(tabId, chromeApi),
+              metadata: { met: false, aborted: true }
+            });
           }
-        }, timeoutMs + 2000, chromeApi);
+
+          let resp = null;
+          try {
+            resp = await sendToTab(tabId, {
+              type: 'EXECUTE_ACTION',
+              payload: {
+                action: 'WAIT_FOR',
+                trackerId,
+                selector: args.selector || null,
+                textContains: args.text_contains || null,
+                waitForReply: args.wait_for_reply !== false && (!!args.wait_for_reply || (!args.selector && !args.text_contains)),
+                trackDomChanges: !!args.track_dom_changes,
+                expectedSender: args.expected_sender || null,
+                timeoutMs: sliceMs
+              }
+            }, 15000, chromeApi);
+          } catch (err) {
+            if (err instanceof ChannelClosedError || err.message?.includes('message channel closed')) {
+              await ensureContentScript(tabId, chromeApi);
+            }
+          }
+
+          if (resp?.result?.found) {
+            found = true;
+            resultInfo = resp.result;
+            break;
+          }
+
+          const elapsedSec = Math.round((Date.now() - startTime) / 1000);
+          if (elapsedSec - lastReportedSec >= 15) {
+            lastReportedSec = elapsedSec;
+          }
+
+          const remainingMs = timeoutMs - (Date.now() - startTime);
+          if (remainingMs <= 0) break;
+          await sleepMs(Math.min(sliceMs, remainingMs), signal);
+        }
 
         const currentTab = await getTabSafe(tabId, chromeApi);
-        if (!resp?.result?.found) {
+        if (!found) {
           return createToolResult({
             toolName,
-            observation: `wait_for timed out after ${timeoutMs / 1000}s — condition not met.`,
+            observation: `wait_for held process for ${timeoutSeconds}s — no incoming reply or matching condition detected in DOM.`,
             page: currentTab,
             metadata: { met: false }
           });
         }
+
+        const detailMsg = resultInfo?.detail || 'incoming response received and verified in DOM';
+        const contentSnippet = resultInfo?.newContent ? `\nResponse Content:\n${resultInfo.newContent}` : '';
         return createToolResult({
           toolName,
-          observation: `Condition met: ${resp.result.detail || 'element appeared.'}`,
+          observation: `Condition met: ${detailMsg}.${contentSnippet}`,
           page: currentTab,
-          metadata: { met: true }
+          metadata: { met: true, detail: resultInfo?.detail, newContent: resultInfo?.newContent }
         });
       }
 
       // ── wait_seconds ─────────────────────────────────────────────────────────
       case TOOL_NAMES.WAIT_SECONDS: {
-        const ms = Math.min(Math.max(args.seconds * 1000, 500), 10000);
-        await sleepMs(ms, signal);
+        const totalMs = Math.min(Math.max(args.seconds * 1000, 500), 300000);
+        const start = Date.now();
+        while (Date.now() - start < totalMs) {
+          if (signal?.aborted) break;
+          const chunk = Math.min(1000, totalMs - (Date.now() - start));
+          await sleepMs(chunk, signal);
+        }
         const currentTab = await getTabSafe(tabId, chromeApi);
         return createToolResult({
           toolName,
-          observation: `Waited ${ms / 1000}s${args.reason ? ` (${args.reason})` : ''}.`,
+          observation: `Waited ${(Date.now() - start) / 1000}s${args.reason ? ` (${args.reason})` : ''}.`,
           page: currentTab
         });
       }
@@ -724,7 +780,7 @@ export function waitForTabLoad(tabId, timeoutMs = 15000, chromeApi, signal) {
   });
 }
 
-export async function sendToTab(tabId, message, timeoutMs = 8000, chromeApi) {
+export async function sendToTab(tabId, message, timeoutMs = 35000, chromeApi) {
   if (!chromeApi?.tabs?.sendMessage) throw new Error('chrome.tabs.sendMessage unavailable');
 
   const send = () => new Promise((resolve, reject) => {

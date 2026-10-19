@@ -113,13 +113,16 @@ export const TOOL_ZOD_SCHEMAS = {
   [TOOL_NAMES.WAIT_FOR]: z.object({
     selector: z.string().optional().describe('CSS selector to wait for.'),
     text_contains: z.string().optional().describe('Text that must appear on the page.'),
-    timeout_seconds: z.number().min(1).max(30).default(8).optional().describe('Max seconds to wait (default 8, max 30).')
-  }).refine(data => !!data.selector || !!data.text_contains, {
-    message: 'wait_for requires either selector or text_contains'
+    wait_for_reply: z.boolean().optional().describe('Set to true to wait for a reply/response from the other user in email or chat, tracking incoming message DOM changes.'),
+    track_dom_changes: z.boolean().optional().describe('Set to true to hold until meaningful DOM mutations or new elements arrive on the page.'),
+    expected_sender: z.string().optional().describe('Optional sender name or email address whose reply is expected.'),
+    timeout_seconds: z.number().min(1).max(600).default(60).optional().describe('Max seconds to hold and wait for the response/condition (up to 600s / 10 minutes).')
+  }).refine(data => !!data.selector || !!data.text_contains || !!data.wait_for_reply || !!data.track_dom_changes, {
+    message: 'wait_for requires selector, text_contains, wait_for_reply, or track_dom_changes'
   }),
 
   [TOOL_NAMES.WAIT_SECONDS]: z.object({
-    seconds: z.number().min(0.5).max(10).describe('Seconds to wait (0.5–10).'),
+    seconds: z.number().min(0.5).max(300).describe('Seconds to wait (0.5–300).'),
     reason: z.string().optional().describe('Why you are waiting.')
   }),
 
@@ -379,7 +382,7 @@ export const BROWSER_TOOL_SPECS = [
   },
   {
     name: TOOL_NAMES.WAIT_FOR,
-    description: 'Waits until a specific element appears in the DOM or specific text becomes visible on the page.',
+    description: 'Waits until a specific element appears, text becomes visible, or an incoming reply/response arrives from another user by tracking live DOM mutations.',
     category: TOOL_CATEGORIES.WAITING,
     defaultRisk: RISK_TIERS.READ_ONLY,
     parameters: {
@@ -387,7 +390,10 @@ export const BROWSER_TOOL_SPECS = [
       properties: {
         selector: { type: 'STRING', description: 'CSS selector to wait for.' },
         text_contains: { type: 'STRING', description: 'Text that must appear on the page.' },
-        timeout_seconds: { type: 'NUMBER', description: 'Max seconds to wait (default 8, max 30).' }
+        wait_for_reply: { type: 'BOOLEAN', description: 'Wait for incoming reply or response from other user in email/chat threads.' },
+        track_dom_changes: { type: 'BOOLEAN', description: 'Track live DOM changes and hold until new response elements appear.' },
+        expected_sender: { type: 'STRING', description: 'Optional expected sender name or email.' },
+        timeout_seconds: { type: 'NUMBER', description: 'Max seconds to hold and wait (default 60, up to 600).' }
       },
       required: []
     }
@@ -400,7 +406,7 @@ export const BROWSER_TOOL_SPECS = [
     parameters: {
       type: 'OBJECT',
       properties: {
-        seconds: { type: 'NUMBER', description: 'Seconds to wait (0.5–10).' },
+        seconds: { type: 'NUMBER', description: 'Seconds to wait (0.5–300).' },
         reason: { type: 'STRING', description: 'Why you are waiting.' }
       },
       required: ['seconds']

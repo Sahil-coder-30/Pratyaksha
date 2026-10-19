@@ -65,6 +65,13 @@ test('Deterministic Planner - Email Workflow & Missing Information', () => {
   // Recipient was not specified, so missingInformation must be flagged
   assert.ok(plan.missingInformation.length > 0);
   assert.ok(plan.missingInformation.some(m => /recipient/i.test(m)));
+
+  // If task asks to wait for a reply, adds a 5th wait_for subgoal
+  const replyPlan = generateDeterministicPlan('Send email to manager@test.com and wait for his reply');
+  assert.equal(replyPlan.subgoals.length, 5);
+  const waitSubgoal = replyPlan.subgoals.find(s => s.expectedAction === 'wait_for');
+  assert.ok(waitSubgoal);
+  assert.ok(replyPlan.verificationCriteria.some(c => /reply/i.test(c)));
 });
 
 test('Deterministic Planner - Web Search Flow', () => {
@@ -89,3 +96,17 @@ test('Planner Node - LangGraph State Transformation', async () => {
   assert.equal(update.status, 'PLANNING_COMPLETE');
   assert.equal(update.plan.subgoals.length, 2);
 });
+
+test('Deterministic Planner - WhatsApp Specific Group & Multi-Turn Iterations', () => {
+  const task = 'Open silicon valley ke 14 group on whatsapp and chat with the people over there for 20 iterations, you must await for a response from the user and answer it';
+  const plan = generateDeterministicPlan(task);
+
+  assert.equal(plan.targetService?.name, 'WhatsApp');
+  assert.equal(plan.subgoals.length, 5);
+  // Check target group search subgoal
+  const searchSubgoal = plan.subgoals.find(s => /silicon valley ke 14/i.test(s.description));
+  assert.ok(searchSubgoal);
+  assert.ok(plan.verificationCriteria.some(c => /silicon valley ke 14/i.test(c)));
+  assert.ok(plan.verificationCriteria.some(c => /iterations/i.test(c)));
+});
+

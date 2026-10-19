@@ -62637,6 +62637,7 @@ var init_constants = __esm({
       FINISH_TASK: "finish_task"
     });
     CANONICAL_SERVICES = Object.freeze([
+      { pattern: /\b(whatsapp|wa\.me)\b/i, url: "https://web.whatsapp.com", name: "WhatsApp", hostMatch: /web\.whatsapp\.com/i },
       { pattern: /\bgmail\b/i, url: "https://mail.google.com", name: "Gmail", hostMatch: /mail\.google\.com/i },
       { pattern: /\byoutube\b/i, url: "https://www.youtube.com", name: "YouTube", hostMatch: /youtube\.com/i },
       { pattern: /\bgithub\b/i, url: "https://github.com", name: "GitHub", hostMatch: /github\.com/i },
@@ -62908,12 +62909,15 @@ var init_schemas4 = __esm({
       [TOOL_NAMES.WAIT_FOR]: external_exports.object({
         selector: external_exports.string().optional().describe("CSS selector to wait for."),
         text_contains: external_exports.string().optional().describe("Text that must appear on the page."),
-        timeout_seconds: external_exports.number().min(1).max(30).default(8).optional().describe("Max seconds to wait (default 8, max 30).")
-      }).refine((data) => !!data.selector || !!data.text_contains, {
-        message: "wait_for requires either selector or text_contains"
+        wait_for_reply: external_exports.boolean().optional().describe("Set to true to wait for a reply/response from the other user in email or chat, tracking incoming message DOM changes."),
+        track_dom_changes: external_exports.boolean().optional().describe("Set to true to hold until meaningful DOM mutations or new elements arrive on the page."),
+        expected_sender: external_exports.string().optional().describe("Optional sender name or email address whose reply is expected."),
+        timeout_seconds: external_exports.number().min(1).max(600).default(60).optional().describe("Max seconds to hold and wait for the response/condition (up to 600s / 10 minutes).")
+      }).refine((data) => !!data.selector || !!data.text_contains || !!data.wait_for_reply || !!data.track_dom_changes, {
+        message: "wait_for requires selector, text_contains, wait_for_reply, or track_dom_changes"
       }),
       [TOOL_NAMES.WAIT_SECONDS]: external_exports.object({
-        seconds: external_exports.number().min(0.5).max(10).describe("Seconds to wait (0.5\u201310)."),
+        seconds: external_exports.number().min(0.5).max(300).describe("Seconds to wait (0.5\u2013300)."),
         reason: external_exports.string().optional().describe("Why you are waiting.")
       }),
       [TOOL_NAMES.FINISH_TASK]: external_exports.object({
@@ -63167,7 +63171,7 @@ var init_schemas4 = __esm({
       },
       {
         name: TOOL_NAMES.WAIT_FOR,
-        description: "Waits until a specific element appears in the DOM or specific text becomes visible on the page.",
+        description: "Waits until a specific element appears, text becomes visible, or an incoming reply/response arrives from another user by tracking live DOM mutations.",
         category: TOOL_CATEGORIES.WAITING,
         defaultRisk: RISK_TIERS.READ_ONLY,
         parameters: {
@@ -63175,7 +63179,10 @@ var init_schemas4 = __esm({
           properties: {
             selector: { type: "STRING", description: "CSS selector to wait for." },
             text_contains: { type: "STRING", description: "Text that must appear on the page." },
-            timeout_seconds: { type: "NUMBER", description: "Max seconds to wait (default 8, max 30)." }
+            wait_for_reply: { type: "BOOLEAN", description: "Wait for incoming reply or response from other user in email/chat threads." },
+            track_dom_changes: { type: "BOOLEAN", description: "Track live DOM changes and hold until new response elements appear." },
+            expected_sender: { type: "STRING", description: "Optional expected sender name or email." },
+            timeout_seconds: { type: "NUMBER", description: "Max seconds to hold and wait (default 60, up to 600)." }
           },
           required: []
         }
@@ -63188,7 +63195,7 @@ var init_schemas4 = __esm({
         parameters: {
           type: "OBJECT",
           properties: {
-            seconds: { type: "NUMBER", description: "Seconds to wait (0.5\u201310)." },
+            seconds: { type: "NUMBER", description: "Seconds to wait (0.5\u2013300)." },
             reason: { type: "STRING", description: "Why you are waiting." }
           },
           required: ["seconds"]
@@ -63467,12 +63474,14 @@ ${JSON.stringify(data, null, 2)}`,
         const targetId = args.target_id;
         const hint = args.semantic_hint || "";
         const initialTab = await getTabSafe(tabId, chromeApi);
+        const isSendOrSubmit = /(^|\b)(send|submit|dispatch)\b/i.test(hint);
+        const clickTimeout = isSendOrSubmit ? 45e3 : 35e3;
         let resp;
         try {
           resp = await sendToTab(tabId, {
             type: "EXECUTE_ACTION",
             payload: { action: "CLICK", target_id: targetId, semantic_hint: hint }
-          }, 8e3, chromeApi);
+          }, clickTimeout, chromeApi);
         } catch (err) {
           if (err instanceof ChannelClosedError || err.message?.includes("message channel closed")) {
             await waitForTabLoad(tabId, 12e3, chromeApi, signal);
@@ -63502,11 +63511,12 @@ ${JSON.stringify(data, null, 2)}`,
         const info = resp.result && typeof resp.result === "object" ? resp.result : {};
         const what = info.clicked || `[#${targetId || "?"}] "${hint}"`;
         const change = navigated ? `page navigated to ${currentTab.url}` : info.change || "no URL change";
+        const sendStatus = info.sendConfirmed ? " (Email dispatched & Send confirmed in DOM)" : "";
         return createToolResult({
           toolName,
-          observation: `Clicked ${what} \u2014 ${change}.`,
+          observation: `Clicked ${what} \u2014 ${change}${sendStatus}.`,
           page: currentTab,
-          metadata: { navigated, previousUrl: initialTab.url, target_id: targetId }
+          metadata: { navigated, previousUrl: initialTab.url, target_id: targetId, sendConfirmed: !!info.sendConfirmed }
         });
       }
       // ── type_into_element ───────────────────────────────────────────────────
@@ -63694,40 +63704,89 @@ URL: ${currentTab.url}`,
       }
       // ── wait_for ─────────────────────────────────────────────────────────────
       case TOOL_NAMES.WAIT_FOR: {
-        const timeoutMs = Math.min((args.timeout_seconds || 8) * 1e3, 3e4);
-        const resp = await sendToTab(tabId, {
-          type: "EXECUTE_ACTION",
-          payload: {
-            action: "WAIT_FOR",
-            selector: args.selector || null,
-            textContains: args.text_contains || null,
-            timeoutMs
+        const timeoutSeconds = Math.min(Math.max(args.timeout_seconds || 60, 1), 600);
+        const timeoutMs = timeoutSeconds * 1e3;
+        const trackerId = `track_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+        const sliceMs = 3e3;
+        const startTime = Date.now();
+        let lastReportedSec = 0;
+        let found = false;
+        let resultInfo = null;
+        while (Date.now() - startTime < timeoutMs) {
+          if (signal?.aborted) {
+            return createToolResult({
+              toolName,
+              observation: "wait_for aborted by user.",
+              page: await getTabSafe(tabId, chromeApi),
+              metadata: { met: false, aborted: true }
+            });
           }
-        }, timeoutMs + 2e3, chromeApi);
+          let resp = null;
+          try {
+            resp = await sendToTab(tabId, {
+              type: "EXECUTE_ACTION",
+              payload: {
+                action: "WAIT_FOR",
+                trackerId,
+                selector: args.selector || null,
+                textContains: args.text_contains || null,
+                waitForReply: args.wait_for_reply !== false && (!!args.wait_for_reply || !args.selector && !args.text_contains),
+                trackDomChanges: !!args.track_dom_changes,
+                expectedSender: args.expected_sender || null,
+                timeoutMs: sliceMs
+              }
+            }, 15e3, chromeApi);
+          } catch (err) {
+            if (err instanceof ChannelClosedError || err.message?.includes("message channel closed")) {
+              await ensureContentScript(tabId, chromeApi);
+            }
+          }
+          if (resp?.result?.found) {
+            found = true;
+            resultInfo = resp.result;
+            break;
+          }
+          const elapsedSec = Math.round((Date.now() - startTime) / 1e3);
+          if (elapsedSec - lastReportedSec >= 15) {
+            lastReportedSec = elapsedSec;
+          }
+          const remainingMs = timeoutMs - (Date.now() - startTime);
+          if (remainingMs <= 0) break;
+          await sleepMs(Math.min(sliceMs, remainingMs), signal);
+        }
         const currentTab = await getTabSafe(tabId, chromeApi);
-        if (!resp?.result?.found) {
+        if (!found) {
           return createToolResult({
             toolName,
-            observation: `wait_for timed out after ${timeoutMs / 1e3}s \u2014 condition not met.`,
+            observation: `wait_for held process for ${timeoutSeconds}s \u2014 no incoming reply or matching condition detected in DOM.`,
             page: currentTab,
             metadata: { met: false }
           });
         }
+        const detailMsg = resultInfo?.detail || "incoming response received and verified in DOM";
+        const contentSnippet = resultInfo?.newContent ? `
+Response Content:
+${resultInfo.newContent}` : "";
         return createToolResult({
           toolName,
-          observation: `Condition met: ${resp.result.detail || "element appeared."}`,
+          observation: `Condition met: ${detailMsg}.${contentSnippet}`,
           page: currentTab,
-          metadata: { met: true }
+          metadata: { met: true, detail: resultInfo?.detail, newContent: resultInfo?.newContent }
         });
       }
       // ── wait_seconds ─────────────────────────────────────────────────────────
       case TOOL_NAMES.WAIT_SECONDS: {
-        const ms = Math.min(Math.max(args.seconds * 1e3, 500), 1e4);
-        await sleepMs(ms, signal);
+        const totalMs = Math.min(Math.max(args.seconds * 1e3, 500), 3e5);
+        const start = Date.now();
+        while (Date.now() - start < totalMs) {
+          if (signal?.aborted) break;
+          const chunk = Math.min(1e3, totalMs - (Date.now() - start));
+          await sleepMs(chunk, signal);
+        }
         const currentTab = await getTabSafe(tabId, chromeApi);
         return createToolResult({
           toolName,
-          observation: `Waited ${ms / 1e3}s${args.reason ? ` (${args.reason})` : ""}.`,
+          observation: `Waited ${(Date.now() - start) / 1e3}s${args.reason ? ` (${args.reason})` : ""}.`,
           page: currentTab
         });
       }
@@ -63827,7 +63886,7 @@ function waitForTabLoad(tabId, timeoutMs = 15e3, chromeApi, signal) {
     timer = setTimeout(finish, timeoutMs);
   });
 }
-async function sendToTab(tabId, message, timeoutMs = 8e3, chromeApi) {
+async function sendToTab(tabId, message, timeoutMs = 35e3, chromeApi) {
   if (!chromeApi?.tabs?.sendMessage) throw new Error("chrome.tabs.sendMessage unavailable");
   const send = () => new Promise((resolve, reject) => {
     const timer = setTimeout(() => reject(new Error("Content script response timed out")), timeoutMs);
@@ -64056,11 +64115,94 @@ function generateDeterministicPlan(task2 = "", pageContext = {}) {
       riskTier: RISK_TIERS.IRREVERSIBLE,
       completionEvidence: "Send button clicked and message sent toast appears"
     });
+    const expectsReply = /\b(wait(ing)?\s+(for\s+)?([a-z0-9_-]+\s+)*(reply|response)|until\s+([a-z0-9_-]+\s+)*(reply|response))\b/i.test(task2);
+    if (expectsReply) {
+      subgoals.push({
+        id: 5,
+        description: "Hold execution and wait for reply from other user, tracking incoming message DOM changes",
+        expectedAction: "wait_for",
+        riskTier: RISK_TIERS.READ_ONLY,
+        completionEvidence: "Incoming response/reply detected and verified in DOM"
+      });
+    }
     verificationCriteria.push("Email service mail.google.com was visited");
     verificationCriteria.push("Recipient and message fields were typed");
     verificationCriteria.push("Send button was successfully triggered");
+    if (expectsReply) {
+      verificationCriteria.push("Response/reply from other user was received and verified in DOM");
+    }
     if (!/@/.test(task2) && !/\[EMAIL_/i.test(task2)) {
       missingInformation.push("Recipient email address was not specified");
+    }
+  } else if (/\b(whatsapp|wa\.me)\b/i.test(task2)) {
+    targetService = { name: "WhatsApp", url: "https://web.whatsapp.com" };
+    let targetChatName = null;
+    const groupMatch = task2.match(/(?:open|in|to)\s+["']?([a-zA-Z0-9_\s]{2,35}?)["']?\s+(?:group|chat|on\s+whatsapp)/i) || task2.match(/(?:group|chat)\s+["']?([a-zA-Z0-9_\s]{2,35}?)["']?\s+(?:on|in)/i) || task2.match(/whatsapp\s+(?:and\s+chat\s+(?:with\s+(?:the\s+people\s+over\s+there|them)\s+)?in\s+)?["']?([a-zA-Z0-9_\s]{2,35}?)["']?\s+group/i);
+    if (groupMatch && groupMatch[1]) {
+      targetChatName = groupMatch[1].trim();
+    }
+    const iterMatch = task2.match(/(\d+)\s+iterations?/i);
+    const requestedIterations = iterMatch ? parseInt(iterMatch[1], 10) : 1;
+    const expectsReply = requestedIterations > 1 || /\b(a?wait(ing)?\s+(for\s+)?([a-z0-9_-]+\s+)*(reply|response)|until\s+([a-z0-9_-]+\s+)*(reply|response)|iterations?)\b/i.test(task2);
+    subgoals.push({
+      id: 1,
+      description: "Focus WhatsApp Web on current active tab",
+      expectedAction: "read_page",
+      riskTier: RISK_TIERS.READ_ONLY,
+      completionEvidence: "WhatsApp chat interface is active"
+    });
+    if (targetChatName) {
+      subgoals.push({
+        id: 2,
+        description: `Search for and click into requested group/contact "${targetChatName}"`,
+        expectedAction: "type_into_element",
+        riskTier: RISK_TIERS.REVERSIBLE,
+        completionEvidence: `Group "${targetChatName}" is opened and active in main chat pane`
+      });
+    } else {
+      subgoals.push({
+        id: 2,
+        description: "Find and open requested contact or group chat",
+        expectedAction: "click_element",
+        riskTier: RISK_TIERS.REVERSIBLE,
+        completionEvidence: "Target chat conversation opened in main view"
+      });
+    }
+    subgoals.push({
+      id: 3,
+      description: "Type initial message/introduction into WhatsApp compose input",
+      expectedAction: "type_into_element",
+      riskTier: RISK_TIERS.REVERSIBLE,
+      completionEvidence: "Message text typed into WhatsApp input"
+    });
+    subgoals.push({
+      id: 4,
+      description: "Send message (press Enter or click Send icon)",
+      expectedAction: "press_key",
+      riskTier: RISK_TIERS.IRREVERSIBLE,
+      completionEvidence: "Message dispatched into chat thread"
+    });
+    if (expectsReply) {
+      subgoals.push({
+        id: 5,
+        description: requestedIterations > 1 ? `Execute multi-turn conversation loop: wait for incoming reply, read response, and answer (cycle through ${requestedIterations} iterations)` : "Hold execution and wait for response from group members, monitoring DOM for incoming messages",
+        expectedAction: "wait_for",
+        riskTier: RISK_TIERS.READ_ONLY,
+        completionEvidence: requestedIterations > 1 ? `Conversation loop completed for ${requestedIterations} iterations` : "Incoming response detected in WhatsApp DOM"
+      });
+    }
+    verificationCriteria.push("WhatsApp Web was accessed");
+    if (targetChatName) {
+      verificationCriteria.push(`Target group "${targetChatName}" was selected and opened`);
+    } else {
+      verificationCriteria.push("Target group or chat was opened");
+    }
+    verificationCriteria.push("Message was dispatched into the chat");
+    if (expectsReply) {
+      verificationCriteria.push("Incoming response tracked and verified in DOM without hallucination");
+    }
+    if (requestedIterations > 1) {
+      verificationCriteria.push("Multi-turn conversation maintained across iterations");
     }
   } else if (/\b(search|find|lookup|who|what|score|price)\b/i.test(task2)) {
     subgoals.push({
@@ -145170,11 +145312,27 @@ STRICT RULES (follow exactly)
 7. You may call several tools in one step only when they do not depend on each other's result (e.g. fill 3 form fields, then click Submit). After a click that navigates, the remaining calls are skipped automatically.
 8. Do not ask the user questions like "Shall I proceed?". Act. If the task truly needs information you do not have (password, missing recipient), call finish_task with success=false and say what is missing.
 9. If you hit a login wall, CAPTCHA, or payment step you are not authorized for, stop with finish_task(success=false) and explain.
+10. If the task requires sending an email, message, or prompt AND waiting for a reply or response from the other user:
+    - After clicking Send, DO NOT call finish_task immediately!
+    - Call wait_for with wait_for_reply=true and timeout_seconds (e.g. 180 or 300) to hold the execution process until the other user responds. The tool tracks live DOM changes and returns when the reply arrives.
+    - Once the reply appears in the DOM, read the response and only then call finish_task with the received reply summary.
+11. When asked to message or open a specific contact or group (e.g. "Silicon Valley ke 14" on WhatsApp):
+    - DO NOT type into whatever chat is currently open on the screen!
+    - First find and open the target chat: locate the search input (e.g. "Search or start new chat" or "Search input textbox"), type the contact/group name with press_enter=true, or click the matching contact/group in the chat list.
+    - Verify that the active chat header displays the requested group/contact name before sending messages.
+12. When the user requests a multi-turn conversation or multiple iterations (e.g. "chat for 20 iterations", "await reply and respond"):
+    - NEVER call finish_task after sending a single message!
+    - After sending a message, call wait_for(wait_for_reply=true) to hold execution until an incoming response arrives.
+    - Once the incoming reply appears in the DOM, read what was said, formulate an appropriate response, and send it.
+    - Repeat this loop for the requested number of iterations.
+    - NEVER fabricate or claim that group members or users responded unless their reply was verifiably observed in the DOM.
 
 FINISHING
-- Call finish_task as soon as the goal is verifiably done on the page. Put the actual result (the answer, the data found, what was sent) in the summary.
+- Call finish_task as soon as the goal is verifiably done on the page. Put the actual result (the answer, the data found, what was sent, or the reply received) in the summary.
 - For information tasks, read the page first, then finish with the answer. Do not finish without the answer.
-- Do not call finish_task for a multi-step goal (chat, form, email) until the final step is confirmed on the page.`;
+- Do not call finish_task for a multi-step goal (chat, form, email) until the final step is confirmed on the page.
+- Never finish an email or messaging task that requested waiting for a reply until that reply has actually been observed and confirmed in the DOM.
+- Never finish a multi-iteration task prematurely before completing the requested conversation cycles.`;
 var DEFAULT_HIDDEN_TOOLS = Object.freeze([
   TOOL_NAMES.SCREENSHOT,
   TOOL_NAMES.GET_PAGE_METADATA,
@@ -145661,11 +145819,98 @@ function verifyTaskOutcome({
         evidence: "No Send click detected in action history."
       };
     }
+    const expectsReply = /\b(wait(ing)?\s+(for\s+)?([a-z0-9_-]+\s+)*(reply|response)|until\s+([a-z0-9_-]+\s+)*(reply|response))\b/i.test(task2);
+    if (expectsReply) {
+      const waitedForReply = history.some(
+        (h) => h.toolName === "wait_for" && (h.ok !== false || h.metadata?.met || /condition\s+met|reply|response/i.test(h.observation || ""))
+      );
+      const readReply = history.some(
+        (h) => h.toolName === "read_page" && /reply|response|from/i.test(h.observation || "")
+      );
+      if (!waitedForReply && !readReply) {
+        return {
+          outcome: VERIFICATION_OUTCOMES.INCOMPLETE_RECOVERABLE,
+          verified: false,
+          reason: "Email was sent, but the task requires waiting for a reply from the other user. The agent must hold execution and wait for the response to be received in the DOM.",
+          evidence: "Send clicked, but incoming reply was not tracked or verified in DOM."
+        };
+      }
+    }
     return {
       outcome: VERIFICATION_OUTCOMES.VERIFIED_SUCCESS,
       verified: true,
-      reason: "Email workflow verified: Visited service, filled fields, and triggered Send.",
-      evidence: `Visited: ${currentUrl}, Inputs: ${typedInputs.length}, Send Clicked: true`
+      reason: expectsReply ? "Email workflow verified: Sent message and confirmed response/reply received from other user." : "Email workflow verified: Visited service, filled fields, and triggered Send.",
+      evidence: `Visited: ${currentUrl}, Inputs: ${typedInputs.length}, Send Clicked: true${expectsReply ? ", Reply Verified: true" : ""}`
+    };
+  }
+  const isWhatsAppTask = /\b(whatsapp|wa\.me)\b/i.test(task2);
+  if (isWhatsAppTask) {
+    const visitedWhatsApp = history.some((h) => /web\.whatsapp\.com/i.test(h.url || "")) || /web\.whatsapp\.com/i.test(currentUrl);
+    const typedInputs = history.filter((h) => h.toolName === "type_into_element");
+    const sentMessage = history.some((h) => h.toolName === "press_key" && /enter/i.test(h.args?.key || "") || h.toolName === "click_element" && /send/i.test(h.args?.semantic_hint || ""));
+    let targetChatName = null;
+    const groupMatch = task2.match(/(?:open|in|to)\s+["']?([a-zA-Z0-9_\s]{2,35}?)["']?\s+(?:group|chat|on\s+whatsapp)/i) || task2.match(/(?:group|chat)\s+["']?([a-zA-Z0-9_\s]{2,35}?)["']?\s+(?:on|in)/i) || task2.match(/whatsapp\s+(?:and\s+chat\s+(?:with\s+(?:the\s+people\s+over\s+there|them)\s+)?in\s+)?["']?([a-zA-Z0-9_\s]{2,35}?)["']?\s+group/i);
+    if (groupMatch && groupMatch[1]) {
+      targetChatName = groupMatch[1].trim();
+    }
+    const iterMatch = task2.match(/(\d+)\s+iterations?/i);
+    const requestedIterations = iterMatch ? parseInt(iterMatch[1], 10) : 1;
+    const expectsReply = requestedIterations > 1 || /\b(a?wait(ing)?\s+(for\s+)?([a-z0-9_-]+\s+)*(reply|response)|until\s+([a-z0-9_-]+\s+)*(reply|response)|iterations?)\b/i.test(task2);
+    if (!visitedWhatsApp) {
+      return {
+        outcome: VERIFICATION_OUTCOMES.INCOMPLETE_RECOVERABLE,
+        verified: false,
+        reason: "WhatsApp Web (web.whatsapp.com) was never visited or active.",
+        evidence: `Current URL: ${currentUrl}`
+      };
+    }
+    if (targetChatName) {
+      const selectedTargetChat = history.some(
+        (h) => h.toolName === "type_into_element" && new RegExp(targetChatName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i").test(h.args?.text || "") || h.toolName === "click_element" && new RegExp(targetChatName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i").test(h.args?.semantic_hint || h.observation || "") || h.toolName === "read_page" && new RegExp(targetChatName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i").test(h.observation || "")
+      );
+      if (!selectedTargetChat) {
+        return {
+          outcome: VERIFICATION_OUTCOMES.INCOMPLETE_RECOVERABLE,
+          verified: false,
+          reason: `Requested WhatsApp chat or group "${targetChatName}" was not opened. The agent must search for and select "${targetChatName}".`,
+          evidence: `Action history does not reference "${targetChatName}".`
+        };
+      }
+    }
+    if (typedInputs.length === 0) {
+      return {
+        outcome: VERIFICATION_OUTCOMES.INCOMPLETE_RECOVERABLE,
+        verified: false,
+        reason: "No message was typed into the WhatsApp chat input.",
+        evidence: "Input fields typed: 0"
+      };
+    }
+    if (!sentMessage) {
+      return {
+        outcome: VERIFICATION_OUTCOMES.INCOMPLETE_RECOVERABLE,
+        verified: false,
+        reason: "Message was typed but not dispatched into the WhatsApp chat.",
+        evidence: "Send action (press Enter or click Send) not detected."
+      };
+    }
+    if (expectsReply) {
+      const waitedForReply = history.some(
+        (h) => h.toolName === "wait_for" && (h.ok !== false && (h.metadata?.met || /condition\s+met|new\s+reply/i.test(h.observation || "")))
+      );
+      if (!waitedForReply) {
+        return {
+          outcome: VERIFICATION_OUTCOMES.INCOMPLETE_RECOVERABLE,
+          verified: false,
+          reason: "Message was dispatched, but the task requires waiting for a response from the group members. The agent must call wait_for with wait_for_reply=true to track incoming messages in the DOM.",
+          evidence: "Dispatched message, but incoming response was not tracked or verified in DOM."
+        };
+      }
+    }
+    return {
+      outcome: VERIFICATION_OUTCOMES.VERIFIED_SUCCESS,
+      verified: true,
+      reason: expectsReply ? "WhatsApp workflow verified: Sent message and confirmed response received from group." : "WhatsApp workflow verified: Opened group and sent message.",
+      evidence: `Visited: web.whatsapp.com, Sent: true${targetChatName ? `, Group: "${targetChatName}"` : ""}${expectsReply ? ", Reply Verified: true" : ""}`
     };
   }
   const isSearchTask = /\b(search|find|lookup|who|what|score|price)\b/i.test(task2);

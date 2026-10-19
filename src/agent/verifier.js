@@ -74,11 +74,117 @@ export function verifyTaskOutcome({
       };
     }
 
+    const expectsReply = /\b(wait(ing)?\s+(for\s+)?([a-z0-9_-]+\s+)*(reply|response)|until\s+([a-z0-9_-]+\s+)*(reply|response))\b/i.test(task);
+    if (expectsReply) {
+      const waitedForReply = history.some(h =>
+        h.toolName === 'wait_for' && (h.ok !== false || h.metadata?.met || /condition\s+met|reply|response/i.test(h.observation || ''))
+      );
+      const readReply = history.some(h =>
+        h.toolName === 'read_page' && /reply|response|from/i.test(h.observation || '')
+      );
+      if (!waitedForReply && !readReply) {
+        return {
+          outcome: VERIFICATION_OUTCOMES.INCOMPLETE_RECOVERABLE,
+          verified: false,
+          reason: 'Email was sent, but the task requires waiting for a reply from the other user. The agent must hold execution and wait for the response to be received in the DOM.',
+          evidence: 'Send clicked, but incoming reply was not tracked or verified in DOM.'
+        };
+      }
+    }
+
     return {
       outcome: VERIFICATION_OUTCOMES.VERIFIED_SUCCESS,
       verified: true,
-      reason: 'Email workflow verified: Visited service, filled fields, and triggered Send.',
-      evidence: `Visited: ${currentUrl}, Inputs: ${typedInputs.length}, Send Clicked: true`
+      reason: expectsReply
+        ? 'Email workflow verified: Sent message and confirmed response/reply received from other user.'
+        : 'Email workflow verified: Visited service, filled fields, and triggered Send.',
+      evidence: `Visited: ${currentUrl}, Inputs: ${typedInputs.length}, Send Clicked: true${expectsReply ? ', Reply Verified: true' : ''}`
+    };
+  }
+
+  // ── 1b. WhatsApp Verification Gate ──
+  const isWhatsAppTask = /\b(whatsapp|wa\.me)\b/i.test(task);
+  if (isWhatsAppTask) {
+    const visitedWhatsApp = history.some(h => /web\.whatsapp\.com/i.test(h.url || '')) || /web\.whatsapp\.com/i.test(currentUrl);
+    const typedInputs = history.filter(h => h.toolName === 'type_into_element');
+    const sentMessage = history.some(h => (h.toolName === 'press_key' && /enter/i.test(h.args?.key || '')) || (h.toolName === 'click_element' && /send/i.test(h.args?.semantic_hint || '')));
+
+    let targetChatName = null;
+    const groupMatch = task.match(/(?:open|in|to)\s+["']?([a-zA-Z0-9_\s]{2,35}?)["']?\s+(?:group|chat|on\s+whatsapp)/i) ||
+                       task.match(/(?:group|chat)\s+["']?([a-zA-Z0-9_\s]{2,35}?)["']?\s+(?:on|in)/i) ||
+                       task.match(/whatsapp\s+(?:and\s+chat\s+(?:with\s+(?:the\s+people\s+over\s+there|them)\s+)?in\s+)?["']?([a-zA-Z0-9_\s]{2,35}?)["']?\s+group/i);
+    if (groupMatch && groupMatch[1]) {
+      targetChatName = groupMatch[1].trim();
+    }
+
+    const iterMatch = task.match(/(\d+)\s+iterations?/i);
+    const requestedIterations = iterMatch ? parseInt(iterMatch[1], 10) : 1;
+    const expectsReply = requestedIterations > 1 || /\b(a?wait(ing)?\s+(for\s+)?([a-z0-9_-]+\s+)*(reply|response)|until\s+([a-z0-9_-]+\s+)*(reply|response)|iterations?)\b/i.test(task);
+
+    if (!visitedWhatsApp) {
+      return {
+        outcome: VERIFICATION_OUTCOMES.INCOMPLETE_RECOVERABLE,
+        verified: false,
+        reason: 'WhatsApp Web (web.whatsapp.com) was never visited or active.',
+        evidence: `Current URL: ${currentUrl}`
+      };
+    }
+
+    if (targetChatName) {
+      const selectedTargetChat = history.some(h =>
+        (h.toolName === 'type_into_element' && new RegExp(targetChatName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i').test(h.args?.text || '')) ||
+        (h.toolName === 'click_element' && new RegExp(targetChatName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i').test(h.args?.semantic_hint || h.observation || '')) ||
+        (h.toolName === 'read_page' && new RegExp(targetChatName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i').test(h.observation || ''))
+      );
+      if (!selectedTargetChat) {
+        return {
+          outcome: VERIFICATION_OUTCOMES.INCOMPLETE_RECOVERABLE,
+          verified: false,
+          reason: `Requested WhatsApp chat or group "${targetChatName}" was not opened. The agent must search for and select "${targetChatName}".`,
+          evidence: `Action history does not reference "${targetChatName}".`
+        };
+      }
+    }
+
+    if (typedInputs.length === 0) {
+      return {
+        outcome: VERIFICATION_OUTCOMES.INCOMPLETE_RECOVERABLE,
+        verified: false,
+        reason: 'No message was typed into the WhatsApp chat input.',
+        evidence: 'Input fields typed: 0'
+      };
+    }
+
+    if (!sentMessage) {
+      return {
+        outcome: VERIFICATION_OUTCOMES.INCOMPLETE_RECOVERABLE,
+        verified: false,
+        reason: 'Message was typed but not dispatched into the WhatsApp chat.',
+        evidence: 'Send action (press Enter or click Send) not detected.'
+      };
+    }
+
+    if (expectsReply) {
+      const waitedForReply = history.some(h =>
+        h.toolName === 'wait_for' && (h.ok !== false && (h.metadata?.met || /condition\s+met|new\s+reply/i.test(h.observation || '')))
+      );
+      if (!waitedForReply) {
+        return {
+          outcome: VERIFICATION_OUTCOMES.INCOMPLETE_RECOVERABLE,
+          verified: false,
+          reason: 'Message was dispatched, but the task requires waiting for a response from the group members. The agent must call wait_for with wait_for_reply=true to track incoming messages in the DOM.',
+          evidence: 'Dispatched message, but incoming response was not tracked or verified in DOM.'
+        };
+      }
+    }
+
+    return {
+      outcome: VERIFICATION_OUTCOMES.VERIFIED_SUCCESS,
+      verified: true,
+      reason: expectsReply
+        ? 'WhatsApp workflow verified: Sent message and confirmed response received from group.'
+        : 'WhatsApp workflow verified: Opened group and sent message.',
+      evidence: `Visited: web.whatsapp.com, Sent: true${targetChatName ? `, Group: "${targetChatName}"` : ''}${expectsReply ? ', Reply Verified: true' : ''}`
     };
   }
 

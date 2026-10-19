@@ -113,12 +113,8 @@ var process = globalThis.process;`
       }
     }
 
-    // Copy agent folder containing only graph-engine.js
-    mkdirSync(join(BUILD_DIR, 'agent'), { recursive: true });
-    copyFileSync(
-      join(EXT_DIR, 'agent/graph-engine.js'),
-      join(BUILD_DIR, 'agent/graph-engine.js')
-    );
+    // Copy all agent modules (graph-engine.js, tinyfish-agent.js, browser-tools.js, etc.)
+    cpSync(join(EXT_DIR, 'agent'), join(BUILD_DIR, 'agent'), { recursive: true });
 
     // Copy top-level extension files
     const filesToCopy = ['manifest.json', 'env.js', 'env.example.js', '.env'];

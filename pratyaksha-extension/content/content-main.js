@@ -184,7 +184,18 @@
       }
 
       case 'WAIT_FOR': {
-        const timeout = Math.min(timeoutMs || 8000, 30000);
+        const { trackerId, waitForReply, trackDomChanges, expectedSender } = payload;
+        if (window.PratyakshaDOM?.pollResponseCondition) {
+          return window.PratyakshaDOM.pollResponseCondition({
+            trackerId,
+            selector: selector || null,
+            textContains: textContains || null,
+            waitForReply: !!waitForReply,
+            trackDomChanges: !!trackDomChanges,
+            expectedSender: expectedSender || null
+          });
+        }
+        const timeout = Math.min(timeoutMs || 8000, 60000);
         const found   = await pollCondition({ selector, textContains }, timeout);
         return found;
       }

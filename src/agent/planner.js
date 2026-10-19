@@ -82,13 +82,114 @@ export function generateDeterministicPlan(task = '', pageContext = {}) {
       completionEvidence: 'Send button clicked and message sent toast appears'
     });
 
+    const expectsReply = /\b(wait(ing)?\s+(for\s+)?([a-z0-9_-]+\s+)*(reply|response)|until\s+([a-z0-9_-]+\s+)*(reply|response))\b/i.test(task);
+    if (expectsReply) {
+      subgoals.push({
+        id: 5,
+        description: 'Hold execution and wait for reply from other user, tracking incoming message DOM changes',
+        expectedAction: 'wait_for',
+        riskTier: RISK_TIERS.READ_ONLY,
+        completionEvidence: 'Incoming response/reply detected and verified in DOM'
+      });
+    }
+
     verificationCriteria.push('Email service mail.google.com was visited');
     verificationCriteria.push('Recipient and message fields were typed');
     verificationCriteria.push('Send button was successfully triggered');
+    if (expectsReply) {
+      verificationCriteria.push('Response/reply from other user was received and verified in DOM');
+    }
 
     // Check for missing recipient
     if (!/@/.test(task) && !/\[EMAIL_/i.test(task)) {
       missingInformation.push('Recipient email address was not specified');
+    }
+  }
+  // ── WhatsApp / Chat Workflow ──
+  else if (/\b(whatsapp|wa\.me)\b/i.test(task)) {
+    targetService = { name: 'WhatsApp', url: 'https://web.whatsapp.com' };
+
+    // Extract target group/chat name: e.g. "silicon valley ke 14"
+    let targetChatName = null;
+    const groupMatch = task.match(/(?:open|in|to)\s+["']?([a-zA-Z0-9_\s]{2,35}?)["']?\s+(?:group|chat|on\s+whatsapp)/i) ||
+                       task.match(/(?:group|chat)\s+["']?([a-zA-Z0-9_\s]{2,35}?)["']?\s+(?:on|in)/i) ||
+                       task.match(/whatsapp\s+(?:and\s+chat\s+(?:with\s+(?:the\s+people\s+over\s+there|them)\s+)?in\s+)?["']?([a-zA-Z0-9_\s]{2,35}?)["']?\s+group/i);
+    if (groupMatch && groupMatch[1]) {
+      targetChatName = groupMatch[1].trim();
+    }
+
+    const iterMatch = task.match(/(\d+)\s+iterations?/i);
+    const requestedIterations = iterMatch ? parseInt(iterMatch[1], 10) : 1;
+    const expectsReply = requestedIterations > 1 || /\b(a?wait(ing)?\s+(for\s+)?([a-z0-9_-]+\s+)*(reply|response)|until\s+([a-z0-9_-]+\s+)*(reply|response)|iterations?)\b/i.test(task);
+
+    subgoals.push({
+      id: 1,
+      description: 'Focus WhatsApp Web on current active tab',
+      expectedAction: 'read_page',
+      riskTier: RISK_TIERS.READ_ONLY,
+      completionEvidence: 'WhatsApp chat interface is active'
+    });
+
+    if (targetChatName) {
+      subgoals.push({
+        id: 2,
+        description: `Search for and click into requested group/contact "${targetChatName}"`,
+        expectedAction: 'type_into_element',
+        riskTier: RISK_TIERS.REVERSIBLE,
+        completionEvidence: `Group "${targetChatName}" is opened and active in main chat pane`
+      });
+    } else {
+      subgoals.push({
+        id: 2,
+        description: 'Find and open requested contact or group chat',
+        expectedAction: 'click_element',
+        riskTier: RISK_TIERS.REVERSIBLE,
+        completionEvidence: 'Target chat conversation opened in main view'
+      });
+    }
+
+    subgoals.push({
+      id: 3,
+      description: 'Type initial message/introduction into WhatsApp compose input',
+      expectedAction: 'type_into_element',
+      riskTier: RISK_TIERS.REVERSIBLE,
+      completionEvidence: 'Message text typed into WhatsApp input'
+    });
+
+    subgoals.push({
+      id: 4,
+      description: 'Send message (press Enter or click Send icon)',
+      expectedAction: 'press_key',
+      riskTier: RISK_TIERS.IRREVERSIBLE,
+      completionEvidence: 'Message dispatched into chat thread'
+    });
+
+    if (expectsReply) {
+      subgoals.push({
+        id: 5,
+        description: requestedIterations > 1
+          ? `Execute multi-turn conversation loop: wait for incoming reply, read response, and answer (cycle through ${requestedIterations} iterations)`
+          : 'Hold execution and wait for response from group members, monitoring DOM for incoming messages',
+        expectedAction: 'wait_for',
+        riskTier: RISK_TIERS.READ_ONLY,
+        completionEvidence: requestedIterations > 1
+          ? `Conversation loop completed for ${requestedIterations} iterations`
+          : 'Incoming response detected in WhatsApp DOM'
+      });
+    }
+
+    verificationCriteria.push('WhatsApp Web was accessed');
+    if (targetChatName) {
+      verificationCriteria.push(`Target group "${targetChatName}" was selected and opened`);
+    } else {
+      verificationCriteria.push('Target group or chat was opened');
+    }
+    verificationCriteria.push('Message was dispatched into the chat');
+    if (expectsReply) {
+      verificationCriteria.push('Incoming response tracked and verified in DOM without hallucination');
+    }
+    if (requestedIterations > 1) {
+      verificationCriteria.push('Multi-turn conversation maintained across iterations');
     }
   }
   // ── Web Search / Fact Lookup ──

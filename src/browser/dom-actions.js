@@ -203,6 +203,10 @@ window.PratyakshaDOM = window.PratyakshaDOM || (function() {
     '[role="treeitem"]',
     '[role="slider"]',
     '[role="spinbutton"]',
+    '[role="row"]',
+    '[role="listitem"]',
+    '[data-testid*="cell"]',
+    '[data-testid*="chat"]',
     '[onclick]',
     '[jsaction*="click"]',
     '[aria-haspopup="true"]',
@@ -564,6 +568,176 @@ window.PratyakshaDOM = window.PratyakshaDOM || (function() {
     });
   }
 
+  // ───────────────────────────────────────────────────────────────────────────
+  // Active response & DOM mutation tracker
+  // ───────────────────────────────────────────────────────────────────────────
+  const activeTrackers = new Map();
+
+  function queryMessageContainers() {
+    const selectors = [
+      '[role="listitem"]',
+      '[data-message-id]',
+      '.adn.ads',
+      '.ii.gt',
+      '.h7',
+      '[role="article"]',
+      '.message-in',
+      '[data-pre-plain-text]',
+      '.chat-message',
+      '[data-testid*="msg"]',
+      '.email-body',
+      '.mail-message',
+      'div[aria-label*="Message" i]'
+    ];
+    try {
+      return Array.from(document.querySelectorAll(selectors.join(', ')));
+    } catch (_) {
+      return [];
+    }
+  }
+
+  function getVisibleTextSnapshot() {
+    try {
+      return (document.body?.innerText || '').trim();
+    } catch (_) {
+      return '';
+    }
+  }
+
+  function pollResponseCondition({
+    trackerId = 'default',
+    selector = null,
+    textContains = null,
+    waitForReply = false,
+    trackDomChanges = false,
+    expectedSender = null
+  } = {}) {
+    let tracker = activeTrackers.get(trackerId);
+    if (!tracker) {
+      const initialElements = queryMessageContainers();
+      const initialElementsSet = new Set(initialElements);
+      const initialText = getVisibleTextSnapshot();
+      let mutationCount = 0;
+      const addedSnippets = [];
+
+      let observer = null;
+      try {
+        if (typeof MutationObserver !== 'undefined' && document.body) {
+          observer = new MutationObserver((mutations) => {
+            mutationCount += mutations.length;
+            for (const m of mutations) {
+              for (const node of m.addedNodes) {
+                if (node.nodeType === Node.ELEMENT_NODE) {
+                  const txt = (node.innerText || node.textContent || '').trim();
+                  if (txt.length > 5 && !addedSnippets.includes(txt.slice(0, 80))) {
+                    addedSnippets.push(txt.slice(0, 300));
+                  }
+                }
+              }
+            }
+          });
+          observer.observe(document.body, { childList: true, subtree: true, characterData: true });
+        }
+      } catch (_) {}
+
+      tracker = {
+        trackerId,
+        startTime: Date.now(),
+        initialElementsSet,
+        initialText,
+        observer,
+        getMutationCount: () => mutationCount,
+        getAddedSnippets: () => addedSnippets
+      };
+      activeTrackers.set(trackerId, tracker);
+    }
+
+    const cleanup = (res) => {
+      if (tracker.observer) {
+        try { tracker.observer.disconnect(); } catch (_) {}
+      }
+      activeTrackers.delete(trackerId);
+      return res;
+    };
+
+    // 1. Selector check
+    if (selector) {
+      const el = document.querySelector(selector);
+      if (el) {
+        try { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch (_) {}
+        return cleanup({ found: true, detail: `Selector "${selector}" appeared in DOM` });
+      }
+    }
+
+    // 2. Text check
+    const currentText = getVisibleTextSnapshot();
+    if (textContains) {
+      if (currentText.toLowerCase().includes(textContains.toLowerCase())) {
+        return cleanup({ found: true, detail: `Expected text "${textContains}" appeared on page` });
+      }
+    }
+
+    // 3. Wait for reply / incoming response
+    if (waitForReply) {
+      const currentElements = queryMessageContainers();
+      const newElements = currentElements.filter(el => !tracker.initialElementsSet.has(el));
+      if (newElements.length > 0) {
+        const newText = newElements.map(el => (el.innerText || el.textContent || '').trim()).filter(Boolean).join('\n');
+        return cleanup({
+          found: true,
+          detail: `New reply message appeared in thread (${newElements.length} new message container(s))`,
+          newContent: newText.slice(0, 500)
+        });
+      }
+
+      if (expectedSender && currentText.toLowerCase().includes(expectedSender.toLowerCase()) && !tracker.initialText.toLowerCase().includes(expectedSender.toLowerCase())) {
+        return cleanup({
+          found: true,
+          detail: `Incoming response from "${expectedSender}" detected in DOM`
+        });
+      }
+
+      const snippets = tracker.getAddedSnippets();
+      if (snippets.length > 0) {
+        const replySnippet = snippets.find(s => !/(sending|saving|draft|undo)/i.test(s) && s.length > 10);
+        if (replySnippet) {
+          return cleanup({
+            found: true,
+            detail: `Incoming message response text received: "${replySnippet.slice(0, 100)}"`,
+            newContent: replySnippet
+          });
+        }
+      }
+    }
+
+    // 4. Track DOM changes
+    if (trackDomChanges) {
+      if (tracker.getMutationCount() > 5) {
+        const snippets = tracker.getAddedSnippets();
+        if (snippets.length > 0) {
+          return cleanup({
+            found: true,
+            detail: `Tracked DOM changes: new content received (${tracker.getMutationCount()} mutations, "${snippets[0].slice(0, 80)}")`,
+            newContent: snippets[0]
+          });
+        }
+      }
+    }
+
+    return { found: false, detail: 'Waiting for response/DOM mutations...' };
+  }
+
+  function clearAllTrackers() {
+    try {
+      for (const [id, tracker] of activeTrackers.entries()) {
+        if (tracker.observer) {
+          try { tracker.observer.disconnect(); } catch (_) {}
+        }
+      }
+      activeTrackers.clear();
+    } catch (_) {}
+  }
+
   function scrollIntoViewIfNeeded(el) {
     const rect = el.getBoundingClientRect();
     const fullyVisible = rect.top >= 0 && rect.left >= 0 &&
@@ -800,6 +974,7 @@ window.PratyakshaDOM = window.PratyakshaDOM || (function() {
 
     clearHighlight() {
       try {
+        clearAllTrackers();
         cursorMoveId++;
         if (agentCursor) {
           try { agentCursor.classList.remove('is-visible', 'is-clicking'); } catch (_) {}
@@ -885,8 +1060,32 @@ window.PratyakshaDOM = window.PratyakshaDOM || (function() {
         setTimeout(() => { try { anchor.setAttribute('target', restoreTarget); } catch (_) {} }, 50);
       }
 
+      const isSendAction = /(^|\b)(send|submit|dispatch)\b/i.test(desc) ||
+                           /(^|\b)(send|submit|dispatch)\b/i.test(el.getAttribute('aria-label') || '') ||
+                           /(^|\b)(send|submit)\b/i.test(el.innerText || '');
+
+      if (isSendAction) {
+        // Wait for send network in-flight request and confirmation banner to settle
+        const maxWaitMs = 8000;
+        const startWait = Date.now();
+        while (Date.now() - startWait < maxWaitMs) {
+          const bodyText = (document.body?.innerText || '');
+          const isStillSending = /\b(sending|saving\s+draft)\b/i.test(bodyText) && !/\bmessage\s+sent\b/i.test(bodyText);
+          const hasSentConfirmation = /\b(message\s+sent|sent\b|undo\b)/i.test(bodyText);
+          if (hasSentConfirmation || !isStillSending) {
+            break;
+          }
+          await sleep(250);
+        }
+      }
+
       await waitForDomSettle(1500, 250);
-      return { clicked: desc, change: summarizeChange(before) };
+      const changeText = summarizeChange(before);
+      return {
+        clicked: desc,
+        change: isSendAction ? (changeText ? `${changeText}; email dispatched` : 'email dispatched') : changeText,
+        sendConfirmed: isSendAction
+      };
     },
 
     /**
@@ -1269,7 +1468,10 @@ window.PratyakshaDOM = window.PratyakshaDOM || (function() {
         attributes:  attrs,
         children
       };
-    }
+    },
+
+    pollResponseCondition,
+    clearAllTrackers
   };
 })();
 
