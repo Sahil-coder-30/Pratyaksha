@@ -7,7 +7,11 @@
  * Rejects model completion claims that lack physical proof.
  */
 
+import { HumanMessage } from '@langchain/core/messages';
 import { VerificationFailureError, formatError } from '../shared/errors.js';
+import { extractActionHistory } from './middleware.js';
+
+const MAIL_HOST_REGEX = /mail\.google\.com|outlook\.(live|office|office365)\.com|mail\.yahoo\.com|mail\.proton\.me|proton\.me\/mail|mail\.zoho\.|\bmail\./i;
 
 export const VERIFICATION_OUTCOMES = Object.freeze({
   VERIFIED_SUCCESS: 'VERIFIED_SUCCESS',
@@ -33,18 +37,20 @@ export function verifyTaskOutcome({
   // ── 1. Email / Messaging Verification Gate ──
   const isEmailTask = /\b(mail|email|send\s+email)\b/i.test(task);
   if (isEmailTask) {
-    const visitedEmail = history.some(h => /mail\.google\.com/i.test(h.url || '')) ||
-                         /mail\.google\.com/i.test(currentUrl);
+    const visitedEmail = history.some(h => MAIL_HOST_REGEX.test(h.url || '')) ||
+                         MAIL_HOST_REGEX.test(currentUrl);
 
     const typedInputs = history.filter(h => h.toolName === 'type_into_element');
     const clickedActions = history.filter(h => h.toolName === 'click_element');
-    const clickedSend = clickedActions.some(c => /send/i.test(c.args?.semantic_hint || ''));
+    const clickedSend = clickedActions.some(c =>
+      /send/i.test(c.args?.semantic_hint || '') || /\bsend\b/i.test(c.observation || '')
+    ) || history.some(h => h.toolName === 'press_key' && /enter/i.test(h.args?.key || '') && /send/i.test(h.observation || ''));
 
     if (!visitedEmail) {
       return {
         outcome: VERIFICATION_OUTCOMES.INCOMPLETE_RECOVERABLE,
         verified: false,
-        reason: 'Target email service (mail.google.com) was never visited.',
+        reason: 'Target email service (e.g. mail.google.com) was never visited.',
         evidence: `Current URL: ${currentUrl}`
       };
     }
@@ -147,13 +153,26 @@ export async function verifierNode(state, options = {}) {
     step: state.stepCount
   });
 
+  // The model gave up explicitly (login wall, missing info): report its reason, don't retry
+  if (state.latestObservation?.isFinished && state.latestObservation?.success === false) {
+    const reason = state.latestObservation.summary || 'Agent reported the task could not be completed.';
+    events?.emit?.('THINKING', { phase: 'verify', text: `Agent stopped: ${reason}`, step: state.stepCount });
+    return {
+      verificationResult: {
+        outcome: VERIFICATION_OUTCOMES.FAILED,
+        verified: false,
+        reason,
+        evidence: `Current page: ${state.browserSession?.url || ''}`
+      },
+      status: 'FAILED'
+    };
+  }
+
   const result = verifyTaskOutcome({
     task: state.sanitizedTask || state.originalTask,
     plan: state.plan,
     browserSession: state.browserSession,
-    actionHistory: state.messages
-      ?.filter(m => m._getType && m._getType() === 'tool')
-      ?.map(m => ({ toolName: m.name, ok: !m.content?.startsWith('ERROR') })) || [],
+    actionHistory: extractActionHistory(state.messages || []),
     latestObservation: state.latestObservation
   });
 
@@ -172,10 +191,20 @@ export async function verifierNode(state, options = {}) {
   }
 
   const failureErr = !result.verified ? new VerificationFailureError(result.reason, { criteria: [result.evidence] }) : null;
+  const recoverable = !result.verified && result.outcome === VERIFICATION_OUTCOMES.INCOMPLETE_RECOVERABLE;
 
-  return {
+  const update = {
     verificationResult: result,
     error: failureErr ? formatError(failureErr) : null,
-    status: result.verified ? 'VERIFIED' : (result.outcome === VERIFICATION_OUTCOMES.INCOMPLETE_RECOVERABLE ? 'RECOVERABLE' : 'FAILED')
+    status: result.verified ? 'VERIFIED' : (recoverable ? 'RECOVERABLE' : 'FAILED')
   };
+
+  // Tell the model WHY its completion claim was rejected, otherwise it just calls finish_task again
+  if (recoverable) {
+    update.latestObservation = null;
+    update.messages = [new HumanMessage(
+      `Your finish_task was rejected by verification: ${result.reason} The task is NOT complete yet. Continue from the current page and finish only after this is done.`
+    )];
+  }
+  return update;
 }

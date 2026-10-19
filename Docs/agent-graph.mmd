@@ -3,29 +3,46 @@ graph TD;
 	__start__([<p>__start__</p>]):::first
 	intake(intake)
 	privacy(privacy)
+	jev_input_guard(jev_input_guard)
 	planner(planner)
+	plan_gate(plan_gate)
 	policy(policy)
 	browser_agent(browser_agent)
+	tool_approval(tool_approval)
 	verification(verification)
 	recovery(recovery)
+	jev_output_guard(jev_output_guard)
 	finalize(finalize)
 	__end__([<p>__end__</p>]):::last
 	__start__ --> intake;
-	browser_agent --> verification;
 	finalize --> __end__;
-	privacy --> planner;
+	jev_output_guard --> finalize;
+	privacy --> jev_input_guard;
 	intake -.-> privacy;
 	intake -.-> finalize;
-	planner -.-> policy;
+	jev_input_guard -.-> planner;
+	jev_input_guard -.-> finalize;
+	planner -.-> plan_gate;
 	planner -.-> finalize;
+	plan_gate -.-> policy;
+	plan_gate -.-> finalize;
 	policy -.-> browser_agent;
 	policy -.-> finalize;
-	verification -.-> finalize;
+	browser_agent -.-> tool_approval;
+	browser_agent -.-> verification;
+	browser_agent -.-> recovery;
+	browser_agent -.-> finalize;
+	tool_approval -.-> verification;
+	tool_approval -.-> recovery;
+	tool_approval -.-> browser_agent;
+	tool_approval -.-> finalize;
+	verification -.-> jev_output_guard;
 	verification -.-> recovery;
-	verification -.-> browser_agent;
 	recovery -.-> finalize;
 	recovery -.-> planner;
-	recovery -.-> policy;
+	recovery -.-> browser_agent;
+	browser_agent -.-> browser_agent;
+	tool_approval -.-> tool_approval;
 	classDef default fill:#f2f0ff,line-height:1.2;
 	classDef first fill-opacity:0;
 	classDef last fill:#bfb6fc;

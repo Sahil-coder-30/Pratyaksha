@@ -74,7 +74,9 @@ export class ChromeStorageSaver extends MemorySaver {
     this.storageKey = options.storageKey || 'pratyaksha_checkpoints';
     this.isHydrated = false;
     this.asyncFlush = options.asyncFlush !== undefined ? options.asyncFlush : true;
+    this.flushDebounceMs = options.flushDebounceMs ?? 1500;
     this._flushPromise = null;
+    this._flushTimer = null;
   }
 
   /**
@@ -121,6 +123,10 @@ export class ChromeStorageSaver extends MemorySaver {
    */
   async flush() {
     if (!this.persistentStorage) return;
+    if (this._flushTimer) {
+      clearTimeout(this._flushTimer);
+      this._flushTimer = null;
+    }
 
     // Prune checkpoints to keep only the 10 most recent per thread to prevent unbounded payload growth
     if (this.storage && typeof this.storage === 'object') {
@@ -160,16 +166,39 @@ export class ChromeStorageSaver extends MemorySaver {
 
   /**
    * Non-blocking background flush trigger.
+   * Throttled: LangGraph writes a checkpoint after every node, and serializing the whole
+   * store to chrome.storage on each write was a major per-step cost. The first write
+   * flushes at once; a burst within `flushDebounceMs` collapses into one trailing write.
+   * runner.flush() at the end of a run still persists immediately.
    */
   flushAsync() {
     if (!this.persistentStorage) return;
-    if (this._flushPromise) return this._flushPromise;
-    this._flushPromise = this.flush()
-      .catch(() => {})
-      .finally(() => {
-        this._flushPromise = null;
-      });
-    return this._flushPromise;
+    if (this._flushTimer) return;
+
+    const run = () => {
+      this._lastFlushAt = Date.now();
+      this._flushPromise = this.flush()
+        .catch(() => {})
+        .finally(() => {
+          this._flushPromise = null;
+        });
+    };
+
+    const elapsed = Date.now() - (this._lastFlushAt || 0);
+    if (!this._flushPromise && elapsed >= this.flushDebounceMs) {
+      run();
+      return;
+    }
+
+    this._flushTimer = setTimeout(() => {
+      this._flushTimer = null;
+      if (this._flushPromise) {
+        this._flushPromise.finally(() => this.flushAsync());
+        return;
+      }
+      run();
+    }, Math.max(50, this.flushDebounceMs - elapsed));
+    this._flushTimer?.unref?.();
   }
 
   /**

@@ -16,8 +16,8 @@ import {
 import { TOOL_NAMES, RISK_TIERS, TOOL_CATEGORIES } from '../src/shared/constants.js';
 
 test('Tool Registry - Integrity & Completeness', (t) => {
-  assert.equal(BROWSER_TOOL_SPECS.length, 19, 'Must have exactly 19 authoritative tools');
-  assert.equal(Object.keys(TOOL_ZOD_SCHEMAS).length, 19, 'All 19 tools must have a Zod schema');
+  assert.equal(BROWSER_TOOL_SPECS.length, 21, 'Must have exactly 21 authoritative tools');
+  assert.equal(Object.keys(TOOL_ZOD_SCHEMAS).length, 21, 'All 21 tools must have a Zod schema');
 
   for (const spec of BROWSER_TOOL_SPECS) {
     assert.ok(spec.name, 'Tool must have a name');
@@ -111,12 +111,12 @@ test('Schema Validation - Rejection of Invalid Arguments', () => {
 
 test('Schema Converters - Gemini & OpenAI Tool Declarations', () => {
   const geminiDecls = getGeminiToolDeclarations();
-  assert.equal(geminiDecls.length, 19);
+  assert.equal(geminiDecls.length, 21);
   assert.ok(geminiDecls[0].name);
   assert.ok(geminiDecls[0].parameters.type === 'OBJECT');
 
   const openAiDecls = getOpenAiToolDeclarations();
-  assert.equal(openAiDecls.length, 19);
+  assert.equal(openAiDecls.length, 21);
   assert.equal(openAiDecls[0].type, 'function');
   assert.ok(openAiDecls[0].function.name);
   assert.equal(openAiDecls[0].function.parameters.type, 'object');

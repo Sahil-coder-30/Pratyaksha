@@ -17,15 +17,17 @@ import { TOOL_NAMES } from '../shared/constants.js';
  * @param {Function} getSessionContext Function returning { activeTab, vault, signal, chromeApi, onToolResult }
  * @param {Object} [options]
  * @param {boolean} [options.includeFinishTask=true] Whether to expose finish_task to the model
+ * @param {Array<string>} [options.exclude=[]] Tool names to hide from the model
  * @returns {Array<Object>} Array of LangChain StructuredTools
  */
 export function createLangChainBrowserTools(getSessionContext, options = {}) {
   const includeFinish = options.includeFinishTask !== false;
+  const excluded = new Set(options.exclude || []);
 
   const tools = [];
 
   for (const spec of BROWSER_TOOL_SPECS) {
-    if (spec.name === TOOL_NAMES.FINISH_TASK && !includeFinish) {
+    if ((spec.name === TOOL_NAMES.FINISH_TASK && !includeFinish) || excluded.has(spec.name)) {
       continue;
     }
 

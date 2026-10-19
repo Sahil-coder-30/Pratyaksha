@@ -19,8 +19,8 @@
 
     if (type === 'GET_PAGE_CONTEXT') {
       try {
-        const elements = window.PratyakshaDOM ? window.PratyakshaDOM.scanInteractiveElements() : [];
-        sendResponse({ url: window.location.href, title: document.title, elements });
+        const snapshot = window.PratyakshaDOM ? window.PratyakshaDOM.scanPage() : { elements: [], page: null };
+        sendResponse({ url: window.location.href, title: document.title, elements: snapshot.elements, page: snapshot.page });
       } catch (err) {
         sendResponse({ url: window.location.href, title: document.title, elements: [], error: err.message });
       }
@@ -71,16 +71,19 @@
 
     const {
       action, target_id, selector, semantic_hint,
-      value, clear_first, deltaY, durationMs, maxChars,
+      value, clear_first, press_enter, deltaY, durationMs, maxChars, key, option,
       // New tool payloads
       filter, max, text, caseSensitive, fields, rootSelector,
       code, textContains, timeoutMs
     } = payload;
 
-    // Resolve a target element from id / selector / semantic hint
+    // Resolve a target element from id / selector / semantic hint.
+    // The object form lets the DOM layer try the ID first and fall back to the hint,
+    // without ever turning a stale numeric ID into a fuzzy text match.
     const parsedId = Number(target_id);
     const numId = (target_id !== undefined && target_id !== null && Number.isFinite(parsedId) && parsedId > 0) ? parsedId : null;
-    const target = numId !== null ? numId : (selector || semantic_hint || (target_id != null ? String(target_id) : null));
+    const hasTarget = numId !== null || !!selector || !!semantic_hint;
+    const target = hasTarget ? { target_id: numId, selector, semantic_hint } : null;
 
     switch (action) {
 
@@ -91,7 +94,7 @@
 
       case 'TYPE':
         if (target === null) throw new Error('TYPE requires target_id or semantic_hint');
-        return await window.PratyakshaDOM.type(target, value || '', { clearFirst: !!clear_first });
+        return await window.PratyakshaDOM.type(target, value || '', { clearFirst: clear_first !== false, pressEnter: !!press_enter });
 
       case 'PRESS_ENTER':
         if (target === null) throw new Error('PRESS_ENTER requires target_id or semantic_hint');
@@ -100,8 +103,16 @@
       case 'PRESS_ESCAPE':
         return await window.PratyakshaDOM.pressEscape();
 
+      case 'PRESS_KEY':
+        if (!key) throw new Error('PRESS_KEY requires a key name');
+        return await window.PratyakshaDOM.pressKey(key, target);
+
+      case 'SELECT_OPTION':
+        if (target === null) throw new Error('SELECT_OPTION requires target_id or semantic_hint');
+        return await window.PratyakshaDOM.selectOption(target, option);
+
       case 'SCROLL':
-        return await window.PratyakshaDOM.scroll(deltaY || 500);
+        return await window.PratyakshaDOM.scroll(deltaY || 500, target);
 
       case 'SCROLL_INTO_VIEW':
         return await window.PratyakshaDOM.scrollIntoView(target);
@@ -153,8 +164,7 @@
         return window.PratyakshaDOM.extractStructured(fields || [], rootSelector || null);
 
       case 'INSPECT_DOM': {
-        const inspectTarget = numId !== null ? numId : (selector || semantic_hint || null);
-        return window.PratyakshaDOM.inspectElement(inspectTarget);
+        return window.PratyakshaDOM.inspectElement(target);
       }
 
       case 'EXECUTE_JS': {

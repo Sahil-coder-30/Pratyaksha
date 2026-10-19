@@ -2,7 +2,7 @@
  * PRATYAKSHA Authoritative Tool Registry & Schema System
  * Sovereign Privacy-First Browser Agent
  *
- * Single Source of Truth for all 19 browser tools.
+ * Single Source of Truth for all 21 browser tools.
  * Exposes Zod schemas, Gemini function declarations, OpenAI tool declarations,
  * and standard internal tool result builders.
  */
@@ -11,7 +11,7 @@ import { z } from 'zod';
 import { TOOL_NAMES, TOOL_CATEGORIES, RISK_TIERS } from './constants.js';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 1. AUTHORITATIVE ZOD SCHEMAS FOR ALL 19 BROWSER TOOLS
+// 1. AUTHORITATIVE ZOD SCHEMAS FOR ALL 21 BROWSER TOOLS
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const TOOL_ZOD_SCHEMAS = {
@@ -72,10 +72,23 @@ export const TOOL_ZOD_SCHEMAS = {
     target_id: z.union([z.number().int(), z.string().regex(/^\d+$/)]).optional().describe('Numeric [ID] from the DOM elements table.'),
     semantic_hint: z.string().optional().describe('Fallback: describe the field.'),
     text: z.string().describe('The exact text to type.'),
-    clear_first: z.boolean().default(false).optional().describe('Clear existing content before typing (default false).'),
+    clear_first: z.boolean().default(true).optional().describe('Replace existing content (default true). Set false to append.'),
     press_enter: z.boolean().default(false).optional().describe('Press Enter after typing (for search bars and forms).')
   }).refine(data => data.target_id !== undefined || !!data.semantic_hint, {
     message: 'type_into_element requires either target_id or semantic_hint'
+  }),
+
+  [TOOL_NAMES.SELECT_OPTION]: z.object({
+    target_id: z.union([z.number().int(), z.string().regex(/^\d+$/)]).optional().describe('Numeric [ID] of the dropdown from the element list.'),
+    semantic_hint: z.string().optional().describe('Fallback: describe the dropdown.'),
+    option: z.string().min(1, 'Option text is required').describe('Visible text (or value) of the option to choose.')
+  }).refine(data => data.target_id !== undefined || !!data.semantic_hint, {
+    message: 'select_option requires either target_id or semantic_hint'
+  }),
+
+  [TOOL_NAMES.PRESS_KEY]: z.object({
+    key: z.enum(['Enter', 'Escape', 'Tab', 'Backspace', 'Delete', 'ArrowDown', 'ArrowUp', 'ArrowLeft', 'ArrowRight', 'Space', 'PageDown', 'PageUp', 'Home', 'End']).describe('Key to press.'),
+    target_id: z.union([z.number().int(), z.string().regex(/^\d+$/)]).optional().describe('Optional element [ID] to press the key on (default: focused element).')
   }),
 
   [TOOL_NAMES.EXECUTE_JS]: z.object({
@@ -93,7 +106,8 @@ export const TOOL_ZOD_SCHEMAS = {
 
   [TOOL_NAMES.SCROLL_PAGE]: z.object({
     direction: z.enum(['down', 'up', 'top', 'bottom']).describe('Scroll direction.'),
-    pixels: z.number().min(1).max(5000).default(600).optional().describe('Pixels to scroll (for "down"/"up"). Default 600.')
+    pixels: z.number().min(1).max(5000).default(600).optional().describe('Pixels to scroll (for "down"/"up"). Default 600.'),
+    target_id: z.union([z.number().int(), z.string().regex(/^\d+$/)]).optional().describe('Optional [ID] of a scrollable panel to scroll instead of the page.')
   }),
 
   [TOOL_NAMES.WAIT_FOR]: z.object({
@@ -116,7 +130,7 @@ export const TOOL_ZOD_SCHEMAS = {
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 2. AUTHORITATIVE TOOL SPECIFICATIONS REGISTRY (19 TOOLS)
+// 2. AUTHORITATIVE TOOL SPECIFICATIONS REGISTRY (21 TOOLS)
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const BROWSER_TOOL_SPECS = [
@@ -179,7 +193,7 @@ export const BROWSER_TOOL_SPECS = [
   },
   {
     name: TOOL_NAMES.READ_PAGE,
-    description: 'Reads and extracts the visible text content of the current page. Optionally focus on a specific CSS region.',
+    description: 'Returns the main text content of the whole page (not only the viewport). Use it to read articles, results or answers before reporting them. Optionally scope with a CSS selector.',
     category: TOOL_CATEGORIES.READING,
     defaultRisk: RISK_TIERS.READ_ONLY,
     parameters: {
@@ -254,7 +268,7 @@ export const BROWSER_TOOL_SPECS = [
   },
   {
     name: TOOL_NAMES.CLICK_ELEMENT,
-    description: 'Clicks an interactive element — buttons, links, tabs, checkboxes. Use target_id from the DOM table for accuracy.',
+    description: 'Clicks a button, link, tab, checkbox, menu item or other control. Pass target_id = an [ID] from the CURRENT element list. Not for <select> dropdowns (use select_option).',
     category: TOOL_CATEGORIES.INTERACTION,
     defaultRisk: RISK_TIERS.REVERSIBLE,
     parameters: {
@@ -268,7 +282,7 @@ export const BROWSER_TOOL_SPECS = [
   },
   {
     name: TOOL_NAMES.TYPE_INTO_ELEMENT,
-    description: 'Types text into any input, search bar, textarea, or rich-text editor. Use target_id from the DOM table.',
+    description: 'Types text into an input, search box, textarea or rich-text editor (replaces existing text by default). Pass target_id from the CURRENT element list. Set press_enter=true to submit a search box.',
     category: TOOL_CATEGORIES.INTERACTION,
     defaultRisk: RISK_TIERS.SENSITIVE,
     parameters: {
@@ -277,10 +291,39 @@ export const BROWSER_TOOL_SPECS = [
         target_id: { type: 'NUMBER', description: 'Numeric [ID] from the DOM elements table.' },
         semantic_hint: { type: 'STRING', description: 'Fallback: describe the field.' },
         text: { type: 'STRING', description: 'The exact text to type.' },
-        clear_first: { type: 'BOOLEAN', description: 'Clear existing content before typing (default false).' },
+        clear_first: { type: 'BOOLEAN', description: 'Replace existing content (default true). Set false to append.' },
         press_enter: { type: 'BOOLEAN', description: 'Press Enter after typing.' }
       },
       required: ['text']
+    }
+  },
+  {
+    name: TOOL_NAMES.SELECT_OPTION,
+    description: 'Chooses an option in a dropdown (native <select> or custom listbox) by its visible text. Use instead of clicking dropdown options one by one.',
+    category: TOOL_CATEGORIES.INTERACTION,
+    defaultRisk: RISK_TIERS.REVERSIBLE,
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        target_id: { type: 'NUMBER', description: 'Numeric [ID] of the dropdown from the element list.' },
+        semantic_hint: { type: 'STRING', description: 'Fallback: describe the dropdown.' },
+        option: { type: 'STRING', description: 'Visible text (or value) of the option to choose.' }
+      },
+      required: ['option']
+    }
+  },
+  {
+    name: TOOL_NAMES.PRESS_KEY,
+    description: 'Presses a keyboard key: Escape closes popups/menus, Enter submits, Tab/Arrow keys move through suggestions.',
+    category: TOOL_CATEGORIES.INTERACTION,
+    defaultRisk: RISK_TIERS.REVERSIBLE,
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        key: { type: 'STRING', enum: ['Enter', 'Escape', 'Tab', 'Backspace', 'Delete', 'ArrowDown', 'ArrowUp', 'ArrowLeft', 'ArrowRight', 'Space', 'PageDown', 'PageUp', 'Home', 'End'], description: 'Key to press.' },
+        target_id: { type: 'NUMBER', description: 'Optional element [ID] to press the key on (default: focused element).' }
+      },
+      required: ['key']
     }
   },
   {
@@ -328,7 +371,8 @@ export const BROWSER_TOOL_SPECS = [
       type: 'OBJECT',
       properties: {
         direction: { type: 'STRING', enum: ['down', 'up', 'top', 'bottom'], description: 'Direction to scroll.' },
-        pixels: { type: 'NUMBER', description: 'Pixels to scroll (for "down"/"up"). Default 600.' }
+        pixels: { type: 'NUMBER', description: 'Pixels to scroll (for "down"/"up"). Default 600.' },
+        target_id: { type: 'NUMBER', description: 'Optional [ID] of a scrollable panel to scroll instead of the page.' }
       },
       required: ['direction']
     }
@@ -559,7 +603,13 @@ export function normalizeToolInvocation(toolName = '', rawArgs = {}) {
     finish: TOOL_NAMES.FINISH_TASK,
     complete: TOOL_NAMES.FINISH_TASK,
     done: TOOL_NAMES.FINISH_TASK,
-    finishtask: TOOL_NAMES.FINISH_TASK
+    finishtask: TOOL_NAMES.FINISH_TASK,
+    select: TOOL_NAMES.SELECT_OPTION,
+    select_dropdown_option: TOOL_NAMES.SELECT_OPTION,
+    selectoption: TOOL_NAMES.SELECT_OPTION,
+    key: TOOL_NAMES.PRESS_KEY,
+    send_keys: TOOL_NAMES.PRESS_KEY,
+    presskey: TOOL_NAMES.PRESS_KEY
   };
 
   const lower = String(toolName || '').toLowerCase().trim();
@@ -599,6 +649,12 @@ export function normalizeToolInvocation(toolName = '', rawArgs = {}) {
     if (args.text === undefined && args.value !== undefined) {
       args.text = String(args.value);
     }
+  } else if (canonicalName === TOOL_NAMES.SELECT_OPTION) {
+    if (args.target_id === undefined) {
+      const rawTarget = args.id ?? args.target ?? args.element_id ?? args.index;
+      if (rawTarget !== undefined && Number.isFinite(Number(rawTarget))) args.target_id = Number(rawTarget);
+    }
+    if (args.option === undefined) args.option = args.text ?? args.value ?? args.label;
   } else if (canonicalName === TOOL_NAMES.OPEN_URL) {
     if (!args.url && args.link) args.url = args.link;
     if (!args.url && args.destination) args.url = args.destination;

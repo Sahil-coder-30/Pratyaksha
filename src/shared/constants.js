@@ -33,6 +33,8 @@ export const TOOL_NAMES = Object.freeze({
   EXTRACT_STRUCTURED: 'extract_structured',
   CLICK_ELEMENT: 'click_element',
   TYPE_INTO_ELEMENT: 'type_into_element',
+  SELECT_OPTION: 'select_option',
+  PRESS_KEY: 'press_key',
   EXECUTE_JS: 'execute_js',
   INSPECT_DOM: 'inspect_dom',
   SCREENSHOT: 'screenshot',
