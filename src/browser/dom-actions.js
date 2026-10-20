@@ -203,6 +203,10 @@ window.PratyakshaDOM = window.PratyakshaDOM || (function() {
     '[role="treeitem"]',
     '[role="slider"]',
     '[role="spinbutton"]',
+    '[role="row"]',
+    '[role="listitem"]',
+    '[data-testid*="cell"]',
+    '[data-testid*="chat"]',
     '[onclick]',
     '[jsaction*="click"]',
     '[aria-haspopup="true"]',
@@ -214,12 +218,23 @@ window.PratyakshaDOM = window.PratyakshaDOM || (function() {
   // Controls that swallow their descendants (a <span> inside a <button> is noise)
   const LEAF_CONTROL_SELECTOR = 'button, a[href], [role="button"], [role="link"], [role="menuitem"], [role="option"], [role="tab"], summary';
   const EDITABLE_SELECTOR = 'input:not([type="hidden"]), textarea, select, [contenteditable="true"], [contenteditable=""], [contenteditable="plaintext-only"], [role="textbox"], [role="searchbox"], [role="combobox"]';
+  const CODE_EDITOR_SELECTOR = '.monaco-editor, .cm-editor, .cm-content, .CodeMirror, .ace_editor, [data-mode-id], [class*="monaco-editor"], [data-track-load*="code-editor"]';
   const DIALOG_SELECTOR = '[role="dialog"], [role="alertdialog"], [aria-modal="true"], dialog[open]';
 
   const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
+  function isCodeEditor(el) {
+    if (!el) return false;
+    return !!(
+      el.matches?.(CODE_EDITOR_SELECTOR) ||
+      el.closest?.(CODE_EDITOR_SELECTOR) ||
+      el.querySelector?.(CODE_EDITOR_SELECTOR)
+    );
+  }
+
   function isEditable(el) {
     if (!el) return false;
+    if (isCodeEditor(el)) return true;
     if (el.isContentEditable) return true;
     const tag = el.tagName;
     if (tag === 'TEXTAREA') return !el.readOnly;
@@ -564,6 +579,347 @@ window.PratyakshaDOM = window.PratyakshaDOM || (function() {
     });
   }
 
+  // ───────────────────────────────────────────────────────────────────────────
+  // Continuous Session DOM & Message Stream Tracker
+  // ───────────────────────────────────────────────────────────────────────────
+  // ───────────────────────────────────────────────────────────────────────────
+  // Continuous Session DOM & Message Stream Tracker
+  // ───────────────────────────────────────────────────────────────────────────
+  const sessionTracker = {
+    initialized: false,
+    sessionStartTime: 0,
+    isRunning: false,
+    lastOutgoingTime: 0,
+    lastOutgoingText: '',
+    lastAnsweredText: '',
+    initialMessageNodes: new Set(),
+    capturedIncomingMessages: [],
+    recentMutationCount: 0,
+    observer: null
+  };
+
+  function queryMessageContainers() {
+    const selectors = [
+      '[role="listitem"]',
+      '[data-message-id]',
+      '.adn.ads',
+      '.ii.gt',
+      '.h7',
+      '[role="article"]',
+      '.message-in',
+      '[data-pre-plain-text]',
+      '.chat-message',
+      '[data-testid*="msg"]',
+      '.email-body',
+      '.mail-message',
+      'div[aria-label*="Message" i]'
+    ];
+    try {
+      return Array.from(document.querySelectorAll(selectors.join(', ')));
+    } catch (_) {
+      return [];
+    }
+  }
+
+  function getVisibleTextSnapshot() {
+    try {
+      return (document.body?.innerText || '').trim();
+    } catch (_) {
+      return '';
+    }
+  }
+
+  function getLatestIncomingMessageRaw() {
+    if (/web\.whatsapp\.com/i.test(window.location.href)) {
+      const inNodes = Array.from(document.querySelectorAll('div.message-in'));
+      if (inNodes.length > 0) {
+        for (let i = inNodes.length - 1; i >= 0; i--) {
+          const node = inNodes[i];
+          const pre = node.querySelector('[data-pre-plain-text]')?.getAttribute('data-pre-plain-text') ||
+                      node.getAttribute('data-pre-plain-text') || '';
+          const textEl = node.querySelector('span.selectable-text, span.copyable-text, span[data-lexical-text]') || node;
+          const text = (textEl.innerText || textEl.textContent || '').trim();
+          if (text) {
+            const sender = pre.replace(/^\[.*?\]\s*/, '').replace(/:\s*$/, '').trim() || 'User';
+            return { sender, text, node, isWhatsApp: true };
+          }
+        }
+      }
+    }
+    const containers = queryMessageContainers();
+    if (containers.length > 0) {
+      const last = containers[containers.length - 1];
+      const text = (last.innerText || last.textContent || '').trim();
+      if (text) return { sender: 'User', text, node: last };
+    }
+    return null;
+  }
+
+  function startSessionTracker() {
+    sessionTracker.sessionStartTime = Date.now();
+    sessionTracker.isRunning = true;
+    sessionTracker.lastOutgoingTime = 0;
+    sessionTracker.lastOutgoingText = '';
+    sessionTracker.recentMutationCount = 0;
+    sessionTracker.capturedIncomingMessages = [];
+
+    // Snapshot existing messages right now as baseline
+    const existing = queryMessageContainers();
+    sessionTracker.initialMessageNodes = new Set(existing);
+
+    // Record the current latest message in the chat as baseline so old messages are NOT re-answered
+    const baseline = getLatestIncomingMessageRaw();
+    if (baseline && baseline.text) {
+      sessionTracker.lastAnsweredText = baseline.text;
+    }
+
+    ensureSessionTracker();
+  }
+
+  function extractAndCaptureMessage(node) {
+    if (!node) return;
+    try {
+      const msgNode = (node.nodeType === Node.ELEMENT_NODE)
+        ? (node.closest?.('div.message-in, [role="listitem"], .adn.ads') ||
+           (node.matches?.('div.message-in, [role="listitem"], .adn.ads') ? node : null) ||
+           node.querySelector?.('div.message-in'))
+        : (node.parentElement?.closest?.('div.message-in, [role="listitem"], .adn.ads') || null);
+
+      if (!msgNode) return;
+
+      // Check if this node was present before the agent session started
+      if (sessionTracker.initialMessageNodes.has(msgNode)) return;
+
+      const pre = msgNode.querySelector?.('[data-pre-plain-text]')?.getAttribute('data-pre-plain-text') ||
+                  msgNode.getAttribute?.('data-pre-plain-text') || '';
+      const textEl = msgNode.querySelector?.('span.selectable-text, span.copyable-text, span[data-lexical-text]') || msgNode;
+      const text = (textEl.innerText || textEl.textContent || '').trim();
+      if (!text) return;
+
+      // Filter out our own outgoing text
+      if (sessionTracker.lastOutgoingText &&
+          (text.toLowerCase() === sessionTracker.lastOutgoingText ||
+           sessionTracker.lastOutgoingText.includes(text.toLowerCase()))) {
+        return;
+      }
+
+      // Check if already captured
+      const alreadyCaptured = sessionTracker.capturedIncomingMessages.some(m => m.node === msgNode || m.text === text);
+      if (!alreadyCaptured) {
+        const sender = pre.replace(/^\[.*?\]\s*/, '').replace(/:\s*$/, '').trim() || 'User';
+        sessionTracker.capturedIncomingMessages.push({
+          sender,
+          text,
+          timestamp: Date.now(),
+          node: msgNode
+        });
+      }
+    } catch (_) {}
+  }
+
+  function ensureSessionTracker() {
+    if (sessionTracker.observer) return;
+    sessionTracker.initialized = true;
+    if (!sessionTracker.sessionStartTime) sessionTracker.sessionStartTime = Date.now();
+
+    try {
+      if (typeof MutationObserver !== 'undefined' && (document.body || document.documentElement)) {
+        sessionTracker.observer = new MutationObserver((mutations) => {
+          sessionTracker.recentMutationCount += mutations.length;
+          for (const m of mutations) {
+            for (const node of m.addedNodes) {
+              extractAndCaptureMessage(node);
+            }
+            if (m.type === 'characterData' && m.target) {
+              extractAndCaptureMessage(m.target);
+            }
+          }
+        });
+
+        sessionTracker.observer.observe(document.documentElement || document.body, {
+          childList: true,
+          subtree: true,
+          characterData: true
+        });
+      }
+    } catch (_) {}
+  }
+
+  try {
+    if (typeof document !== 'undefined') {
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', ensureSessionTracker);
+      } else {
+        ensureSessionTracker();
+      }
+    }
+  } catch (_) {}
+
+  function getLatestIncomingMessage() {
+    ensureSessionTracker();
+
+    // 1. Observer captured messages (instant real-time stream!)
+    if (sessionTracker.capturedIncomingMessages.length > 0) {
+      const last = sessionTracker.capturedIncomingMessages[sessionTracker.capturedIncomingMessages.length - 1];
+      return { sender: last.sender, text: last.text, node: last.node };
+    }
+
+    // 2. WhatsApp Web specific incoming message detection:
+    if (/web\.whatsapp\.com/i.test(window.location.href)) {
+      const inNodes = Array.from(document.querySelectorAll('div.message-in'));
+      if (inNodes.length > 0) {
+        for (let i = inNodes.length - 1; i >= 0; i--) {
+          const node = inNodes[i];
+          const pre = node.querySelector('[data-pre-plain-text]')?.getAttribute('data-pre-plain-text') ||
+                      node.getAttribute('data-pre-plain-text') || '';
+          const textEl = node.querySelector('span.selectable-text, span.copyable-text, span[data-lexical-text]') || node;
+          const text = (textEl.innerText || textEl.textContent || '').trim();
+          if (text) {
+            const sender = pre.replace(/^\[.*?\]\s*/, '').replace(/:\s*$/, '').trim() || 'User';
+            return { sender, text, node, isWhatsApp: true };
+          }
+        }
+      }
+    }
+
+    // 3. Generic message containers:
+    const containers = queryMessageContainers();
+    if (containers.length > 0) {
+      const newOnes = containers.filter(el => !sessionTracker.initialMessageNodes.has(el));
+      if (newOnes.length > 0) {
+        const last = newOnes[newOnes.length - 1];
+        const text = (last.innerText || last.textContent || '').trim();
+        if (text) return { sender: 'User', text, node: last };
+      }
+    }
+
+    return null;
+  }
+
+  function recordOutgoingMessage(text) {
+    ensureSessionTracker();
+    sessionTracker.lastOutgoingTime = Date.now();
+    sessionTracker.lastOutgoingText = String(text || '').trim().toLowerCase();
+
+    // Mark current incoming messages up to this point as answered
+    const currentLatest = getLatestIncomingMessageRaw();
+    if (currentLatest) {
+      sessionTracker.lastAnsweredText = currentLatest.text;
+    }
+    // Filter out messages that arrived prior to sending our message
+    sessionTracker.capturedIncomingMessages = sessionTracker.capturedIncomingMessages.filter(m =>
+      m.text !== sessionTracker.lastAnsweredText &&
+      (!sessionTracker.lastOutgoingText || !m.text.toLowerCase().includes(sessionTracker.lastOutgoingText))
+    );
+  }
+
+  function pollResponseCondition({
+    trackerId = 'default',
+    selector = null,
+    textContains = null,
+    waitForReply = false,
+    trackDomChanges = false,
+    expectedSender = null
+  } = {}) {
+    ensureSessionTracker();
+
+    // 1. Selector check
+    if (selector) {
+      const el = document.querySelector(selector);
+      if (el) {
+        try { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch (_) {}
+        return { found: true, detail: `Selector "${selector}" appeared in DOM` };
+      }
+    }
+
+    // 2. Text check
+    const currentText = getVisibleTextSnapshot();
+    if (textContains) {
+      if (currentText.toLowerCase().includes(textContains.toLowerCase())) {
+        return { found: true, detail: `Expected text "${textContains}" appeared on page` };
+      }
+    }
+
+    // 3. Wait for reply / incoming response - check continuous session stream instantly!
+    if (waitForReply) {
+      // Check captured incoming messages from continuous observer first (zero latency)
+      if (sessionTracker.capturedIncomingMessages.length > 0) {
+        const unhandled = sessionTracker.capturedIncomingMessages.find(m =>
+          m.text !== sessionTracker.lastAnsweredText &&
+          (!sessionTracker.lastOutgoingText || m.text.toLowerCase() !== sessionTracker.lastOutgoingText)
+        );
+        if (unhandled) {
+          sessionTracker.lastAnsweredText = unhandled.text;
+          return {
+            found: true,
+            detail: `Incoming message from ${unhandled.sender}: "${unhandled.text.slice(0, 100)}"`,
+            newContent: unhandled.text,
+            sender: unhandled.sender
+          };
+        }
+      }
+
+      // Check live DOM snapshot
+      const latest = getLatestIncomingMessage();
+      if (latest && latest.text) {
+        const isSelfEcho = sessionTracker.lastOutgoingText &&
+          (latest.text.toLowerCase() === sessionTracker.lastOutgoingText ||
+           sessionTracker.lastOutgoingText.includes(latest.text.toLowerCase()));
+
+        const isNewSinceLastAnswer = !sessionTracker.lastAnsweredText ||
+          latest.text !== sessionTracker.lastAnsweredText;
+
+        if (!isSelfEcho && isNewSinceLastAnswer) {
+          sessionTracker.lastAnsweredText = latest.text;
+          return {
+            found: true,
+            detail: `Incoming message from ${latest.sender}: "${latest.text.slice(0, 100)}"`,
+            newContent: latest.text,
+            sender: latest.sender
+          };
+        }
+      }
+
+      if (expectedSender && currentText.toLowerCase().includes(expectedSender.toLowerCase())) {
+        return {
+          found: true,
+          detail: `Incoming response from "${expectedSender}" detected in DOM`
+        };
+      }
+    }
+
+    // 4. Track DOM changes
+    if (trackDomChanges) {
+      if (sessionTracker.recentMutationCount > 0) {
+        const latest = getLatestIncomingMessage();
+        if (latest && latest.text && latest.text !== sessionTracker.lastAnsweredText) {
+          sessionTracker.lastAnsweredText = latest.text;
+          return {
+            found: true,
+            detail: `Tracked DOM changes: new content received from ${latest.sender} ("${latest.text.slice(0, 80)}")`,
+            newContent: latest.text,
+            sender: latest.sender
+          };
+        }
+      }
+    }
+
+    return { found: false, detail: 'Waiting for response/DOM mutations...' };
+  }
+
+  function clearAllTrackers() {
+    try {
+      if (sessionTracker.observer) {
+        try { sessionTracker.observer.disconnect(); } catch (_) {}
+        sessionTracker.observer = null;
+      }
+      sessionTracker.initialized = false;
+      sessionTracker.isRunning = false;
+      sessionTracker.capturedIncomingMessages = [];
+      sessionTracker.initialMessageNodes.clear();
+    } catch (_) {}
+  }
+
   function scrollIntoViewIfNeeded(el) {
     const rect = el.getBoundingClientRect();
     const fullyVisible = rect.top >= 0 && rect.left >= 0 &&
@@ -650,9 +1006,26 @@ window.PratyakshaDOM = window.PratyakshaDOM || (function() {
      * Full perception snapshot: interactive elements + compact page state.
      */
     scanPage() {
+      // Auto-recover if WhatsApp Web got stuck in voice recording mode
+      if (/web\.whatsapp\.com/i.test(window.location.href)) {
+        try {
+          const cancelVoice = document.querySelector('button span[data-icon="ptt-cancel"], [data-testid="ptt-cancel"], button[aria-label*="Cancel recording"], button[aria-label*="Discard"]')
+            ?.closest('button') || document.querySelector('button[aria-label*="Cancel recording"], button[aria-label*="Discard"]');
+          if (cancelVoice) cancelVoice.click();
+        } catch (_) {}
+      }
+
       const viewH = window.innerHeight || 800;
       const viewW = window.innerWidth || 1280;
       const matched = new Set(deepQueryAll(INTERACTIVE_SELECTOR));
+
+      // Discover Code Editors (Monaco on LeetCode/VSCode, CodeMirror, Ace)
+      const editorRoots = deepQueryAll(CODE_EDITOR_SELECTOR);
+      for (const ed of editorRoots) {
+        if (ed.parentElement?.closest(CODE_EDITOR_SELECTOR)) continue;
+        matched.add(ed);
+        ed.__pratyaksha_editor = true;
+      }
 
       // Cursor:pointer pass catches div/span "buttons" that SPAs use without roles
       const pointerPool = document.querySelectorAll('div, span, li, img, i, td, svg');
@@ -680,7 +1053,8 @@ window.PratyakshaDOM = window.PratyakshaDOM || (function() {
         if (!isVisible(el, rect, style)) continue;
         if (rect.bottom < -viewH || rect.top > viewH * 4) continue;
 
-        const editable = el.matches(EDITABLE_SELECTOR);
+        const isEditor = !!(el.__pratyaksha_editor || isCodeEditor(el));
+        const editable = el.matches(EDITABLE_SELECTOR) || isEditor;
         if (!editable) {
           const leafAncestor = el.parentElement?.closest(LEAF_CONTROL_SELECTOR);
           if (leafAncestor && matched.has(leafAncestor)) continue;
@@ -698,12 +1072,22 @@ window.PratyakshaDOM = window.PratyakshaDOM || (function() {
           continue;
         }
 
-        const label = extractElementLabel(el);
-        const tag = el.tagName.toLowerCase();
+        let editorType = '';
+        let editorLang = '';
+        if (isEditor) {
+          editorType = el.matches?.('.monaco-editor') || el.querySelector?.('.monaco-editor') ? 'monaco'
+            : (el.matches?.('.cm-editor') || el.querySelector?.('.cm-editor') ? 'codemirror'
+            : (el.matches?.('.CodeMirror') || el.querySelector?.('.CodeMirror') ? 'codemirror5'
+            : (el.matches?.('.ace_editor') || el.querySelector?.('.ace_editor') ? 'ace' : 'code')));
+          editorLang = el.getAttribute?.('data-mode-id') || el.querySelector?.('[data-mode-id]')?.getAttribute('data-mode-id') || '';
+        }
+
+        const label = isEditor ? (extractElementLabel(el) || 'Code Editor') : extractElementLabel(el);
+        const tag = isEditor ? 'editor' : el.tagName.toLowerCase();
         // Pointer-only elements without any label are untargetable noise
         if (!label && !editable && !['button', 'a', 'select', 'input'].includes(tag) && !el.getAttribute('role')) continue;
 
-        candidates.push({ el, rect, inViewport, label, tag, editable });
+        candidates.push({ el, rect, inViewport, label, tag, editable, isEditor, editorType, editorLang });
       }
 
       // A blocking modal covers the page: off-screen elements behind it are not actionable either
@@ -737,13 +1121,16 @@ window.PratyakshaDOM = window.PratyakshaDOM || (function() {
           id,
           tag: item.tag,
           role,
-          type: type || role || (el.isContentEditable ? 'contenteditable' : ''),
+          type: item.isEditor ? (item.editorType || 'editor') : (type || role || (el.isContentEditable ? 'contenteditable' : '')),
           label: item.label.replace(/\s+/g, ' ').slice(0, 80),
           text: (el.innerText || '').trim().replace(/\s+/g, ' ').slice(0, 60),
           selector: `[data-pratyaksha-id="${id}"]`,
           inViewport: item.inViewport,
           isNew: previousScanIds.size > 0 && !previousScanIds.has(id),
-          inDialog: !!(topDialog && topDialog.contains(el))
+          inDialog: !!(topDialog && topDialog.contains(el)),
+          isEditor: !!item.isEditor,
+          editorType: item.editorType || '',
+          language: item.editorLang || ''
         };
         if (item.tag === 'a') entry.href = shortHref(el);
         if (item.editable) {
@@ -854,6 +1241,17 @@ window.PratyakshaDOM = window.PratyakshaDOM || (function() {
         throw new Error(`${desc} is a dropdown <select>. Use select_option with the option text instead of clicking it.`);
       }
 
+      // Guard against accidentally clicking the microphone / voice note button in WhatsApp Web
+      if (/web\.whatsapp\.com/i.test(window.location.href)) {
+        const isMic = /(voice\s*message|record\s*voice|ptt|audio\s*note)/i.test(desc) ||
+                      /(voice\s*message|record\s*voice|ptt|audio\s*note)/i.test(el.getAttribute('aria-label') || '') ||
+                      /(voice\s*message|record\s*voice|ptt|audio\s*note)/i.test(el.getAttribute('title') || '') ||
+                      !!el.querySelector?.('span[data-icon="ptt"], span[data-icon="mic"]');
+        if (isMic) {
+          throw new Error('Click failed: Target is a WhatsApp Voice Message / Audio Recording button. Do NOT click the microphone. To send text, type into the message input field or click the Send button (with the send paper-plane icon).');
+        }
+      }
+
       scrollIntoViewIfNeeded(el);
       const rect = el.getBoundingClientRect();
       const x = Math.round(rect.left + rect.width / 2);
@@ -885,8 +1283,178 @@ window.PratyakshaDOM = window.PratyakshaDOM || (function() {
         setTimeout(() => { try { anchor.setAttribute('target', restoreTarget); } catch (_) {} }, 50);
       }
 
+      const isEmailSite = /mail\.google\.com|outlook\.|mail\.yahoo\.com|mail\.proton\.me|proton\.me\/mail|zoho\.com\/mail/i.test(window.location.href);
+      const isSendAction = isEmailSite && (
+        /(^|\b)(send|dispatch)\b/i.test(desc) ||
+        /(^|\b)(send|dispatch)\b/i.test(el.getAttribute('aria-label') || '') ||
+        /(^|\b)(send)\b/i.test(el.innerText || '')
+      );
+
+      if (isSendAction) {
+        // Wait for send network in-flight request and confirmation banner to settle
+        const maxWaitMs = 8000;
+        const startWait = Date.now();
+        while (Date.now() - startWait < maxWaitMs) {
+          const bodyText = (document.body?.innerText || '');
+          const isStillSending = /\b(sending|saving\s+draft)\b/i.test(bodyText) && !/\bmessage\s+sent\b/i.test(bodyText);
+          const hasSentConfirmation = /\b(message\s+sent|sent\b|undo\b)/i.test(bodyText);
+          if (hasSentConfirmation || !isStillSending) {
+            break;
+          }
+          await sleep(250);
+        }
+      }
+
       await waitForDomSettle(1500, 250);
-      return { clicked: desc, change: summarizeChange(before) };
+      const changeText = summarizeChange(before);
+      return {
+        clicked: desc,
+        change: isSendAction ? (changeText ? `${changeText}; email dispatched` : 'email dispatched') : changeText,
+        sendConfirmed: isSendAction
+      };
+    },
+
+    /**
+     * Types code cleanly into virtualized code editors (Monaco on LeetCode/VSCode, CodeMirror, Ace).
+     * Bypasses character-by-character auto-close bracket corruption and indentation skew.
+     */
+    async writeCode(target, code, options = {}) {
+      let el = requireElement(target, 'write_code_editor');
+      const editorRoot = el.closest?.(CODE_EDITOR_SELECTOR) ||
+                         el.querySelector?.(CODE_EDITOR_SELECTOR) ||
+                         el;
+
+      // Locate inputarea or editable target
+      let editableTarget = editorRoot.querySelector?.('textarea.inputarea, .cm-content[contenteditable="true"], .CodeMirror textarea, textarea.ace_text-input, textarea, [contenteditable="true"]');
+      if (!editableTarget) editableTarget = editorRoot;
+
+      scrollIntoViewIfNeeded(editableTarget);
+      const { duration } = moveAgentCursor(editableTarget);
+      await sleep(Math.min(duration, 200));
+
+      try { editableTarget.focus({ preventScroll: true }); } catch (_) { try { editableTarget.focus(); } catch (_) {} }
+      editableTarget.dispatchEvent(new FocusEvent('focusin', { bubbles: true }));
+
+      const textToType = String(code ?? '');
+      const shouldClear = options.clear_existing !== false && options.clearFirst !== false;
+      let inserted = false;
+
+      // Single-transaction replace to prevent auto-bracket duplication and leftover template
+      if (shouldClear) {
+        // Tier 1: Page-context script injection to update window.monaco in MAIN world
+        try {
+          const s = document.createElement('script');
+          s.textContent = `
+            try {
+              if (window.monaco?.editor) {
+                const eds = window.monaco.editor.getEditors?.() || [];
+                const m = eds[0]?.getModel?.() || window.monaco.editor.getModels?.()[0];
+                if (m) {
+                  m.setValue(${JSON.stringify(textToType)});
+                  document.documentElement.dataset.pratyakshaCodeSet = 'true';
+                }
+              }
+            } catch (_) {}
+          `;
+          (document.head || document.documentElement).appendChild(s);
+          s.remove();
+          if (document.documentElement.dataset.pratyakshaCodeSet === 'true') {
+            delete document.documentElement.dataset.pratyakshaCodeSet;
+            inserted = true;
+          }
+        } catch (_) {}
+
+        if (!inserted) {
+          // Tier 2: Dispatch realistic selectAll keyboard events to Monaco inputarea
+          try {
+            const isMac = /mac/i.test(navigator.platform || navigator.userAgent);
+            editableTarget.focus({ preventScroll: true });
+            editableTarget.dispatchEvent(new KeyboardEvent('keydown', {
+              key: 'a',
+              code: 'KeyA',
+              keyCode: 65,
+              which: 65,
+              ctrlKey: !isMac,
+              metaKey: isMac,
+              bubbles: true,
+              cancelable: true
+            }));
+            editableTarget.dispatchEvent(new KeyboardEvent('keyup', {
+              key: 'a',
+              code: 'KeyA',
+              keyCode: 65,
+              which: 65,
+              ctrlKey: !isMac,
+              metaKey: isMac,
+              bubbles: true,
+              cancelable: true
+            }));
+            editableTarget.dispatchEvent(new KeyboardEvent('keydown', {
+              key: 'Backspace',
+              code: 'Backspace',
+              keyCode: 8,
+              which: 8,
+              bubbles: true,
+              cancelable: true
+            }));
+            editableTarget.dispatchEvent(new KeyboardEvent('keyup', {
+              key: 'Backspace',
+              code: 'Backspace',
+              keyCode: 8,
+              which: 8,
+              bubbles: true,
+              cancelable: true
+            }));
+          } catch (_) {}
+
+          // Tier 3: Standard document selection clearing
+          try {
+            editableTarget.focus();
+            document.execCommand('selectAll', false, null);
+            document.execCommand('delete', false, null);
+          } catch (_) {}
+        }
+      }
+
+      if (!inserted) {
+        try {
+          editableTarget.focus();
+          inserted = document.execCommand('insertText', false, textToType);
+        } catch (_) {}
+      }
+
+      if (!inserted) {
+        try {
+          const dt = new DataTransfer();
+          dt.setData('text/plain', textToType);
+          editableTarget.dispatchEvent(new ClipboardEvent('paste', {
+            clipboardData: dt,
+            bubbles: true,
+            cancelable: true
+          }));
+          inserted = true;
+        } catch (_) {}
+      }
+
+      if (!inserted && editableTarget instanceof HTMLTextAreaElement) {
+        const proto = HTMLTextAreaElement.prototype;
+        const setter = Object.getOwnPropertyDescriptor(proto, 'value')?.set;
+        if (setter) setter.call(editableTarget, textToType); else editableTarget.value = textToType;
+        editableTarget.dispatchEvent(new InputEvent('input', { bubbles: true, cancelable: true, data: textToType, inputType: 'insertText' }));
+      }
+
+      editableTarget.dispatchEvent(new Event('input', { bubbles: true }));
+      editableTarget.dispatchEvent(new Event('change', { bubbles: true }));
+      await waitForDomSettle(500, 150);
+
+      const lines = textToType.split('\n').length;
+      return {
+        typedInto: describeTarget(editorRoot),
+        editorType: editorRoot.matches?.('.monaco-editor') || editorRoot.querySelector?.('.monaco-editor') ? 'monaco'
+          : (editorRoot.matches?.('.cm-editor') ? 'codemirror' : 'editor'),
+        lines,
+        codeLength: textToType.length
+      };
     },
 
     /**
@@ -896,6 +1464,10 @@ window.PratyakshaDOM = window.PratyakshaDOM || (function() {
      */
     async type(target, value, options = {}) {
       let el = requireElement(target, 'Type');
+
+      if (isCodeEditor(el)) {
+        return await this.writeCode(target, value, options);
+      }
 
       // Clicked on a wrapper or label? Type into the real editable inside/behind it.
       if (!isEditable(el)) {
@@ -914,25 +1486,63 @@ window.PratyakshaDOM = window.PratyakshaDOM || (function() {
       try { el.focus({ preventScroll: true }); } catch (_) { el.focus(); }
       el.dispatchEvent(new FocusEvent('focusin', { bubbles: true }));
 
+      // If WhatsApp Web is stuck in voice recording mode, discard it so input field is visible
+      if (/web\.whatsapp\.com/i.test(window.location.href)) {
+        try {
+          const cancelBtn = document.querySelector('button span[data-icon="ptt-cancel"], [data-testid="ptt-cancel"], button[aria-label*="Cancel recording"], button[aria-label*="Discard"]') ||
+                            document.querySelector('span[data-icon="ptt-cancel"]')?.closest('button');
+          if (cancelBtn) { cancelBtn.click(); await sleep(150); }
+        } catch (_) {}
+      }
+
       const shouldClear = options.clearFirst !== false;
       const textToType = String(value ?? '');
 
       if (el.isContentEditable) {
-        try {
-          const sel = window.getSelection();
-          const range = document.createRange();
-          range.selectNodeContents(el);
-          if (!shouldClear) range.collapse(false);
-          sel.removeAllRanges();
-          sel.addRange(range);
-          if (shouldClear) document.execCommand('delete', false);
-          const ok = document.execCommand('insertText', false, textToType);
-          if (!ok) throw new Error('insertText rejected');
-        } catch (_) {
-          if (shouldClear) el.textContent = '';
-          el.textContent += textToType;
-          el.dispatchEvent(new InputEvent('input', { bubbles: true, cancelable: true, data: textToType, inputType: 'insertText' }));
+        try { el.focus({ preventScroll: true }); } catch (_) { el.focus(); }
+        el.dispatchEvent(new FocusEvent('focusin', { bubbles: true }));
+
+        if (shouldClear) {
+          try {
+            el.focus();
+            document.execCommand('selectAll', false, null);
+            document.execCommand('delete', false, null);
+          } catch (_) {}
+          if (el.textContent && el.textContent.trim().length > 0) {
+            try {
+              const sel = window.getSelection();
+              const range = document.createRange();
+              range.selectNodeContents(el);
+              sel.removeAllRanges();
+              sel.addRange(range);
+              document.execCommand('delete', false, null);
+            } catch (_) {}
+          }
         }
+
+        // Clean single-pass text insertion using document.execCommand('insertText')
+        let inserted = false;
+        try {
+          el.focus();
+          inserted = document.execCommand('insertText', false, textToType);
+        } catch (_) {}
+
+        // Fallback to paste ONLY if execCommand was not supported or failed to insert
+        if (!inserted && (!el.textContent || !el.textContent.includes(textToType))) {
+          try {
+            const dt = new DataTransfer();
+            dt.setData('text/plain', textToType);
+            el.dispatchEvent(new ClipboardEvent('paste', {
+              clipboardData: dt,
+              bubbles: true,
+              cancelable: true
+            }));
+          } catch (_) {}
+        }
+
+        // Inform framework of change without passing duplicate 'insertText' data
+        el.dispatchEvent(new Event('input', { bubbles: true }));
+        el.dispatchEvent(new Event('change', { bubbles: true }));
       } else {
         const proto = el instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
         const setter = Object.getOwnPropertyDescriptor(proto, 'value')?.set;
@@ -955,9 +1565,40 @@ window.PratyakshaDOM = window.PratyakshaDOM || (function() {
                                el.getAttribute('type') === 'email' ||
                                /(^|\b)(to|recipients?)\b/i.test(el.getAttribute('aria-label') || '') ||
                                /^(to|recipients?)$/i.test(el.getAttribute('name') || '');
-      if (options.pressEnter || (looksLikeEmail && isRecipientInput)) {
-        await sleep(80);
-        await this.pressEnter(el);
+
+      // Distinguish WhatsApp chat compose box from WhatsApp contact/chat search bar
+      const isInsideWhatsAppSidebar = !!(el.closest?.('#side') || el.closest?.('[data-testid="chat-list"]'));
+      const isWhatsAppSearch = isInsideWhatsAppSidebar ||
+        el.getAttribute?.('data-tab') === '3' ||
+        /(search|buscar)/i.test(el.getAttribute?.('title') || '') ||
+        /(search|buscar)/i.test(el.getAttribute?.('aria-label') || '');
+
+      const isWhatsAppCompose = /web\.whatsapp\.com/i.test(window.location.href) &&
+        !isWhatsAppSearch &&
+        (el.getAttribute?.('data-tab') === '10' ||
+         el.closest?.('footer') !== null ||
+         /(type a message|escribe un mensaje)/i.test(el.getAttribute?.('title') || '') ||
+         /(type a message|escribe un mensaje)/i.test(el.getAttribute?.('aria-label') || ''));
+
+      if (options.pressEnter || isWhatsAppCompose || (looksLikeEmail && isRecipientInput)) {
+        await sleep(150);
+        const enterResult = await this.pressEnter(el);
+        if (isWhatsAppCompose) {
+          return {
+            typedInto: describeTarget(el),
+            value: '',
+            dispatched: true,
+            isSearchInput: false,
+            change: enterResult?.change || 'Message sent and dispatched into chat'
+          };
+        }
+        return {
+          typedInto: describeTarget(el),
+          value: isWhatsAppSearch ? textToType : '',
+          dispatched: false,
+          isSearchInput: isWhatsAppSearch,
+          change: enterResult?.change || (isWhatsAppSearch ? 'Searched for contact/group in WhatsApp' : 'Submitted input via Enter')
+        };
       } else {
         await waitForDomSettle(600, 150);
       }
@@ -965,7 +1606,7 @@ window.PratyakshaDOM = window.PratyakshaDOM || (function() {
       const actual = el.isConnected
         ? (el.isContentEditable ? (el.innerText || '') : (el.value ?? ''))
         : '';
-      return { typedInto: describeTarget(el), value: String(actual).slice(0, 80) };
+      return { typedInto: describeTarget(el), value: String(actual).slice(0, 80), isSearchInput: isWhatsAppSearch };
     },
 
     /**
@@ -979,6 +1620,83 @@ window.PratyakshaDOM = window.PratyakshaDOM || (function() {
       const notCancelled = el.dispatchEvent(new KeyboardEvent('keydown', eventOpts));
       el.dispatchEvent(new KeyboardEvent('keypress', eventOpts));
       el.dispatchEvent(new KeyboardEvent('keyup', eventOpts));
+
+      // WhatsApp Web / Chat send button fallback:
+      const isWhatsApp = /web\.whatsapp\.com/i.test(window.location.href);
+      const isInsideSidebar = !!(el.closest?.('#side') || el.closest?.('[data-testid="chat-list"]'));
+      const isSearchInput = isInsideSidebar ||
+        el.getAttribute?.('data-tab') === '3' ||
+        /(search|buscar)/i.test(el.getAttribute?.('title') || '') ||
+        /(search|buscar)/i.test(el.getAttribute?.('aria-label') || '');
+
+      // In WhatsApp search input: auto-select top search result if available
+      if (isWhatsApp && isSearchInput) {
+        await sleep(350);
+        const firstChatResult = document.querySelector('#side [role="listitem"], #side div[data-testid="cell-frame-container"]');
+        if (firstChatResult) {
+          try {
+            firstChatResult.click();
+            await sleep(300);
+            return { change: 'Opened matching chat from search results' };
+          } catch (_) {}
+        }
+        return { change: 'Submitted search query in WhatsApp' };
+      }
+
+      // NEVER click send or footer buttons if pressing enter inside search input!
+      if (isWhatsApp && !isSearchInput) {
+        // Discard any accidental voice recording first
+        const cancelVoiceBtn = document.querySelector('button span[data-icon="ptt-cancel"], [data-testid="ptt-cancel"], button[aria-label*="Cancel recording"], button[aria-label*="Discard"]') ||
+                              document.querySelector('span[data-icon="ptt-cancel"]')?.closest('button');
+        if (cancelVoiceBtn) {
+          try { cancelVoiceBtn.click(); await sleep(150); } catch (_) {}
+        }
+
+        // STRICT Send button selection: poll up to 350ms for React/Lexical to mount Send button
+        let sendBtn = null;
+        for (let waitCount = 0; waitCount < 7; waitCount++) {
+          sendBtn = document.querySelector('button[aria-label="Send"]') ||
+                    document.querySelector('[data-testid="send"]') ||
+                    document.querySelector('[data-testid="compose-btn-send"]') ||
+                    document.querySelector('footer button span[data-icon="send"]')?.closest('button') ||
+                    document.querySelector('span[data-icon="send"]')?.closest('button');
+          if (sendBtn) {
+            const btnAria = (sendBtn.getAttribute('aria-label') || '').toLowerCase();
+            const btnTestId = (sendBtn.getAttribute('data-testid') || '').toLowerCase();
+            const isMicOrVoice = /voice|mic|ptt|record/i.test(btnAria) ||
+                                 /mic|ptt/i.test(btnTestId) ||
+                                 !!sendBtn.querySelector('span[data-icon="ptt"], span[data-icon="mic"]');
+            if (!isMicOrVoice) break;
+            sendBtn = null;
+          }
+          await sleep(50);
+        }
+
+        if (sendBtn) {
+          try {
+            const msgText = el.isContentEditable ? (el.innerText || '') : (el.value || '');
+            recordOutgoingMessage(msgText);
+            sendBtn.click();
+            await sleep(100);
+            try {
+              el.focus();
+              document.execCommand('selectAll', false, null);
+              document.execCommand('delete', false, null);
+            } catch (_) {}
+            await waitForDomSettle(800, 200);
+            return { change: 'Message sent via WhatsApp Send button' };
+          } catch (_) {}
+        } else {
+          const msgText = el.isContentEditable ? (el.innerText || '') : (el.value || '');
+          recordOutgoingMessage(msgText);
+          await sleep(80);
+          try {
+            el.focus();
+            document.execCommand('selectAll', false, null);
+            document.execCommand('delete', false, null);
+          } catch (_) {}
+        }
+      }
 
       if (notCancelled && el.form && el.tagName === 'INPUT') {
         try {
@@ -995,7 +1713,10 @@ window.PratyakshaDOM = window.PratyakshaDOM || (function() {
      * Presses a named key (Escape, Enter, Tab, ArrowDown, ...) on a target or the focused element.
      */
     async pressKey(key, target = null) {
-      if (key === 'Enter' && target !== null && target !== undefined) return this.pressEnter(target);
+      if (key === 'Enter') {
+        const el = (target !== null && target !== undefined) ? requireElement(target, 'Press key') : (document.activeElement || document.body);
+        return this.pressEnter(el);
+      }
       const el = (target !== null && target !== undefined) ? requireElement(target, 'Press key') : (document.activeElement || document.body);
       const before = snapshotState();
       const codes = { Escape: 27, Enter: 13, Tab: 9, Backspace: 8, Delete: 46, ArrowDown: 40, ArrowUp: 38, ArrowLeft: 37, ArrowRight: 39, Space: 32, PageDown: 34, PageUp: 33, Home: 36, End: 35 };
@@ -1269,7 +1990,13 @@ window.PratyakshaDOM = window.PratyakshaDOM || (function() {
         attributes:  attrs,
         children
       };
-    }
+    },
+
+    pollResponseCondition,
+    clearAllTrackers,
+    recordOutgoingMessage,
+    getLatestIncomingMessage,
+    startSessionTracker
   };
 })();
 

@@ -47,8 +47,23 @@
         if (window.PratyakshaDOM?.setControlActive) {
           window.PratyakshaDOM.setControlActive(message.active !== false);
         }
+        if (message.active !== false && window.PratyakshaDOM?.startSessionTracker) {
+          window.PratyakshaDOM.startSessionTracker();
+        }
       } catch (err) {
         console.warn('[PRATYAKSHA] Set control active warning:', err);
+      }
+      try { sendResponse({ success: true }); } catch (_) {}
+      return true;
+    }
+
+    if (type === 'START_SESSION_TRACKER') {
+      try {
+        if (window.PratyakshaDOM?.startSessionTracker) {
+          window.PratyakshaDOM.startSessionTracker();
+        }
+      } catch (err) {
+        console.warn('[PRATYAKSHA] startSessionTracker error:', err);
       }
       try { sendResponse({ success: true }); } catch (_) {}
       return true;
@@ -95,6 +110,10 @@
       case 'TYPE':
         if (target === null) throw new Error('TYPE requires target_id or semantic_hint');
         return await window.PratyakshaDOM.type(target, value || '', { clearFirst: clear_first !== false, pressEnter: !!press_enter });
+
+      case 'WRITE_CODE':
+        if (target === null) throw new Error('WRITE_CODE requires target_id or semantic_hint');
+        return await window.PratyakshaDOM.writeCode(target, code || value || '', payload);
 
       case 'PRESS_ENTER':
         if (target === null) throw new Error('PRESS_ENTER requires target_id or semantic_hint');
@@ -184,7 +203,18 @@
       }
 
       case 'WAIT_FOR': {
-        const timeout = Math.min(timeoutMs || 8000, 30000);
+        const { trackerId, waitForReply, trackDomChanges, expectedSender } = payload;
+        if (window.PratyakshaDOM?.pollResponseCondition) {
+          return window.PratyakshaDOM.pollResponseCondition({
+            trackerId,
+            selector: selector || null,
+            textContains: textContains || null,
+            waitForReply: !!waitForReply,
+            trackDomChanges: !!trackDomChanges,
+            expectedSender: expectedSender || null
+          });
+        }
+        const timeout = Math.min(timeoutMs || 8000, 60000);
         const found   = await pollCondition({ selector, textContains }, timeout);
         return found;
       }

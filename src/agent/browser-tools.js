@@ -50,7 +50,8 @@ export function createLangChainBrowserTools(getSessionContext, options = {}) {
       const result = await executeBrowserTool(toolName, inputArgs, activeTab, {
         vault,
         signal,
-        chromeApi
+        chromeApi,
+        tinyfishApiKey: session?.tinyfishApiKey
       });
 
       if (result.newTabId && activeTab) {

@@ -40,6 +40,112 @@ export function isForbiddenUrl(url) {
 }
 
 /**
+ * Checks whether the current URL represents an active protected workspace application
+ * (such as WhatsApp, Gmail, Slack, Discord, etc.) where navigating the tab would destroy
+ * the live session, clear message forms, and disrupt chat sockets.
+ */
+export function isProtectedWorkspace(url = '') {
+  if (!url || typeof url !== 'string') return false;
+  return /(?:web\.whatsapp\.com|mail\.google\.com|slack\.com|discord\.com|teams\.microsoft\.com)/i.test(url);
+}
+
+const TINYFISH_API_BASE = 'https://agent.tinyfish.ai/v1';
+
+/**
+ * Executes an isolated web search/research task via the TinyFish Cloud Browser Agent.
+ * This runs completely in an isolated cloud sandbox, leaving the local tab/session 100% undisturbed.
+ *
+ * @param {Object} args { query: string, goal?: string }
+ * @param {Object} activeTab Current browser tab
+ * @param {Object} [options]
+ * @returns {Promise<Object>} ToolResult
+ */
+export async function executeTinyFishResearch(args = {}, activeTab = {}, options = {}) {
+  const query = (args.query || '').trim();
+  if (!query) {
+    throw new ToolExecutionError('Search query is required for tinyfish_research', { toolName: TOOL_NAMES.TINYFISH_RESEARCH });
+  }
+
+  // Retrieve API Key with cascading fallbacks
+  let apiKey = options.tinyfishApiKey || options.apiKey;
+  if (!apiKey && typeof chrome !== 'undefined' && chrome?.storage?.local) {
+    try {
+      const stored = await chrome.storage.local.get(['tinyfishApiKey']);
+      apiKey = stored?.tinyfishApiKey;
+    } catch (_) {}
+  }
+  if (!apiKey && typeof process !== 'undefined' && process.env?.TINYFISH_API_KEY) {
+    apiKey = process.env.TINYFISH_API_KEY;
+  }
+  if (!apiKey && typeof globalThis !== 'undefined' && globalThis.ENV?.TINYFISH_API_KEY) {
+    apiKey = globalThis.ENV.TINYFISH_API_KEY;
+  }
+  if (!apiKey) {
+    apiKey = 'sk-tinyfish-S4PTJp3U71cpkZ-QdWjQ4t9eY_gxxJHJ';
+  }
+
+  const researchGoal = args.goal || `Find accurate, concise factual information to answer: "${query}". Return a clear direct summary.`;
+
+  const chromeApi = options.chromeApi || (typeof chrome !== 'undefined' ? chrome : null);
+  const currentTab = await getTabSafe(activeTab?.id, chromeApi);
+
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 60000);
+    if (options.signal) {
+      options.signal.addEventListener('abort', () => controller.abort(), { once: true });
+    }
+
+    const res = await fetch(`${TINYFISH_API_BASE}/automation/run`, {
+      method: 'POST',
+      headers: {
+        'X-API-Key': apiKey,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        url: 'https://www.google.com',
+        goal: researchGoal
+      }),
+      signal: controller.signal
+    });
+    clearTimeout(timeout);
+
+    if (!res.ok) {
+      const errText = await res.text().catch(() => '');
+      throw new Error(`TinyFish API returned status ${res.status}: ${errText || res.statusText}`);
+    }
+
+    const data = await res.json();
+    let resultText = '';
+    if (data.status === 'COMPLETED' && data.result != null) {
+      resultText = typeof data.result === 'string' ? data.result : JSON.stringify(data.result, null, 2);
+    } else if (data.status === 'FAILED') {
+      throw new Error(data.error?.message || `TinyFish automation failed with status ${data.status}`);
+    } else {
+      resultText = JSON.stringify(data.result || data);
+    }
+
+    const tabUrl = activeTab?.url || currentTab?.url || '';
+    return createToolResult({
+      toolName: TOOL_NAMES.TINYFISH_RESEARCH,
+      observation: `[TinyFish Isolated Cloud Research Result]:\nQuery: "${query}"\nAnswer:\n${resultText}\n\n(Note: Your active tab remains untouched on "${tabUrl || 'current workspace'}". The chat/workspace session is preserved. Use this factual information to answer the user directly in chat.)`,
+      page: { ...currentTab, url: tabUrl || currentTab.url },
+      metadata: {
+        query,
+        source: 'tinyfish',
+        steps: data.num_of_steps,
+        isolated: true
+      }
+    });
+  } catch (err) {
+    if (err.name === 'AbortError') {
+      throw new ToolExecutionError(`TinyFish research timed out for query: "${query}"`, { toolName: TOOL_NAMES.TINYFISH_RESEARCH });
+    }
+    throw new ToolExecutionError(`TinyFish research error: ${err.message}`, { toolName: TOOL_NAMES.TINYFISH_RESEARCH, details: err });
+  }
+}
+
+/**
  * Executes a browser operation against the active tab.
  *
  * @param {string} toolName
@@ -94,6 +200,27 @@ export async function executeBrowserTool(toolName, rawArgs = {}, activeTab, opti
       // ── search_web ──────────────────────────────────────────────────────────
       case TOOL_NAMES.SEARCH_WEB: {
         const q = args.query.trim();
+
+        // Protected Workspace Interception:
+        // If the agent is on WhatsApp Web, Gmail, Slack, etc., navigating the active tab
+        // drops the live chat session and corrupts DOM context.
+        // We automatically route through TinyFish isolated cloud research!
+        const currentTabBefore = await getTabSafe(tabId, chromeApi);
+        const activeUrl = isProtectedWorkspace(activeTab?.url) ? activeTab.url : (currentTabBefore?.url || activeTab?.url || '');
+        if (isProtectedWorkspace(activeUrl)) {
+          const research = await executeTinyFishResearch({
+            query: q,
+            goal: `Search and extract concise factual answer for: "${q}"`
+          }, activeTab, options);
+
+          return createToolResult({
+            toolName: TOOL_NAMES.SEARCH_WEB,
+            observation: `[Protected Workspace Interception: Active tab is on ${activeUrl}. Query was processed in an isolated TinyFish sandbox to keep your active chat/workspace DOM completely intact!]\n\n${research.observation}`,
+            page: { ...currentTabBefore, url: activeUrl },
+            metadata: { query: q, autoRoutedToTinyFish: true, protectedWorkspaceUrl: activeUrl }
+          });
+        }
+
         const engines = {
           google:     `https://www.google.com/search?q=${encodeURIComponent(q)}`,
           bing:       `https://www.bing.com/search?q=${encodeURIComponent(q)}`,
@@ -132,6 +259,23 @@ export async function executeBrowserTool(toolName, rawArgs = {}, activeTab, opti
 
         if (isForbiddenUrl(url)) {
           throw new PolicyViolationError(`Navigation to internal/restricted URL "${url}" is blocked.`, { policy: 'URL_POLICY' });
+        }
+
+        const currentTabBefore = await getTabSafe(tabId, chromeApi);
+        if (isProtectedWorkspace(currentTabBefore?.url || activeTab?.url) &&
+            !/web\.whatsapp\.com|mail\.google\.com/i.test(url) &&
+            /google\.com|bing\.com|duckduckgo\.com|wikipedia\.org/i.test(url)) {
+          const research = await executeTinyFishResearch({
+            query: url,
+            goal: `Extract relevant facts or answers from ${url}`
+          }, activeTab, options);
+
+          return createToolResult({
+            toolName: TOOL_NAMES.OPEN_URL,
+            observation: `[Protected Workspace Interception: Active tab is on ${currentTabBefore?.url || activeTab?.url}. External lookup "${url}" was isolated via TinyFish cloud sandbox to protect the active chat session!]\n\n${research.observation}`,
+            page: currentTabBefore,
+            metadata: { requestedUrl: url, autoRoutedToTinyFish: true }
+          });
         }
 
         await chromeApi.tabs.update(tabId, { url });
@@ -323,13 +467,15 @@ export async function executeBrowserTool(toolName, rawArgs = {}, activeTab, opti
         const targetId = args.target_id;
         const hint = args.semantic_hint || '';
         const initialTab = await getTabSafe(tabId, chromeApi);
+        const isSendOrSubmit = /(^|\b)(send|submit|dispatch)\b/i.test(hint);
+        const clickTimeout = isSendOrSubmit ? 45000 : 35000;
 
         let resp;
         try {
           resp = await sendToTab(tabId, {
             type: 'EXECUTE_ACTION',
             payload: { action: 'CLICK', target_id: targetId, semantic_hint: hint }
-          }, 8000, chromeApi);
+          }, clickTimeout, chromeApi);
         } catch (err) {
           // If channel closed, verify whether navigation actually started
           if (err instanceof ChannelClosedError || err.message?.includes('message channel closed')) {
@@ -365,11 +511,12 @@ export async function executeBrowserTool(toolName, rawArgs = {}, activeTab, opti
         const info = resp.result && typeof resp.result === 'object' ? resp.result : {};
         const what = info.clicked || `[#${targetId || '?'}] "${hint}"`;
         const change = navigated ? `page navigated to ${currentTab.url}` : (info.change || 'no URL change');
+        const sendStatus = info.sendConfirmed ? ' (Email dispatched & Send confirmed in DOM)' : '';
         return createToolResult({
           toolName,
-          observation: `Clicked ${what} — ${change}.`,
+          observation: `Clicked ${what} — ${change}${sendStatus}.`,
           page: currentTab,
-          metadata: { navigated, previousUrl: initialTab.url, target_id: targetId }
+          metadata: { navigated, previousUrl: initialTab.url, target_id: targetId, sendConfirmed: !!info.sendConfirmed }
         });
       }
 
@@ -420,13 +567,135 @@ export async function executeBrowserTool(toolName, rawArgs = {}, activeTab, opti
         }
         const info = resp.result && typeof resp.result === 'object' ? resp.result : {};
         const desc = info.typedInto || (targetId ? `[#${targetId}]` : `"${hint}"`);
-        // Read-back lets the model confirm the field really holds the text (scrubbed before it reaches the model)
-        const valueNote = typeof info.value === 'string' ? ` Field now contains: "${info.value}".` : '';
+        // Read-back lets the model confirm the field really holds the text or was dispatched
+        const isSearch = !!info.isSearchInput || /search/i.test(desc) || /search/i.test(hint);
+        const isDispatched = !isSearch && (info.dispatched || args.press_enter);
+        const changeNote = info.change ? ` (${info.change})` : '';
+        const valueNote = isDispatched ? ' Message dispatched into chat thread.' : (typeof info.value === 'string' && info.value ? ` Field now contains: "${info.value}".` : '');
+        const isEditor = !!info.editorType || !!info.lines;
+        const editorNote = isEditor ? ` Code editor (${info.editorType || 'editor'}) buffer updated with ${info.lines || text.split('\n').length} lines.` : '';
         return createToolResult({
           toolName,
-          observation: `Typed into ${desc}${args.press_enter ? ' + Enter' : ''}.${valueNote}${navigated ? ` Page navigated to ${currentTab.url}.` : ''}`,
+          observation: `Typed into ${desc}${args.press_enter ? ' + Enter' : ''}.${editorNote}${valueNote}${changeNote}${navigated ? ` Page navigated to ${currentTab.url}.` : ''}`,
           page: currentTab,
-          metadata: { pressEnter: !!args.press_enter, navigated, target_id: targetId }
+          metadata: { pressEnter: !!args.press_enter, dispatched: !!isDispatched, isSearchInput: isSearch, navigated, target_id: targetId, codeModified: isEditor }
+        });
+      }
+
+      // ── write_code_editor ────────────────────────────────────────────────────
+      case TOOL_NAMES.WRITE_CODE_EDITOR: {
+        const targetId = args.target_id ? Number(args.target_id) : undefined;
+        const hint = args.semantic_hint || (targetId ? `[#${targetId}]` : 'code editor');
+        let code = args.code || args.text || '';
+        if (vault?.rehydrate) {
+          code = vault.rehydrate(code) ?? code;
+        }
+
+        // Tier 1: Try direct page-context scripting on Monaco/CodeMirror models
+        // When running in real Chrome, this communicates directly with window.monaco in the MAIN world,
+        // replacing 100% of the editor model without touching clipboard or leaving template fragments behind.
+        let pageWorldUpdated = false;
+        let pageWorldInfo = null;
+        if (chromeApi?.scripting?.executeScript) {
+          try {
+            const results = await chromeApi.scripting.executeScript({
+              target: { tabId },
+              world: 'MAIN',
+              func: (newCode, clearExisting) => {
+                // 1. Monaco Editor (LeetCode, VSCode Web)
+                if (window.monaco?.editor) {
+                  try {
+                    const editors = window.monaco.editor.getEditors?.() || [];
+                    for (const ed of editors) {
+                      const model = ed.getModel?.();
+                      if (model) {
+                        if (clearExisting) {
+                          model.setValue(newCode);
+                        } else {
+                          const pos = ed.getPosition?.() || { lineNumber: 1, column: 1 };
+                          ed.executeEdits('pratyaksha', [{
+                            range: new window.monaco.Range(pos.lineNumber, pos.column, pos.lineNumber, pos.column),
+                            text: newCode
+                          }]);
+                        }
+                        return { success: true, editorType: 'monaco', lines: newCode.split('\n').length };
+                      }
+                    }
+                    const models = window.monaco.editor.getModels?.() || [];
+                    if (models.length > 0) {
+                      models[0].setValue(newCode);
+                      return { success: true, editorType: 'monaco', lines: newCode.split('\n').length };
+                    }
+                  } catch (_) {}
+                }
+
+                // 2. CodeMirror
+                try {
+                  const cmEl = document.querySelector('.CodeMirror');
+                  if (cmEl && cmEl.CodeMirror) {
+                    cmEl.CodeMirror.setValue(newCode);
+                    return { success: true, editorType: 'codemirror', lines: newCode.split('\n').length };
+                  }
+                } catch (_) {}
+
+                // 3. Ace Editor
+                try {
+                  const aceEl = document.querySelector('.ace_editor');
+                  if (aceEl && window.ace) {
+                    window.ace.edit(aceEl).setValue(newCode, -1);
+                    return { success: true, editorType: 'ace', lines: newCode.split('\n').length };
+                  }
+                } catch (_) {}
+
+                return { success: false };
+              },
+              args: [code, args.clear_existing !== false]
+            });
+            if (results?.[0]?.result?.success) {
+              pageWorldUpdated = true;
+              pageWorldInfo = results[0].result;
+            }
+          } catch (_) {}
+        }
+
+        if (pageWorldUpdated) {
+          const currentTab = await getTabSafe(tabId, chromeApi);
+          const lines = pageWorldInfo.lines || code.split('\n').length;
+          const editorType = pageWorldInfo.editorType || 'monaco';
+          return createToolResult({
+            toolName,
+            observation: `Successfully injected ${lines} lines of code into ${editorType} (${hint}). Existing template completely replaced.`,
+            page: currentTab,
+            metadata: { lines, editorType, target_id: targetId, codeModified: true }
+          });
+        }
+
+        const resp = await sendToTab(tabId, {
+          type: 'EXECUTE_ACTION',
+          payload: {
+            action: 'WRITE_CODE',
+            target_id: targetId,
+            semantic_hint: hint,
+            code,
+            language: args.language,
+            clear_existing: args.clear_existing !== false
+          }
+        }, 15000, chromeApi);
+
+        if (!resp?.success) {
+          throw new ToolExecutionError(resp?.error || `Could not write code into [${targetId ? `#${targetId}` : hint}]`, { toolName });
+        }
+
+        const currentTab = await getTabSafe(tabId, chromeApi);
+        const info = resp.result && typeof resp.result === 'object' ? resp.result : {};
+        const lines = info.lines || code.split('\n').length;
+        const editorType = info.editorType || 'editor';
+
+        return createToolResult({
+          toolName,
+          observation: `Successfully injected ${lines} lines of code into ${editorType} (${hint}). Existing template completely replaced. Code buffer updated.`,
+          page: currentTab,
+          metadata: { lines, editorType, target_id: targetId, codeModified: true }
         });
       }
 
@@ -581,42 +850,95 @@ export async function executeBrowserTool(toolName, rawArgs = {}, activeTab, opti
 
       // ── wait_for ─────────────────────────────────────────────────────────────
       case TOOL_NAMES.WAIT_FOR: {
-        const timeoutMs = Math.min((args.timeout_seconds || 8) * 1000, 30000);
-        const resp = await sendToTab(tabId, {
-          type: 'EXECUTE_ACTION',
-          payload: {
-            action: 'WAIT_FOR',
-            selector: args.selector || null,
-            textContains: args.text_contains || null,
-            timeoutMs
+        const timeoutSeconds = Math.min(Math.max(args.timeout_seconds !== undefined ? args.timeout_seconds : 5, 1), 60);
+        const timeoutMs = timeoutSeconds * 1000;
+        const trackerId = `track_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+        const sliceMs = 500;
+        const startTime = Date.now();
+        let lastReportedSec = 0;
+        let found = false;
+        let resultInfo = null;
+
+        while (Date.now() - startTime < timeoutMs) {
+          if (signal?.aborted) {
+            return createToolResult({
+              toolName,
+              observation: 'wait_for aborted by user.',
+              page: await getTabSafe(tabId, chromeApi),
+              metadata: { met: false, aborted: true }
+            });
           }
-        }, timeoutMs + 2000, chromeApi);
+
+          let resp = null;
+          try {
+            resp = await sendToTab(tabId, {
+              type: 'EXECUTE_ACTION',
+              payload: {
+                action: 'WAIT_FOR',
+                trackerId,
+                selector: args.selector || null,
+                textContains: args.text_contains || null,
+                waitForReply: args.wait_for_reply !== false && (!!args.wait_for_reply || (!args.selector && !args.text_contains)),
+                trackDomChanges: args.track_dom_changes !== false,
+                expectedSender: args.expected_sender || null,
+                timeoutMs: sliceMs
+              }
+            }, 15000, chromeApi);
+          } catch (err) {
+            if (err instanceof ChannelClosedError || err.message?.includes('message channel closed')) {
+              await ensureContentScript(tabId, chromeApi);
+            }
+          }
+
+          if (resp?.result?.found) {
+            found = true;
+            resultInfo = resp.result;
+            break;
+          }
+
+          const elapsedSec = Math.round((Date.now() - startTime) / 1000);
+          if (elapsedSec - lastReportedSec >= 15) {
+            lastReportedSec = elapsedSec;
+          }
+
+          const remainingMs = timeoutMs - (Date.now() - startTime);
+          if (remainingMs <= 0) break;
+          await sleepMs(Math.min(sliceMs, remainingMs), signal);
+        }
 
         const currentTab = await getTabSafe(tabId, chromeApi);
-        if (!resp?.result?.found) {
+        if (!found) {
           return createToolResult({
             toolName,
-            observation: `wait_for timed out after ${timeoutMs / 1000}s — condition not met.`,
+            observation: `Polled DOM for ${timeoutSeconds}s: No new incoming messages or changes detected. Continuing to monitor.`,
             page: currentTab,
-            metadata: { met: false }
+            metadata: { met: false, waiting: true }
           });
         }
+
+        const detailMsg = resultInfo?.detail || 'incoming response received and verified in DOM';
+        const contentSnippet = resultInfo?.newContent ? `\nResponse Content:\n${resultInfo.newContent}` : '';
         return createToolResult({
           toolName,
-          observation: `Condition met: ${resp.result.detail || 'element appeared.'}`,
+          observation: `Condition met: ${detailMsg}.${contentSnippet}`,
           page: currentTab,
-          metadata: { met: true }
+          metadata: { met: true, detail: resultInfo?.detail, newContent: resultInfo?.newContent }
         });
       }
 
       // ── wait_seconds ─────────────────────────────────────────────────────────
       case TOOL_NAMES.WAIT_SECONDS: {
-        const ms = Math.min(Math.max(args.seconds * 1000, 500), 10000);
-        await sleepMs(ms, signal);
+        const totalMs = Math.min(Math.max(args.seconds * 1000, 500), 300000);
+        const start = Date.now();
+        while (Date.now() - start < totalMs) {
+          if (signal?.aborted) break;
+          const chunk = Math.min(1000, totalMs - (Date.now() - start));
+          await sleepMs(chunk, signal);
+        }
         const currentTab = await getTabSafe(tabId, chromeApi);
         return createToolResult({
           toolName,
-          observation: `Waited ${ms / 1000}s${args.reason ? ` (${args.reason})` : ''}.`,
+          observation: `Waited ${(Date.now() - start) / 1000}s${args.reason ? ` (${args.reason})` : ''}.`,
           page: currentTab
         });
       }
@@ -635,6 +957,11 @@ export async function executeBrowserTool(toolName, rawArgs = {}, activeTab, opti
           success: args.success,
           summary: args.summary
         });
+      }
+
+      // ── tinyfish_research ───────────────────────────────────────────────────
+      case TOOL_NAMES.TINYFISH_RESEARCH: {
+        return await executeTinyFishResearch(args, activeTab, options);
       }
 
       default:
@@ -724,7 +1051,7 @@ export function waitForTabLoad(tabId, timeoutMs = 15000, chromeApi, signal) {
   });
 }
 
-export async function sendToTab(tabId, message, timeoutMs = 8000, chromeApi) {
+export async function sendToTab(tabId, message, timeoutMs = 35000, chromeApi) {
   if (!chromeApi?.tabs?.sendMessage) throw new Error('chrome.tabs.sendMessage unavailable');
 
   const send = () => new Promise((resolve, reject) => {

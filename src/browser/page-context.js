@@ -43,6 +43,19 @@ function quote(str, max) {
  * A leading `*` marks an element that appeared since the previous step.
  */
 export function formatElementLine(el, isBlacklisted = false) {
+  if (el.isEditor || el.tag === 'editor') {
+    const lang = el.language ? ` language="${el.language}"` : '';
+    const edType = el.editorType || el.type || 'monaco';
+    const label = quote(el.label || 'Code Editor', 70);
+    const parts = [`${el.isNew ? '*' : ''}[${el.id}] <editor type="${edType}"${lang}>`];
+    if (isBlacklisted) {
+      parts.push(`"[FAILED/DO-NOT-USE] ${label}" ⚠️ BLACKLISTED`);
+      return parts.join(' ');
+    }
+    if (label) parts.push(`"${label}"`);
+    return parts.join(' ');
+  }
+
   const kind = el.type && el.type !== el.tag ? ` ${el.role ? 'role' : 'type'}=${el.type}` : '';
   const label = quote(el.label || el.text || el.placeholder || '', 70);
   const parts = [`${el.isNew ? '*' : ''}[${el.id}] <${el.tag || '?'}${kind}>`];

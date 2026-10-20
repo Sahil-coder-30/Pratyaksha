@@ -62634,9 +62634,13 @@ var init_constants = __esm({
       SCROLL_PAGE: "scroll_page",
       WAIT_FOR: "wait_for",
       WAIT_SECONDS: "wait_seconds",
+      TINYFISH_RESEARCH: "tinyfish_research",
+      WRITE_CODE_EDITOR: "write_code_editor",
       FINISH_TASK: "finish_task"
     });
     CANONICAL_SERVICES = Object.freeze([
+      { pattern: /\bleetcode\b/i, url: "https://leetcode.com", name: "LeetCode", hostMatch: /leetcode\.com/i },
+      { pattern: /\b(whatsapp|wa\.me)\b/i, url: "https://web.whatsapp.com", name: "WhatsApp", hostMatch: /web\.whatsapp\.com/i },
       { pattern: /\bgmail\b/i, url: "https://mail.google.com", name: "Gmail", hostMatch: /mail\.google\.com/i },
       { pattern: /\byoutube\b/i, url: "https://www.youtube.com", name: "YouTube", hostMatch: /youtube\.com/i },
       { pattern: /\bgithub\b/i, url: "https://github.com", name: "GitHub", hostMatch: /github\.com/i },
@@ -62757,7 +62761,13 @@ function normalizeToolInvocation(toolName = "", rawArgs = {}) {
     selectoption: TOOL_NAMES.SELECT_OPTION,
     key: TOOL_NAMES.PRESS_KEY,
     send_keys: TOOL_NAMES.PRESS_KEY,
-    presskey: TOOL_NAMES.PRESS_KEY
+    presskey: TOOL_NAMES.PRESS_KEY,
+    write_code: TOOL_NAMES.WRITE_CODE_EDITOR,
+    writecode: TOOL_NAMES.WRITE_CODE_EDITOR,
+    write_code_editor: TOOL_NAMES.WRITE_CODE_EDITOR,
+    type_code: TOOL_NAMES.WRITE_CODE_EDITOR,
+    set_code: TOOL_NAMES.WRITE_CODE_EDITOR,
+    insert_code: TOOL_NAMES.WRITE_CODE_EDITOR
   };
   const lower = String(toolName || "").toLowerCase().trim();
   const canonicalName = TOOL_ALIASES[lower] || toolName;
@@ -62776,6 +62786,24 @@ function normalizeToolInvocation(toolName = "", rawArgs = {}) {
     } else if (typeof args.target_id === "string" && !/^\d+$/.test(args.target_id)) {
       args.semantic_hint = args.semantic_hint || args.target_id;
       delete args.target_id;
+    }
+  } else if (canonicalName === TOOL_NAMES.WRITE_CODE_EDITOR) {
+    if (args.target_id === void 0) {
+      const rawTarget = args.id ?? args.target ?? args.element_id ?? args.targetId;
+      if (rawTarget !== void 0) {
+        const num = Number(rawTarget);
+        if (Number.isFinite(num) && num > 0) {
+          args.target_id = num;
+        } else {
+          args.semantic_hint = args.semantic_hint || String(rawTarget);
+        }
+      }
+    } else if (typeof args.target_id === "string" && !/^\d+$/.test(args.target_id)) {
+      args.semantic_hint = args.semantic_hint || args.target_id;
+      delete args.target_id;
+    }
+    if (args.code === void 0) {
+      args.code = args.text ?? args.value ?? args.snippet ?? "";
     }
   } else if (canonicalName === TOOL_NAMES.TYPE_INTO_ELEMENT) {
     if (args.target_id === void 0) {
@@ -62908,13 +62936,29 @@ var init_schemas4 = __esm({
       [TOOL_NAMES.WAIT_FOR]: external_exports.object({
         selector: external_exports.string().optional().describe("CSS selector to wait for."),
         text_contains: external_exports.string().optional().describe("Text that must appear on the page."),
-        timeout_seconds: external_exports.number().min(1).max(30).default(8).optional().describe("Max seconds to wait (default 8, max 30).")
-      }).refine((data) => !!data.selector || !!data.text_contains, {
-        message: "wait_for requires either selector or text_contains"
+        wait_for_reply: external_exports.boolean().optional().describe("Set to true to wait for a reply/response from the other user in email or chat, tracking incoming message DOM changes."),
+        track_dom_changes: external_exports.boolean().optional().describe("Set to true to hold until meaningful DOM mutations or new elements arrive on the page."),
+        expected_sender: external_exports.string().optional().describe("Optional sender name or email address whose reply is expected."),
+        timeout_seconds: external_exports.number().min(1).max(600).default(60).optional().describe("Max seconds to hold and wait for the response/condition (up to 600s / 10 minutes).")
+      }).refine((data) => !!data.selector || !!data.text_contains || !!data.wait_for_reply || !!data.track_dom_changes, {
+        message: "wait_for requires selector, text_contains, wait_for_reply, or track_dom_changes"
       }),
       [TOOL_NAMES.WAIT_SECONDS]: external_exports.object({
-        seconds: external_exports.number().min(0.5).max(10).describe("Seconds to wait (0.5\u201310)."),
+        seconds: external_exports.number().min(0.5).max(300).describe("Seconds to wait (0.5\u2013300)."),
         reason: external_exports.string().optional().describe("Why you are waiting.")
+      }),
+      [TOOL_NAMES.TINYFISH_RESEARCH]: external_exports.object({
+        query: external_exports.string().min(1, "Search query is required").describe("Information or factual question to research via isolated TinyFish cloud agent."),
+        goal: external_exports.string().optional().describe("Optional high-level goal or context for the research.")
+      }),
+      [TOOL_NAMES.WRITE_CODE_EDITOR]: external_exports.object({
+        target_id: external_exports.union([external_exports.number().int(), external_exports.string().regex(/^\d+$/)]).optional().describe("Numeric [ID] of the code editor element (e.g. [24] <editor>)."),
+        semantic_hint: external_exports.string().optional().describe('Fallback: description of the code editor (e.g. "Monaco code editor", "solution editor").'),
+        code: external_exports.string().describe("The complete source code to inject into the editor."),
+        language: external_exports.string().optional().describe("Optional programming language (e.g. cpp, python, javascript)."),
+        clear_existing: external_exports.boolean().default(true).optional().describe("Whether to clear existing boilerplate code before writing (default true).")
+      }).refine((data) => data.target_id !== void 0 || !!data.semantic_hint, {
+        message: "write_code_editor requires either target_id or semantic_hint"
       }),
       [TOOL_NAMES.FINISH_TASK]: external_exports.object({
         summary: external_exports.string().min(1, "Summary is required").describe("Detailed summary of what was accomplished."),
@@ -63167,7 +63211,7 @@ var init_schemas4 = __esm({
       },
       {
         name: TOOL_NAMES.WAIT_FOR,
-        description: "Waits until a specific element appears in the DOM or specific text becomes visible on the page.",
+        description: "Waits until a specific element appears, text becomes visible, or an incoming reply/response arrives from another user by tracking live DOM mutations.",
         category: TOOL_CATEGORIES.WAITING,
         defaultRisk: RISK_TIERS.READ_ONLY,
         parameters: {
@@ -63175,7 +63219,10 @@ var init_schemas4 = __esm({
           properties: {
             selector: { type: "STRING", description: "CSS selector to wait for." },
             text_contains: { type: "STRING", description: "Text that must appear on the page." },
-            timeout_seconds: { type: "NUMBER", description: "Max seconds to wait (default 8, max 30)." }
+            wait_for_reply: { type: "BOOLEAN", description: "Wait for incoming reply or response from other user in email/chat threads." },
+            track_dom_changes: { type: "BOOLEAN", description: "Track live DOM changes and hold until new response elements appear." },
+            expected_sender: { type: "STRING", description: "Optional expected sender name or email." },
+            timeout_seconds: { type: "NUMBER", description: "Max seconds to hold and wait (default 60, up to 600)." }
           },
           required: []
         }
@@ -63188,10 +63235,41 @@ var init_schemas4 = __esm({
         parameters: {
           type: "OBJECT",
           properties: {
-            seconds: { type: "NUMBER", description: "Seconds to wait (0.5\u201310)." },
+            seconds: { type: "NUMBER", description: "Seconds to wait (0.5\u2013300)." },
             reason: { type: "STRING", description: "Why you are waiting." }
           },
           required: ["seconds"]
+        }
+      },
+      {
+        name: TOOL_NAMES.TINYFISH_RESEARCH,
+        description: "Researches questions, prices, facts, or external web information in an isolated cloud browser sandbox using TinyFish. Leaves the current tab and DOM completely untouched (vital when chatting in WhatsApp or composing in Gmail so active sessions are never lost).",
+        category: TOOL_CATEGORIES.READING,
+        defaultRisk: RISK_TIERS.READ_ONLY,
+        parameters: {
+          type: "OBJECT",
+          properties: {
+            query: { type: "STRING", description: "The question, topic, or factual query to research." },
+            goal: { type: "STRING", description: "Optional context on how the result will be used." }
+          },
+          required: ["query"]
+        }
+      },
+      {
+        name: TOOL_NAMES.WRITE_CODE_EDITOR,
+        description: "Writes source code into a virtualized code editor (Monaco on LeetCode/VSCode, CodeMirror, Ace). Uses atomic clipboard/buffer injection to prevent bracket duplication and indentation corruption.",
+        category: TOOL_CATEGORIES.INTERACTION,
+        defaultRisk: RISK_TIERS.SENSITIVE,
+        parameters: {
+          type: "OBJECT",
+          properties: {
+            target_id: { type: "NUMBER", description: "Numeric [ID] of the code editor from the element list." },
+            semantic_hint: { type: "STRING", description: "Fallback: describe the code editor." },
+            code: { type: "STRING", description: "The complete source code to inject into the editor." },
+            language: { type: "STRING", description: "Optional programming language (e.g. cpp, python, javascript)." },
+            clear_existing: { type: "BOOLEAN", description: "Whether to clear existing template/boilerplate code first (default true)." }
+          },
+          required: ["code"]
         }
       },
       {
@@ -63220,6 +63298,91 @@ function isForbiddenUrl(url2) {
     return FORBIDDEN_URL_PROTOCOLS.includes(parsed.protocol);
   } catch {
     return false;
+  }
+}
+function isProtectedWorkspace(url2 = "") {
+  if (!url2 || typeof url2 !== "string") return false;
+  return /(?:web\.whatsapp\.com|mail\.google\.com|slack\.com|discord\.com|teams\.microsoft\.com)/i.test(url2);
+}
+async function executeTinyFishResearch(args = {}, activeTab = {}, options = {}) {
+  const query = (args.query || "").trim();
+  if (!query) {
+    throw new ToolExecutionError("Search query is required for tinyfish_research", { toolName: TOOL_NAMES.TINYFISH_RESEARCH });
+  }
+  let apiKey = options.tinyfishApiKey || options.apiKey;
+  if (!apiKey && typeof chrome !== "undefined" && chrome?.storage?.local) {
+    try {
+      const stored = await chrome.storage.local.get(["tinyfishApiKey"]);
+      apiKey = stored?.tinyfishApiKey;
+    } catch (_) {
+    }
+  }
+  if (!apiKey && typeof process !== "undefined" && process.env?.TINYFISH_API_KEY) {
+    apiKey = process.env.TINYFISH_API_KEY;
+  }
+  if (!apiKey && typeof globalThis !== "undefined" && globalThis.ENV?.TINYFISH_API_KEY) {
+    apiKey = globalThis.ENV.TINYFISH_API_KEY;
+  }
+  if (!apiKey) {
+    apiKey = "sk-tinyfish-S4PTJp3U71cpkZ-QdWjQ4t9eY_gxxJHJ";
+  }
+  const researchGoal = args.goal || `Find accurate, concise factual information to answer: "${query}". Return a clear direct summary.`;
+  const chromeApi = options.chromeApi || (typeof chrome !== "undefined" ? chrome : null);
+  const currentTab = await getTabSafe(activeTab?.id, chromeApi);
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 6e4);
+    if (options.signal) {
+      options.signal.addEventListener("abort", () => controller.abort(), { once: true });
+    }
+    const res = await fetch(`${TINYFISH_API_BASE}/automation/run`, {
+      method: "POST",
+      headers: {
+        "X-API-Key": apiKey,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        url: "https://www.google.com",
+        goal: researchGoal
+      }),
+      signal: controller.signal
+    });
+    clearTimeout(timeout);
+    if (!res.ok) {
+      const errText = await res.text().catch(() => "");
+      throw new Error(`TinyFish API returned status ${res.status}: ${errText || res.statusText}`);
+    }
+    const data = await res.json();
+    let resultText = "";
+    if (data.status === "COMPLETED" && data.result != null) {
+      resultText = typeof data.result === "string" ? data.result : JSON.stringify(data.result, null, 2);
+    } else if (data.status === "FAILED") {
+      throw new Error(data.error?.message || `TinyFish automation failed with status ${data.status}`);
+    } else {
+      resultText = JSON.stringify(data.result || data);
+    }
+    const tabUrl = activeTab?.url || currentTab?.url || "";
+    return createToolResult({
+      toolName: TOOL_NAMES.TINYFISH_RESEARCH,
+      observation: `[TinyFish Isolated Cloud Research Result]:
+Query: "${query}"
+Answer:
+${resultText}
+
+(Note: Your active tab remains untouched on "${tabUrl || "current workspace"}". The chat/workspace session is preserved. Use this factual information to answer the user directly in chat.)`,
+      page: { ...currentTab, url: tabUrl || currentTab.url },
+      metadata: {
+        query,
+        source: "tinyfish",
+        steps: data.num_of_steps,
+        isolated: true
+      }
+    });
+  } catch (err) {
+    if (err.name === "AbortError") {
+      throw new ToolExecutionError(`TinyFish research timed out for query: "${query}"`, { toolName: TOOL_NAMES.TINYFISH_RESEARCH });
+    }
+    throw new ToolExecutionError(`TinyFish research error: ${err.message}`, { toolName: TOOL_NAMES.TINYFISH_RESEARCH, details: err });
   }
 }
 async function executeBrowserTool(toolName, rawArgs = {}, activeTab, options = {}) {
@@ -63257,6 +63420,22 @@ async function executeBrowserTool(toolName, rawArgs = {}, activeTab, options = {
       // ── search_web ──────────────────────────────────────────────────────────
       case TOOL_NAMES.SEARCH_WEB: {
         const q = args.query.trim();
+        const currentTabBefore = await getTabSafe(tabId, chromeApi);
+        const activeUrl = isProtectedWorkspace(activeTab?.url) ? activeTab.url : currentTabBefore?.url || activeTab?.url || "";
+        if (isProtectedWorkspace(activeUrl)) {
+          const research = await executeTinyFishResearch({
+            query: q,
+            goal: `Search and extract concise factual answer for: "${q}"`
+          }, activeTab, options);
+          return createToolResult({
+            toolName: TOOL_NAMES.SEARCH_WEB,
+            observation: `[Protected Workspace Interception: Active tab is on ${activeUrl}. Query was processed in an isolated TinyFish sandbox to keep your active chat/workspace DOM completely intact!]
+
+${research.observation}`,
+            page: { ...currentTabBefore, url: activeUrl },
+            metadata: { query: q, autoRoutedToTinyFish: true, protectedWorkspaceUrl: activeUrl }
+          });
+        }
         const engines = {
           google: `https://www.google.com/search?q=${encodeURIComponent(q)}`,
           bing: `https://www.bing.com/search?q=${encodeURIComponent(q)}`,
@@ -63289,6 +63468,21 @@ ${text}`,
         }
         if (isForbiddenUrl(url2)) {
           throw new PolicyViolationError(`Navigation to internal/restricted URL "${url2}" is blocked.`, { policy: "URL_POLICY" });
+        }
+        const currentTabBefore = await getTabSafe(tabId, chromeApi);
+        if (isProtectedWorkspace(currentTabBefore?.url || activeTab?.url) && !/web\.whatsapp\.com|mail\.google\.com/i.test(url2) && /google\.com|bing\.com|duckduckgo\.com|wikipedia\.org/i.test(url2)) {
+          const research = await executeTinyFishResearch({
+            query: url2,
+            goal: `Extract relevant facts or answers from ${url2}`
+          }, activeTab, options);
+          return createToolResult({
+            toolName: TOOL_NAMES.OPEN_URL,
+            observation: `[Protected Workspace Interception: Active tab is on ${currentTabBefore?.url || activeTab?.url}. External lookup "${url2}" was isolated via TinyFish cloud sandbox to protect the active chat session!]
+
+${research.observation}`,
+            page: currentTabBefore,
+            metadata: { requestedUrl: url2, autoRoutedToTinyFish: true }
+          });
         }
         await chromeApi.tabs.update(tabId, { url: url2 });
         await waitForTabLoad(tabId, 15e3, chromeApi, signal);
@@ -63467,12 +63661,14 @@ ${JSON.stringify(data, null, 2)}`,
         const targetId = args.target_id;
         const hint = args.semantic_hint || "";
         const initialTab = await getTabSafe(tabId, chromeApi);
+        const isSendOrSubmit = /(^|\b)(send|submit|dispatch)\b/i.test(hint);
+        const clickTimeout = isSendOrSubmit ? 45e3 : 35e3;
         let resp;
         try {
           resp = await sendToTab(tabId, {
             type: "EXECUTE_ACTION",
             payload: { action: "CLICK", target_id: targetId, semantic_hint: hint }
-          }, 8e3, chromeApi);
+          }, clickTimeout, chromeApi);
         } catch (err) {
           if (err instanceof ChannelClosedError || err.message?.includes("message channel closed")) {
             await waitForTabLoad(tabId, 12e3, chromeApi, signal);
@@ -63502,11 +63698,12 @@ ${JSON.stringify(data, null, 2)}`,
         const info = resp.result && typeof resp.result === "object" ? resp.result : {};
         const what = info.clicked || `[#${targetId || "?"}] "${hint}"`;
         const change = navigated ? `page navigated to ${currentTab.url}` : info.change || "no URL change";
+        const sendStatus = info.sendConfirmed ? " (Email dispatched & Send confirmed in DOM)" : "";
         return createToolResult({
           toolName,
-          observation: `Clicked ${what} \u2014 ${change}.`,
+          observation: `Clicked ${what} \u2014 ${change}${sendStatus}.`,
           page: currentTab,
-          metadata: { navigated, previousUrl: initialTab.url, target_id: targetId }
+          metadata: { navigated, previousUrl: initialTab.url, target_id: targetId, sendConfirmed: !!info.sendConfirmed }
         });
       }
       // ── type_into_element ───────────────────────────────────────────────────
@@ -63550,12 +63747,122 @@ ${JSON.stringify(data, null, 2)}`,
         }
         const info = resp.result && typeof resp.result === "object" ? resp.result : {};
         const desc = info.typedInto || (targetId ? `[#${targetId}]` : `"${hint}"`);
-        const valueNote = typeof info.value === "string" ? ` Field now contains: "${info.value}".` : "";
+        const isSearch = !!info.isSearchInput || /search/i.test(desc) || /search/i.test(hint);
+        const isDispatched = !isSearch && (info.dispatched || args.press_enter);
+        const changeNote = info.change ? ` (${info.change})` : "";
+        const valueNote = isDispatched ? " Message dispatched into chat thread." : typeof info.value === "string" && info.value ? ` Field now contains: "${info.value}".` : "";
+        const isEditor = !!info.editorType || !!info.lines;
+        const editorNote = isEditor ? ` Code editor (${info.editorType || "editor"}) buffer updated with ${info.lines || text.split("\n").length} lines.` : "";
         return createToolResult({
           toolName,
-          observation: `Typed into ${desc}${args.press_enter ? " + Enter" : ""}.${valueNote}${navigated ? ` Page navigated to ${currentTab.url}.` : ""}`,
+          observation: `Typed into ${desc}${args.press_enter ? " + Enter" : ""}.${editorNote}${valueNote}${changeNote}${navigated ? ` Page navigated to ${currentTab.url}.` : ""}`,
           page: currentTab,
-          metadata: { pressEnter: !!args.press_enter, navigated, target_id: targetId }
+          metadata: { pressEnter: !!args.press_enter, dispatched: !!isDispatched, isSearchInput: isSearch, navigated, target_id: targetId, codeModified: isEditor }
+        });
+      }
+      // ── write_code_editor ────────────────────────────────────────────────────
+      case TOOL_NAMES.WRITE_CODE_EDITOR: {
+        const targetId = args.target_id ? Number(args.target_id) : void 0;
+        const hint = args.semantic_hint || (targetId ? `[#${targetId}]` : "code editor");
+        let code = args.code || args.text || "";
+        if (vault?.rehydrate) {
+          code = vault.rehydrate(code) ?? code;
+        }
+        let pageWorldUpdated = false;
+        let pageWorldInfo = null;
+        if (chromeApi?.scripting?.executeScript) {
+          try {
+            const results = await chromeApi.scripting.executeScript({
+              target: { tabId },
+              world: "MAIN",
+              func: (newCode, clearExisting) => {
+                if (window.monaco?.editor) {
+                  try {
+                    const editors = window.monaco.editor.getEditors?.() || [];
+                    for (const ed of editors) {
+                      const model = ed.getModel?.();
+                      if (model) {
+                        if (clearExisting) {
+                          model.setValue(newCode);
+                        } else {
+                          const pos = ed.getPosition?.() || { lineNumber: 1, column: 1 };
+                          ed.executeEdits("pratyaksha", [{
+                            range: new window.monaco.Range(pos.lineNumber, pos.column, pos.lineNumber, pos.column),
+                            text: newCode
+                          }]);
+                        }
+                        return { success: true, editorType: "monaco", lines: newCode.split("\n").length };
+                      }
+                    }
+                    const models = window.monaco.editor.getModels?.() || [];
+                    if (models.length > 0) {
+                      models[0].setValue(newCode);
+                      return { success: true, editorType: "monaco", lines: newCode.split("\n").length };
+                    }
+                  } catch (_) {
+                  }
+                }
+                try {
+                  const cmEl = document.querySelector(".CodeMirror");
+                  if (cmEl && cmEl.CodeMirror) {
+                    cmEl.CodeMirror.setValue(newCode);
+                    return { success: true, editorType: "codemirror", lines: newCode.split("\n").length };
+                  }
+                } catch (_) {
+                }
+                try {
+                  const aceEl = document.querySelector(".ace_editor");
+                  if (aceEl && window.ace) {
+                    window.ace.edit(aceEl).setValue(newCode, -1);
+                    return { success: true, editorType: "ace", lines: newCode.split("\n").length };
+                  }
+                } catch (_) {
+                }
+                return { success: false };
+              },
+              args: [code, args.clear_existing !== false]
+            });
+            if (results?.[0]?.result?.success) {
+              pageWorldUpdated = true;
+              pageWorldInfo = results[0].result;
+            }
+          } catch (_) {
+          }
+        }
+        if (pageWorldUpdated) {
+          const currentTab2 = await getTabSafe(tabId, chromeApi);
+          const lines2 = pageWorldInfo.lines || code.split("\n").length;
+          const editorType2 = pageWorldInfo.editorType || "monaco";
+          return createToolResult({
+            toolName,
+            observation: `Successfully injected ${lines2} lines of code into ${editorType2} (${hint}). Existing template completely replaced.`,
+            page: currentTab2,
+            metadata: { lines: lines2, editorType: editorType2, target_id: targetId, codeModified: true }
+          });
+        }
+        const resp = await sendToTab(tabId, {
+          type: "EXECUTE_ACTION",
+          payload: {
+            action: "WRITE_CODE",
+            target_id: targetId,
+            semantic_hint: hint,
+            code,
+            language: args.language,
+            clear_existing: args.clear_existing !== false
+          }
+        }, 15e3, chromeApi);
+        if (!resp?.success) {
+          throw new ToolExecutionError(resp?.error || `Could not write code into [${targetId ? `#${targetId}` : hint}]`, { toolName });
+        }
+        const currentTab = await getTabSafe(tabId, chromeApi);
+        const info = resp.result && typeof resp.result === "object" ? resp.result : {};
+        const lines = info.lines || code.split("\n").length;
+        const editorType = info.editorType || "editor";
+        return createToolResult({
+          toolName,
+          observation: `Successfully injected ${lines} lines of code into ${editorType} (${hint}). Existing template completely replaced. Code buffer updated.`,
+          page: currentTab,
+          metadata: { lines, editorType, target_id: targetId, codeModified: true }
         });
       }
       // ── execute_js ──────────────────────────────────────────────────────────
@@ -63694,40 +64001,89 @@ URL: ${currentTab.url}`,
       }
       // ── wait_for ─────────────────────────────────────────────────────────────
       case TOOL_NAMES.WAIT_FOR: {
-        const timeoutMs = Math.min((args.timeout_seconds || 8) * 1e3, 3e4);
-        const resp = await sendToTab(tabId, {
-          type: "EXECUTE_ACTION",
-          payload: {
-            action: "WAIT_FOR",
-            selector: args.selector || null,
-            textContains: args.text_contains || null,
-            timeoutMs
+        const timeoutSeconds = Math.min(Math.max(args.timeout_seconds !== void 0 ? args.timeout_seconds : 5, 1), 60);
+        const timeoutMs = timeoutSeconds * 1e3;
+        const trackerId = `track_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+        const sliceMs = 500;
+        const startTime = Date.now();
+        let lastReportedSec = 0;
+        let found = false;
+        let resultInfo = null;
+        while (Date.now() - startTime < timeoutMs) {
+          if (signal?.aborted) {
+            return createToolResult({
+              toolName,
+              observation: "wait_for aborted by user.",
+              page: await getTabSafe(tabId, chromeApi),
+              metadata: { met: false, aborted: true }
+            });
           }
-        }, timeoutMs + 2e3, chromeApi);
+          let resp = null;
+          try {
+            resp = await sendToTab(tabId, {
+              type: "EXECUTE_ACTION",
+              payload: {
+                action: "WAIT_FOR",
+                trackerId,
+                selector: args.selector || null,
+                textContains: args.text_contains || null,
+                waitForReply: args.wait_for_reply !== false && (!!args.wait_for_reply || !args.selector && !args.text_contains),
+                trackDomChanges: args.track_dom_changes !== false,
+                expectedSender: args.expected_sender || null,
+                timeoutMs: sliceMs
+              }
+            }, 15e3, chromeApi);
+          } catch (err) {
+            if (err instanceof ChannelClosedError || err.message?.includes("message channel closed")) {
+              await ensureContentScript(tabId, chromeApi);
+            }
+          }
+          if (resp?.result?.found) {
+            found = true;
+            resultInfo = resp.result;
+            break;
+          }
+          const elapsedSec = Math.round((Date.now() - startTime) / 1e3);
+          if (elapsedSec - lastReportedSec >= 15) {
+            lastReportedSec = elapsedSec;
+          }
+          const remainingMs = timeoutMs - (Date.now() - startTime);
+          if (remainingMs <= 0) break;
+          await sleepMs(Math.min(sliceMs, remainingMs), signal);
+        }
         const currentTab = await getTabSafe(tabId, chromeApi);
-        if (!resp?.result?.found) {
+        if (!found) {
           return createToolResult({
             toolName,
-            observation: `wait_for timed out after ${timeoutMs / 1e3}s \u2014 condition not met.`,
+            observation: `Polled DOM for ${timeoutSeconds}s: No new incoming messages or changes detected. Continuing to monitor.`,
             page: currentTab,
-            metadata: { met: false }
+            metadata: { met: false, waiting: true }
           });
         }
+        const detailMsg = resultInfo?.detail || "incoming response received and verified in DOM";
+        const contentSnippet = resultInfo?.newContent ? `
+Response Content:
+${resultInfo.newContent}` : "";
         return createToolResult({
           toolName,
-          observation: `Condition met: ${resp.result.detail || "element appeared."}`,
+          observation: `Condition met: ${detailMsg}.${contentSnippet}`,
           page: currentTab,
-          metadata: { met: true }
+          metadata: { met: true, detail: resultInfo?.detail, newContent: resultInfo?.newContent }
         });
       }
       // ── wait_seconds ─────────────────────────────────────────────────────────
       case TOOL_NAMES.WAIT_SECONDS: {
-        const ms = Math.min(Math.max(args.seconds * 1e3, 500), 1e4);
-        await sleepMs(ms, signal);
+        const totalMs = Math.min(Math.max(args.seconds * 1e3, 500), 3e5);
+        const start = Date.now();
+        while (Date.now() - start < totalMs) {
+          if (signal?.aborted) break;
+          const chunk = Math.min(1e3, totalMs - (Date.now() - start));
+          await sleepMs(chunk, signal);
+        }
         const currentTab = await getTabSafe(tabId, chromeApi);
         return createToolResult({
           toolName,
-          observation: `Waited ${ms / 1e3}s${args.reason ? ` (${args.reason})` : ""}.`,
+          observation: `Waited ${(Date.now() - start) / 1e3}s${args.reason ? ` (${args.reason})` : ""}.`,
           page: currentTab
         });
       }
@@ -63746,6 +64102,10 @@ URL: ${currentTab.url}`,
           success: args.success,
           summary: args.summary
         });
+      }
+      // ── tinyfish_research ───────────────────────────────────────────────────
+      case TOOL_NAMES.TINYFISH_RESEARCH: {
+        return await executeTinyFishResearch(args, activeTab, options);
       }
       default:
         throw new ToolExecutionError(`Unknown tool: "${toolName}"`, { toolName });
@@ -63827,7 +64187,7 @@ function waitForTabLoad(tabId, timeoutMs = 15e3, chromeApi, signal) {
     timer = setTimeout(finish, timeoutMs);
   });
 }
-async function sendToTab(tabId, message, timeoutMs = 8e3, chromeApi) {
+async function sendToTab(tabId, message, timeoutMs = 35e3, chromeApi) {
   if (!chromeApi?.tabs?.sendMessage) throw new Error("chrome.tabs.sendMessage unavailable");
   const send = () => new Promise((resolve, reject) => {
     const timer = setTimeout(() => reject(new Error("Content script response timed out")), timeoutMs);
@@ -63874,13 +64234,14 @@ async function ensureContentScript(tabId, chromeApi) {
   } catch (err) {
   }
 }
-var _lastScreenshot;
+var _lastScreenshot, TINYFISH_API_BASE;
 var init_browser_tools = __esm({
   "src/browser/browser-tools.js"() {
     init_constants();
     init_errors6();
     init_schemas4();
     _lastScreenshot = null;
+    TINYFISH_API_BASE = "https://agent.tinyfish.ai/v1";
   }
 });
 
@@ -63909,6 +64270,18 @@ function quote(str, max) {
   return clean.length > max ? `${clean.slice(0, max - 1)}\u2026` : clean;
 }
 function formatElementLine(el, isBlacklisted = false) {
+  if (el.isEditor || el.tag === "editor") {
+    const lang = el.language ? ` language="${el.language}"` : "";
+    const edType = el.editorType || el.type || "monaco";
+    const label2 = quote(el.label || "Code Editor", 70);
+    const parts2 = [`${el.isNew ? "*" : ""}[${el.id}] <editor type="${edType}"${lang}>`];
+    if (isBlacklisted) {
+      parts2.push(`"[FAILED/DO-NOT-USE] ${label2}" \u26A0\uFE0F BLACKLISTED`);
+      return parts2.join(" ");
+    }
+    if (label2) parts2.push(`"${label2}"`);
+    return parts2.join(" ");
+  }
   const kind = el.type && el.type !== el.tag ? ` ${el.role ? "role" : "type"}=${el.type}` : "";
   const label = quote(el.label || el.text || el.placeholder || "", 70);
   const parts = [`${el.isNew ? "*" : ""}[${el.id}] <${el.tag || "?"}${kind}>`];
@@ -64056,11 +64429,150 @@ function generateDeterministicPlan(task2 = "", pageContext = {}) {
       riskTier: RISK_TIERS.IRREVERSIBLE,
       completionEvidence: "Send button clicked and message sent toast appears"
     });
+    const expectsReply = /\b(wait(ing)?\s+(for\s+)?([a-z0-9_-]+\s+)*(reply|response)|until\s+([a-z0-9_-]+\s+)*(reply|response))\b/i.test(task2);
+    if (expectsReply) {
+      subgoals.push({
+        id: 5,
+        description: "Hold execution and wait for reply from other user, tracking incoming message DOM changes",
+        expectedAction: "wait_for",
+        riskTier: RISK_TIERS.READ_ONLY,
+        completionEvidence: "Incoming response/reply detected and verified in DOM"
+      });
+    }
     verificationCriteria.push("Email service mail.google.com was visited");
     verificationCriteria.push("Recipient and message fields were typed");
     verificationCriteria.push("Send button was successfully triggered");
+    if (expectsReply) {
+      verificationCriteria.push("Response/reply from other user was received and verified in DOM");
+    }
     if (!/@/.test(task2) && !/\[EMAIL_/i.test(task2)) {
       missingInformation.push("Recipient email address was not specified");
+    }
+  } else if (/\b(whatsapp|wa\.me)\b/i.test(task2)) {
+    targetService = { name: "WhatsApp", url: "https://web.whatsapp.com" };
+    let targetChatName = null;
+    const groupMatch = task2.match(/(?:open|in|to)\s+["']?([a-zA-Z0-9_\s]{2,35}?)["']?\s+(?:group|chat|on\s+whatsapp)/i) || task2.match(/(?:group|chat)\s+["']?([a-zA-Z0-9_\s]{2,35}?)["']?\s+(?:on|in)/i) || task2.match(/whatsapp\s+(?:and\s+chat\s+(?:with\s+(?:the\s+people\s+over\s+there|them)\s+)?in\s+)?["']?([a-zA-Z0-9_\s]{2,35}?)["']?\s+group/i);
+    if (groupMatch && groupMatch[1]) {
+      targetChatName = groupMatch[1].trim();
+    }
+    const iterMatch = task2.match(/(\d+)\s+iterations?/i);
+    const requestedIterations = iterMatch ? parseInt(iterMatch[1], 10) : 1;
+    const untilExit = /\buntil\s+(the\s+)?(user|members?|someone|they)?\s*says?\s*["']?exit["']?\b/i.test(task2);
+    const expectsReply = requestedIterations > 1 || untilExit || /\b(a?wait(ing)?\s+(for\s+)?([a-z0-9_-]+\s+)*(reply|response)|until\s+([a-z0-9_-]+\s+)*(reply|response)|iterations?)\b/i.test(task2);
+    subgoals.push({
+      id: 1,
+      description: "Focus WhatsApp Web on current active tab",
+      expectedAction: "read_page",
+      riskTier: RISK_TIERS.READ_ONLY,
+      completionEvidence: "WhatsApp chat interface is active"
+    });
+    if (targetChatName) {
+      subgoals.push({
+        id: 2,
+        description: `Search for and click into requested group/contact "${targetChatName}"`,
+        expectedAction: "type_into_element",
+        riskTier: RISK_TIERS.REVERSIBLE,
+        completionEvidence: `Group "${targetChatName}" is opened and active in main chat pane`
+      });
+    } else {
+      subgoals.push({
+        id: 2,
+        description: "Find and open requested contact or group chat",
+        expectedAction: "click_element",
+        riskTier: RISK_TIERS.REVERSIBLE,
+        completionEvidence: "Target chat conversation opened in main view"
+      });
+    }
+    subgoals.push({
+      id: 3,
+      description: "Type and dispatch initial message/introduction into WhatsApp compose input (with press_enter=true)",
+      expectedAction: "type_into_element",
+      riskTier: RISK_TIERS.REVERSIBLE,
+      completionEvidence: "Message text typed and dispatched into WhatsApp chat"
+    });
+    if (expectsReply) {
+      subgoals.push({
+        id: 4,
+        description: untilExit ? 'Execute continuous conversation loop: wait for incoming reply, answer questions (using tinyfish_research for external info), and continue chatting until user says "exit"' : requestedIterations > 1 ? `Execute multi-turn conversation loop: wait for incoming reply, read response, and answer (cycle through ${requestedIterations} iterations)` : "Hold execution and wait for response from group members, monitoring DOM for incoming messages",
+        expectedAction: "wait_for",
+        riskTier: RISK_TIERS.READ_ONLY,
+        completionEvidence: untilExit ? 'Conversation loop completed when user said "exit"' : requestedIterations > 1 ? `Conversation loop completed for ${requestedIterations} iterations` : "Incoming response detected in WhatsApp DOM"
+      });
+    }
+    verificationCriteria.push("WhatsApp Web was accessed");
+    if (targetChatName) {
+      verificationCriteria.push(`Target group "${targetChatName}" was selected and opened`);
+    } else {
+      verificationCriteria.push("Target group or chat was opened");
+    }
+    verificationCriteria.push("Message was dispatched into the chat");
+    if (expectsReply) {
+      verificationCriteria.push("Incoming response tracked and verified in DOM without hallucination");
+    }
+    if (untilExit) {
+      verificationCriteria.push("Conversation maintained until user exit condition received");
+    } else if (requestedIterations > 1) {
+      verificationCriteria.push("Multi-turn conversation maintained across iterations");
+    }
+  } else if (/\b(leetcode|hackerrank|codeforces|two sum|twosum|solve.*problem|solve.*question|fix.*(code|solution|this)|pasted.*solution|template.*looks)\b/i.test(task2)) {
+    targetService = targetService || { name: "LeetCode", url: "https://leetcode.com" };
+    const isFixTask = /\b(fix|pasted|duplicate|template|compile error|wrong answer|not accepted|error)\b/i.test(task2);
+    if (isFixTask) {
+      subgoals.push({
+        id: 1,
+        description: "Locate code editor on problem page and completely clear duplicate template and boilerplate using write_code_editor(clear_existing=true)",
+        expectedAction: "write_code_editor",
+        riskTier: RISK_TIERS.REVERSIBLE,
+        completionEvidence: "Code editor completely wiped and re-injected with single clean solution"
+      });
+      subgoals.push({
+        id: 2,
+        description: "Click Submit button to test corrected code against judge",
+        expectedAction: "click_element",
+        riskTier: RISK_TIERS.REVERSIBLE,
+        completionEvidence: "Submit button clicked and testcase evaluation triggered"
+      });
+      subgoals.push({
+        id: 3,
+        description: 'Wait for judge submission verdict ("Accepted") and confirm result',
+        expectedAction: "wait_for",
+        riskTier: RISK_TIERS.READ_ONLY,
+        completionEvidence: "Accepted verdict verified in DOM"
+      });
+      verificationCriteria.push("Editor was cleared of duplicate templates and updated with clean solution");
+      verificationCriteria.push("Submit was triggered and Accepted verdict verified in DOM");
+    } else {
+      subgoals.push({
+        id: 1,
+        description: "Navigate to coding platform problem page",
+        expectedAction: "open_url",
+        riskTier: RISK_TIERS.REVERSIBLE,
+        completionEvidence: "Problem description and editor active on page"
+      });
+      subgoals.push({
+        id: 2,
+        description: "Locate code editor and inject clean solution using write_code_editor (with clear_existing=true)",
+        expectedAction: "write_code_editor",
+        riskTier: RISK_TIERS.REVERSIBLE,
+        completionEvidence: "Code editor buffer updated with algorithm implementation"
+      });
+      subgoals.push({
+        id: 3,
+        description: "Click Submit button to test code against judge testcases",
+        expectedAction: "click_element",
+        riskTier: RISK_TIERS.REVERSIBLE,
+        completionEvidence: "Submit button clicked and testcase evaluation triggered"
+      });
+      subgoals.push({
+        id: 4,
+        description: 'Wait for judge submission verdict ("Accepted") and confirm result',
+        expectedAction: "wait_for",
+        riskTier: RISK_TIERS.READ_ONLY,
+        completionEvidence: "Submission verdict (Accepted) verified in DOM"
+      });
+      verificationCriteria.push("Coding platform was visited and problem opened");
+      verificationCriteria.push("Solution was injected into code editor");
+      verificationCriteria.push("Submit was triggered and Accepted verdict verified in DOM");
     }
   } else if (/\b(search|find|lookup|who|what|score|price)\b/i.test(task2)) {
     subgoals.push({
@@ -83717,86 +84229,86 @@ var core_exports3 = /* @__PURE__ */ __exportAll({
 var JsonPatchError = PatchError;
 var deepClone = _deepClone;
 var objOps = {
-  add: function(obj, key, document) {
+  add: function(obj, key, document2) {
     if (key === "__proto__" || key === "constructor") throw new TypeError("JSON-Patch: modifying `__proto__` or `constructor` prop is banned for security reasons");
     obj[key] = this.value;
-    return { newDocument: document };
+    return { newDocument: document2 };
   },
-  remove: function(obj, key, document) {
+  remove: function(obj, key, document2) {
     if (key === "__proto__" || key === "constructor") throw new TypeError("JSON-Patch: modifying `__proto__` or `constructor` prop is banned for security reasons");
     var removed = obj[key];
     delete obj[key];
     return {
-      newDocument: document,
+      newDocument: document2,
       removed
     };
   },
-  replace: function(obj, key, document) {
+  replace: function(obj, key, document2) {
     if (key === "__proto__" || key === "constructor") throw new TypeError("JSON-Patch: modifying `__proto__` or `constructor` prop is banned for security reasons");
     var removed = obj[key];
     obj[key] = this.value;
     return {
-      newDocument: document,
+      newDocument: document2,
       removed
     };
   },
-  move: function(obj, key, document) {
-    let removed = getValueByPointer(document, this.path);
+  move: function(obj, key, document2) {
+    let removed = getValueByPointer(document2, this.path);
     if (removed) removed = _deepClone(removed);
-    const originalValue = applyOperation(document, {
+    const originalValue = applyOperation(document2, {
       op: "remove",
       path: this.from
     }).removed;
-    applyOperation(document, {
+    applyOperation(document2, {
       op: "add",
       path: this.path,
       value: originalValue
     });
     return {
-      newDocument: document,
+      newDocument: document2,
       removed
     };
   },
-  copy: function(obj, key, document) {
-    const valueToCopy = getValueByPointer(document, this.from);
-    applyOperation(document, {
+  copy: function(obj, key, document2) {
+    const valueToCopy = getValueByPointer(document2, this.from);
+    applyOperation(document2, {
       op: "add",
       path: this.path,
       value: _deepClone(valueToCopy)
     });
-    return { newDocument: document };
+    return { newDocument: document2 };
   },
-  test: function(obj, key, document) {
+  test: function(obj, key, document2) {
     return {
-      newDocument: document,
+      newDocument: document2,
       test: _areEquals(obj[key], this.value)
     };
   },
-  _get: function(obj, key, document) {
+  _get: function(obj, key, document2) {
     this.value = obj[key];
-    return { newDocument: document };
+    return { newDocument: document2 };
   }
 };
 var arrOps = {
-  add: function(arr3, i, document) {
+  add: function(arr3, i, document2) {
     if (isInteger(i)) arr3.splice(i, 0, this.value);
     else arr3[i] = this.value;
     return {
-      newDocument: document,
+      newDocument: document2,
       index: i
     };
   },
-  remove: function(arr3, i, document) {
+  remove: function(arr3, i, document2) {
     return {
-      newDocument: document,
+      newDocument: document2,
       removed: arr3.splice(i, 1)[0]
     };
   },
-  replace: function(arr3, i, document) {
+  replace: function(arr3, i, document2) {
     var removed = arr3[i];
     arr3[i] = this.value;
     return {
-      newDocument: document,
+      newDocument: document2,
       removed
     };
   },
@@ -83805,51 +84317,51 @@ var arrOps = {
   test: objOps.test,
   _get: objOps._get
 };
-function getValueByPointer(document, pointer) {
-  if (pointer == "") return document;
+function getValueByPointer(document2, pointer) {
+  if (pointer == "") return document2;
   var getOriginalDestination = {
     op: "_get",
     path: pointer
   };
-  applyOperation(document, getOriginalDestination);
+  applyOperation(document2, getOriginalDestination);
   return getOriginalDestination.value;
 }
-function applyOperation(document, operation, validateOperation = false, mutateDocument = true, banPrototypeModifications = true, index2 = 0) {
+function applyOperation(document2, operation, validateOperation = false, mutateDocument = true, banPrototypeModifications = true, index2 = 0) {
   if (validateOperation) {
-    if (typeof validateOperation == "function") validateOperation(operation, 0, document, operation.path);
+    if (typeof validateOperation == "function") validateOperation(operation, 0, document2, operation.path);
     else validator(operation, 0);
   }
   if (operation.path === "") {
-    let returnValue = { newDocument: document };
+    let returnValue = { newDocument: document2 };
     if (operation.op === "add") {
       returnValue.newDocument = operation.value;
       return returnValue;
     } else if (operation.op === "replace") {
       returnValue.newDocument = operation.value;
-      returnValue.removed = document;
+      returnValue.removed = document2;
       return returnValue;
     } else if (operation.op === "move" || operation.op === "copy") {
-      returnValue.newDocument = getValueByPointer(document, operation.from);
-      if (operation.op === "move") returnValue.removed = document;
+      returnValue.newDocument = getValueByPointer(document2, operation.from);
+      if (operation.op === "move") returnValue.removed = document2;
       return returnValue;
     } else if (operation.op === "test") {
-      returnValue.test = _areEquals(document, operation.value);
-      if (returnValue.test === false) throw new JsonPatchError("Test operation failed", "TEST_OPERATION_FAILED", index2, operation, document);
-      returnValue.newDocument = document;
+      returnValue.test = _areEquals(document2, operation.value);
+      if (returnValue.test === false) throw new JsonPatchError("Test operation failed", "TEST_OPERATION_FAILED", index2, operation, document2);
+      returnValue.newDocument = document2;
       return returnValue;
     } else if (operation.op === "remove") {
-      returnValue.removed = document;
+      returnValue.removed = document2;
       returnValue.newDocument = null;
       return returnValue;
     } else if (operation.op === "_get") {
-      operation.value = document;
+      operation.value = document2;
       return returnValue;
-    } else if (validateOperation) throw new JsonPatchError("Operation `op` property is not one of operations defined in RFC-6902", "OPERATION_OP_INVALID", index2, operation, document);
+    } else if (validateOperation) throw new JsonPatchError("Operation `op` property is not one of operations defined in RFC-6902", "OPERATION_OP_INVALID", index2, operation, document2);
     else return returnValue;
   } else {
-    if (!mutateDocument) document = _deepClone(document);
+    if (!mutateDocument) document2 = _deepClone(document2);
     const keys = (operation.path || "").split("/");
-    let obj = document;
+    let obj = document2;
     let t = 1;
     let len = keys.length;
     let existingPathFragment = void 0;
@@ -83865,80 +84377,80 @@ function applyOperation(document, operation, validateOperation = false, mutateDo
         if (existingPathFragment === void 0) {
           if (obj[key] === void 0) existingPathFragment = keys.slice(0, t).join("/");
           else if (t == len - 1) existingPathFragment = operation.path;
-          if (existingPathFragment !== void 0) validateFunction(operation, 0, document, existingPathFragment);
+          if (existingPathFragment !== void 0) validateFunction(operation, 0, document2, existingPathFragment);
         }
       }
       t++;
       if (Array.isArray(obj)) {
         if (key === "-") key = obj.length;
-        else if (validateOperation && !isInteger(key)) throw new JsonPatchError("Expected an unsigned base-10 integer value, making the new referenced value the array element with the zero-based index", "OPERATION_PATH_ILLEGAL_ARRAY_INDEX", index2, operation, document);
+        else if (validateOperation && !isInteger(key)) throw new JsonPatchError("Expected an unsigned base-10 integer value, making the new referenced value the array element with the zero-based index", "OPERATION_PATH_ILLEGAL_ARRAY_INDEX", index2, operation, document2);
         else if (isInteger(key)) key = ~~key;
         if (t >= len) {
-          if (validateOperation && operation.op === "add" && key > obj.length) throw new JsonPatchError("The specified index MUST NOT be greater than the number of elements in the array", "OPERATION_VALUE_OUT_OF_BOUNDS", index2, operation, document);
-          const returnValue = arrOps[operation.op].call(operation, obj, key, document);
-          if (returnValue.test === false) throw new JsonPatchError("Test operation failed", "TEST_OPERATION_FAILED", index2, operation, document);
+          if (validateOperation && operation.op === "add" && key > obj.length) throw new JsonPatchError("The specified index MUST NOT be greater than the number of elements in the array", "OPERATION_VALUE_OUT_OF_BOUNDS", index2, operation, document2);
+          const returnValue = arrOps[operation.op].call(operation, obj, key, document2);
+          if (returnValue.test === false) throw new JsonPatchError("Test operation failed", "TEST_OPERATION_FAILED", index2, operation, document2);
           return returnValue;
         }
       } else if (t >= len) {
-        const returnValue = objOps[operation.op].call(operation, obj, key, document);
-        if (returnValue.test === false) throw new JsonPatchError("Test operation failed", "TEST_OPERATION_FAILED", index2, operation, document);
+        const returnValue = objOps[operation.op].call(operation, obj, key, document2);
+        if (returnValue.test === false) throw new JsonPatchError("Test operation failed", "TEST_OPERATION_FAILED", index2, operation, document2);
         return returnValue;
       }
       obj = obj[key];
-      if (validateOperation && t < len && (!obj || typeof obj !== "object")) throw new JsonPatchError("Cannot perform operation at the desired path", "OPERATION_PATH_UNRESOLVABLE", index2, operation, document);
+      if (validateOperation && t < len && (!obj || typeof obj !== "object")) throw new JsonPatchError("Cannot perform operation at the desired path", "OPERATION_PATH_UNRESOLVABLE", index2, operation, document2);
     }
   }
 }
-function applyPatch(document, patch, validateOperation, mutateDocument = true, banPrototypeModifications = true) {
+function applyPatch(document2, patch, validateOperation, mutateDocument = true, banPrototypeModifications = true) {
   if (validateOperation) {
     if (!Array.isArray(patch)) throw new JsonPatchError("Patch sequence must be an array", "SEQUENCE_NOT_AN_ARRAY");
   }
-  if (!mutateDocument) document = _deepClone(document);
+  if (!mutateDocument) document2 = _deepClone(document2);
   const results = new Array(patch.length);
   for (let i = 0, length = patch.length; i < length; i++) {
-    results[i] = applyOperation(document, patch[i], validateOperation, true, banPrototypeModifications, i);
-    document = results[i].newDocument;
+    results[i] = applyOperation(document2, patch[i], validateOperation, true, banPrototypeModifications, i);
+    document2 = results[i].newDocument;
   }
-  results.newDocument = document;
+  results.newDocument = document2;
   return results;
 }
-function applyReducer(document, operation, index2) {
-  const operationResult = applyOperation(document, operation);
-  if (operationResult.test === false) throw new JsonPatchError("Test operation failed", "TEST_OPERATION_FAILED", index2, operation, document);
+function applyReducer(document2, operation, index2) {
+  const operationResult = applyOperation(document2, operation);
+  if (operationResult.test === false) throw new JsonPatchError("Test operation failed", "TEST_OPERATION_FAILED", index2, operation, document2);
   return operationResult.newDocument;
 }
-function validator(operation, index2, document, existingPathFragment) {
-  if (typeof operation !== "object" || operation === null || Array.isArray(operation)) throw new JsonPatchError("Operation is not an object", "OPERATION_NOT_AN_OBJECT", index2, operation, document);
-  else if (!objOps[operation.op]) throw new JsonPatchError("Operation `op` property is not one of operations defined in RFC-6902", "OPERATION_OP_INVALID", index2, operation, document);
-  else if (typeof operation.path !== "string") throw new JsonPatchError("Operation `path` property is not a string", "OPERATION_PATH_INVALID", index2, operation, document);
-  else if (operation.path.indexOf("/") !== 0 && operation.path.length > 0) throw new JsonPatchError('Operation `path` property must start with "/"', "OPERATION_PATH_INVALID", index2, operation, document);
-  else if ((operation.op === "move" || operation.op === "copy") && typeof operation.from !== "string") throw new JsonPatchError("Operation `from` property is not present (applicable in `move` and `copy` operations)", "OPERATION_FROM_REQUIRED", index2, operation, document);
-  else if ((operation.op === "add" || operation.op === "replace" || operation.op === "test") && operation.value === void 0) throw new JsonPatchError("Operation `value` property is not present (applicable in `add`, `replace` and `test` operations)", "OPERATION_VALUE_REQUIRED", index2, operation, document);
-  else if ((operation.op === "add" || operation.op === "replace" || operation.op === "test") && hasUndefined(operation.value)) throw new JsonPatchError("Operation `value` property is not present (applicable in `add`, `replace` and `test` operations)", "OPERATION_VALUE_CANNOT_CONTAIN_UNDEFINED", index2, operation, document);
-  else if (document) {
+function validator(operation, index2, document2, existingPathFragment) {
+  if (typeof operation !== "object" || operation === null || Array.isArray(operation)) throw new JsonPatchError("Operation is not an object", "OPERATION_NOT_AN_OBJECT", index2, operation, document2);
+  else if (!objOps[operation.op]) throw new JsonPatchError("Operation `op` property is not one of operations defined in RFC-6902", "OPERATION_OP_INVALID", index2, operation, document2);
+  else if (typeof operation.path !== "string") throw new JsonPatchError("Operation `path` property is not a string", "OPERATION_PATH_INVALID", index2, operation, document2);
+  else if (operation.path.indexOf("/") !== 0 && operation.path.length > 0) throw new JsonPatchError('Operation `path` property must start with "/"', "OPERATION_PATH_INVALID", index2, operation, document2);
+  else if ((operation.op === "move" || operation.op === "copy") && typeof operation.from !== "string") throw new JsonPatchError("Operation `from` property is not present (applicable in `move` and `copy` operations)", "OPERATION_FROM_REQUIRED", index2, operation, document2);
+  else if ((operation.op === "add" || operation.op === "replace" || operation.op === "test") && operation.value === void 0) throw new JsonPatchError("Operation `value` property is not present (applicable in `add`, `replace` and `test` operations)", "OPERATION_VALUE_REQUIRED", index2, operation, document2);
+  else if ((operation.op === "add" || operation.op === "replace" || operation.op === "test") && hasUndefined(operation.value)) throw new JsonPatchError("Operation `value` property is not present (applicable in `add`, `replace` and `test` operations)", "OPERATION_VALUE_CANNOT_CONTAIN_UNDEFINED", index2, operation, document2);
+  else if (document2) {
     if (operation.op == "add") {
       var pathLen = operation.path.split("/").length;
       var existingPathLen = existingPathFragment.split("/").length;
-      if (pathLen !== existingPathLen + 1 && pathLen !== existingPathLen) throw new JsonPatchError("Cannot perform an `add` operation at the desired path", "OPERATION_PATH_CANNOT_ADD", index2, operation, document);
+      if (pathLen !== existingPathLen + 1 && pathLen !== existingPathLen) throw new JsonPatchError("Cannot perform an `add` operation at the desired path", "OPERATION_PATH_CANNOT_ADD", index2, operation, document2);
     } else if (operation.op === "replace" || operation.op === "remove" || operation.op === "_get") {
-      if (operation.path !== existingPathFragment) throw new JsonPatchError("Cannot perform the operation at a path that does not exist", "OPERATION_PATH_UNRESOLVABLE", index2, operation, document);
+      if (operation.path !== existingPathFragment) throw new JsonPatchError("Cannot perform the operation at a path that does not exist", "OPERATION_PATH_UNRESOLVABLE", index2, operation, document2);
     } else if (operation.op === "move" || operation.op === "copy") {
       var error62 = validate5([{
         op: "_get",
         path: operation.from,
         value: void 0
-      }], document);
-      if (error62 && error62.name === "OPERATION_PATH_UNRESOLVABLE") throw new JsonPatchError("Cannot perform the operation from a path that does not exist", "OPERATION_FROM_UNRESOLVABLE", index2, operation, document);
+      }], document2);
+      if (error62 && error62.name === "OPERATION_PATH_UNRESOLVABLE") throw new JsonPatchError("Cannot perform the operation from a path that does not exist", "OPERATION_FROM_UNRESOLVABLE", index2, operation, document2);
     }
   }
 }
-function validate5(sequence, document, externalValidator) {
+function validate5(sequence, document2, externalValidator) {
   try {
     if (!Array.isArray(sequence)) throw new JsonPatchError("Patch sequence must be an array", "SEQUENCE_NOT_AN_ARRAY");
-    if (document) applyPatch(_deepClone(document), _deepClone(sequence), externalValidator || true);
+    if (document2) applyPatch(_deepClone(document2), _deepClone(sequence), externalValidator || true);
     else {
       externalValidator = externalValidator || validator;
-      for (var i = 0; i < sequence.length; i++) externalValidator(sequence[i], i, document, void 0);
+      for (var i = 0; i < sequence.length; i++) externalValidator(sequence[i], i, document2, void 0);
     }
   } catch (e) {
     if (e instanceof JsonPatchError) return e;
@@ -128991,8 +129503,8 @@ var BaseDocumentTransformer = class extends Runnable {
 var MappingDocumentTransformer = class extends BaseDocumentTransformer {
   async transformDocuments(documents) {
     const newDocuments = [];
-    for (const document of documents) {
-      const transformedDocument = await this._transformDocument(document);
+    for (const document2 of documents) {
+      const transformedDocument = await this._transformDocument(document2);
       newDocuments.push(transformedDocument);
     }
     return newDocuments;
@@ -129347,11 +129859,11 @@ var _HashedDocument = class {
       metadata: this.metadata
     });
   }
-  static fromDocument(document, uid) {
+  static fromDocument(document2, uid) {
     const doc = new this({
-      pageContent: document.pageContent,
-      metadata: document.metadata,
-      uid: uid || document.uid
+      pageContent: document2.pageContent,
+      metadata: document2.metadata,
+      uid: uid || document2.uid
     });
     doc.calculateHashes();
     return doc;
@@ -131765,11 +132277,11 @@ var FunctionalTranslator = class extends BaseTranslator {
     const { operator, args } = operation;
     if (this.allowedOperators.includes(operator)) {
       const operatorFunction = this.getOperatorFunction(operator);
-      return (document) => {
+      return (document2) => {
         if (!args) return true;
         return args.reduce((acc, arg) => {
           const result = arg.accept(this);
-          if (typeof result === "function") return operatorFunction(acc, result(document));
+          if (typeof result === "function") return operatorFunction(acc, result(document2));
           else throw new Error("Filter is not a function");
         }, true);
       };
@@ -131787,8 +132299,8 @@ var FunctionalTranslator = class extends BaseTranslator {
     if (this.allowedComparators.includes(comparator)) {
       if (!this.getAllowedComparatorsForType(typeof value).includes(comparator)) throw new Error(`'${comparator}' comparator not allowed to be used with ${typeof value}`);
       const comparatorFunction = this.getComparatorFunction(comparator);
-      return (document) => {
-        const documentValue = document.metadata[attribute];
+      return (document2) => {
+        const documentValue = document2.metadata[attribute];
         if (documentValue === void 0) {
           if (undefinedTrue.includes(comparator)) return true;
           return false;
@@ -131825,8 +132337,8 @@ var FunctionalTranslator = class extends BaseTranslator {
       if (mergeType === "and") return;
       return defaultFilter;
     }
-    if (mergeType === "and") return (document) => defaultFilter(document) && generatedFilter(document);
-    else if (mergeType === "or") return (document) => defaultFilter(document) || generatedFilter(document);
+    if (mergeType === "and") return (document2) => defaultFilter(document2) && generatedFilter(document2);
+    else if (mergeType === "or") return (document2) => defaultFilter(document2) || generatedFilter(document2);
     else throw new Error("Unknown merge type");
   }
 };
@@ -133755,8 +134267,8 @@ var SyntheticEmbeddings = class extends Embeddings2 {
   * @param document The document to generate an embedding for.
   * @returns A promise that resolves with a synthetic embedding for the document.
   */
-  async embedQuery(document) {
-    let doc = document;
+  async embedQuery(document2) {
+    let doc = document2;
     doc = doc.toLowerCase().replaceAll(/[^a-z ]/g, "");
     const padMod = doc.length % this.vectorSize;
     const padGapSize = padMod === 0 ? 0 : this.vectorSize - padMod;
@@ -144868,7 +145380,8 @@ function createLangChainBrowserTools(getSessionContext, options = {}) {
       const result = await executeBrowserTool(toolName, inputArgs, activeTab, {
         vault,
         signal,
-        chromeApi
+        chromeApi,
+        tinyfishApiKey: session?.tinyfishApiKey
       });
       if (result.newTabId && activeTab) {
         activeTab.id = result.newTabId;
@@ -144888,7 +145401,7 @@ function createLangChainBrowserTools(getSessionContext, options = {}) {
 }
 
 // src/agent/middleware.js
-function validateToolCall(toolCall, blacklistedTargets = []) {
+function validateToolCall(toolCall, blacklistedTargets = [], elements = []) {
   if (!toolCall || !toolCall.name) {
     return { valid: false, reason: "Invalid or missing tool call specification" };
   }
@@ -144900,11 +145413,40 @@ function validateToolCall(toolCall, blacklistedTargets = []) {
       reason: `Target element index [${args.index}] is currently blacklisted due to prior failures.`
     };
   }
+  if (args.target_id !== void 0 && blacklistSet.has(String(args.target_id))) {
+    return {
+      valid: false,
+      reason: `Target element [#${args.target_id}] is currently blacklisted due to prior failures.`
+    };
+  }
   if (args.selector && blacklistSet.has(String(args.selector))) {
     return {
       valid: false,
       reason: `Target selector "${args.selector}" is currently blacklisted due to prior failures.`
     };
+  }
+  if (toolCall.name === "type_into_element" || toolCall.name === "write_code_editor") {
+    const targetId = args.target_id ?? args.index;
+    if (targetId !== void 0 && Array.isArray(elements) && elements.length > 0) {
+      const el = elements.find((e) => String(e.id) === String(targetId));
+      if (el) {
+        const tag = (el.tag || "").toLowerCase();
+        const role = (el.role || "").toLowerCase();
+        const type = (el.type || "").toLowerCase();
+        const isEditor = tag === "editor" || role === "code-editor" || /monaco|codemirror|ace/i.test(el.className || "");
+        const isTextInput = tag === "input" && !["button", "submit", "reset", "checkbox", "radio", "file", "image"].includes(type);
+        const isTextarea = tag === "textarea";
+        const isContentEditable = !!el.contenteditable || role === "textbox" || role === "combobox";
+        const isNonEditable = (tag === "button" || role === "button" || tag === "a" || role === "link" || role === "tab") && !isEditor && !isTextInput && !isTextarea && !isContentEditable;
+        if (isNonEditable) {
+          return {
+            valid: false,
+            nonRetryableAction: true,
+            reason: `Target [#${targetId}] <${tag || role}> is not an editable field. To interact with it, use click_element, or choose an input/textarea/editor element.`
+          };
+        }
+      }
+    }
   }
   return { valid: true };
 }
@@ -144993,8 +145535,28 @@ function buildActionLog(history = [], maxLines = 25) {
 }
 function detectLoop(history = [], windowSize = 8) {
   const recent = history.slice(-windowSize).filter((h) => h.toolName !== "finish_task");
+  const typeHistory = recent.filter((h) => h.toolName === "type_into_element" && h.args?.text);
+  const textCounts = /* @__PURE__ */ new Map();
+  for (const h of typeHistory) {
+    const trimmedText = String(h.args.text).trim().toLowerCase();
+    if (trimmedText.length > 3) {
+      const count = (textCounts.get(trimmedText) || 0) + 1;
+      textCounts.set(trimmedText, count);
+      if (count >= 2) {
+        return `SPAM / LOOP PREVENTION: You have already typed and sent this exact message ("${String(h.args.text).slice(0, 40)}..."). Do NOT repeat identical messages or spam the chat! If you are awaiting a reply or response from other participants, call wait_for({ wait_for_reply: true, track_dom_changes: true }) to hold execution until a new response is received.`;
+      }
+    }
+  }
+  if (recent.length >= 2) {
+    const last = recent[recent.length - 1];
+    const prev = recent[recent.length - 2];
+    if (last.toolName === "type_into_element" && prev.toolName === "type_into_element" && last.args?.target_id && last.args?.target_id === prev.args?.target_id) {
+      return `SPAM / LOOP PREVENTION: You just typed into this element in the previous step. Do NOT type consecutively into the same input without checking the page or waiting for a reply! Call wait_for({ wait_for_reply: true, track_dom_changes: true }).`;
+    }
+  }
   const counts = /* @__PURE__ */ new Map();
   for (const h of recent) {
+    if (h.toolName === "wait_for") continue;
     const key = `${h.toolName}:${JSON.stringify(h.args || {})}`;
     counts.set(key, (counts.get(key) || 0) + 1);
   }
@@ -145139,6 +145701,14 @@ function classifyAction(toolName, args = {}, pageContext = {}) {
       summary: `Type into field: "${hint || "#" + args.target_id}"`
     };
   }
+  if (toolName === TOOL_NAMES.WRITE_CODE_EDITOR) {
+    const hint = args.semantic_hint || "";
+    return {
+      riskTier: RISK_TIERS.REVERSIBLE,
+      requiresApproval: false,
+      summary: `Write code into editor: "${hint || "#" + args.target_id}"`
+    };
+  }
   return {
     riskTier: RISK_TIERS.REVERSIBLE,
     requiresApproval: false,
@@ -145164,17 +145734,57 @@ STRICT RULES (follow exactly)
 1. Only use [ID]s that appear in the CURRENT element list. Never invent, guess or reuse an ID that is not listed now.
 2. Never state facts you did not read on the page. Answers must come from VISIBLE TEXT or read_page output.
 3. If what you need is not listed: scroll_page, or use find_on_page, or open a better URL. Do not click random elements.
-4. Text fields: type_into_element (it replaces existing text). For search boxes set press_enter=true. Dropdowns: select_option. Popups/menus: press_key Escape.
+4. Text fields: type_into_element (it replaces existing text). For search boxes and chat message inputs set press_enter=true. Dropdowns: select_option. Popups/menus: press_key Escape.
 5. Cookie banners, sign-up popups or overlays blocking the page: close or accept-necessary them first.
 6. If an action fails, read the error and change approach. Never repeat the same failing action.
 7. You may call several tools in one step only when they do not depend on each other's result (e.g. fill 3 form fields, then click Submit). After a click that navigates, the remaining calls are skipped automatically.
 8. Do not ask the user questions like "Shall I proceed?". Act. If the task truly needs information you do not have (password, missing recipient), call finish_task with success=false and say what is missing.
 9. If you hit a login wall, CAPTCHA, or payment step you are not authorized for, stop with finish_task(success=false) and explain.
+10. If the task requires sending an email, message, or prompt AND waiting for a reply or response from the other user:
+    - After clicking Send or dispatching your message, DO NOT call finish_task immediately!
+    - Call wait_for(wait_for_reply=true, timeout_seconds=5) to monitor the DOM in 5-second intervals.
+    - If an incoming reply or DOM change is detected, read the message and act on it immediately. If no message arrives, call wait_for(wait_for_reply=true, timeout_seconds=5) again to continue waiting.
+11. When asked to message or open a specific contact or group (e.g. "Silicon Valley ke 14" on WhatsApp):
+    - DO NOT type into whatever chat is currently open on the screen!
+    - CRITICAL: NEVER batch searching for a chat and typing a message in the same step!
+    - In step 1, search for the contact/group: locate the search input (e.g. "Search or start new chat"), type the contact/group name with press_enter=true.
+    - In step 2, click into the matching contact/group in the search results list if not already open, and verify the chat header.
+    - Only after the chat is open, type your message into the compose input in the next step!
+12. When messaging or chatting on WhatsApp/chat platforms:
+    - To send a message or introduction, call type_into_element with press_enter=true (this types and dispatches the message in one step).
+    - NEVER call type_into_element again with the same or similar message, and NEVER call press_key("Enter") or click Send after typing with press_enter=true \u2014 the message is ALREADY DISPATCHED!
+    - NEVER send repeated text (like X X X X) into the chat! Once a message is sent, the compose box is cleared.
+    - NEVER click the microphone or "Voice message" button! The microphone starts an audio recording instead of sending text. Only click the Send button (paper-plane icon with aria-label="Send") if text is typed without press_enter.
+    - Immediately after sending, you MUST call wait_for(wait_for_reply=true, timeout_seconds=5) to read DOM changes every 5 seconds.
+    - Act on any incoming reply or question immediately. If no new messages appeared during the 5s window, call wait_for(wait_for_reply=true, timeout_seconds=5) again to keep waiting.
+    - If the user prompt asks to continue chatting until the user says "exit": repeat the loop (wait_for -> read reply -> answer -> wait_for) until an incoming message contains "exit", at which point call finish_task(success=true, summary="Chat conversation ended as user requested exit").
+    - NEVER call finish_task prematurely after a single intro message when multi-turn or continuous chatting was requested!
+    - NEVER fabricate or claim that group members or users responded unless their reply was verifiably observed in the DOM.
+13. EXTERNAL KNOWLEDGE & WEB RESEARCH DURING SESSIONS (WhatsApp, Gmail, chat, forms):
+    - When you are inside an active workspace application (WhatsApp Web, Gmail, chat thread, or form) and someone asks a question or a topic comes up requiring external search or factual information (e.g. "Who is dhruv rathee", "What is the price of a German shepherd"):
+    - NEVER call search_web or open_url to navigate away from the workspace! Navigating away drops the WebSocket connection, closes the active chat, destroys the session, and breaks the conversation.
+    - INSTEAD, call tinyfish_research(query="...")!
+    - tinyfish_research executes the search in an isolated cloud browser sandbox, leaving the local WhatsApp/workspace tab completely pristine.
+    - When tinyfish_research returns the factual answer, use that answer directly to type your reply into the active chat input!
+14. CODING & PROBLEM-SOLVING PLATFORMS (LeetCode, HackerRank, Codeforces, GitHub, VS Code):
+    - When asked to solve a problem, write code, or fix an editor state on coding platforms:
+    - NEVER type code into a <button>, link, or toolbar element! Buttons like "Run", "Submit", or language selectors are not editors.
+    - Locate the code editor element (tagged as <editor> or Monaco/CodeMirror) in the interactive element list.
+    - ALWAYS use write_code_editor(target_id=..., code=..., language=...) with clear_existing=true.
+    - CRITICAL: Never leave the original template or duplicate boilerplate behind! In Monaco/CodeMirror, write_code_editor completely empties and replaces the buffer.
+    - If the user or page reports that the solution was pasted before the template or has duplicate classes, immediately call write_code_editor on the editor with the single complete solution to wipe the template.
+    - NEVER dump your code as conversational text in the chat or claim the task is done without injecting the code into the editor on the page!
+    - After writing code into the editor, click "Run" or "Submit" (<button>).
+    - After clicking "Submit", you MUST wait for the verdict by calling wait_for(text_contains="Accepted", timeout_seconds=10) or inspecting page text.
+    - NEVER call finish_task before the evaluation verdict ("Accepted") is verified in the DOM! If wait_for reports no new messages or times out, do NOT claim it is Accepted \u2014 inspect the page or call wait_for again. If the judge returned "Compile Error" or "Wrong Answer", inspect and fix the code!
+    - If the user reports that code was pasted before template, compiler error occurred, or asks to "fix this": NEVER call finish_task immediately! You MUST locate the editor, re-inject the clean single solution via write_code_editor, click Submit, and wait for "Accepted".
 
 FINISHING
-- Call finish_task as soon as the goal is verifiably done on the page. Put the actual result (the answer, the data found, what was sent) in the summary.
+- Call finish_task as soon as the goal is verifiably done on the page. Put the actual result (the answer, the data found, what was sent, or the reply received) in the summary.
 - For information tasks, read the page first, then finish with the answer. Do not finish without the answer.
-- Do not call finish_task for a multi-step goal (chat, form, email) until the final step is confirmed on the page.`;
+- Do not call finish_task for a multi-step goal (chat, form, email) until the final step is confirmed on the page.
+- Never finish an email or messaging task that requested waiting for a reply until that reply has actually been observed and confirmed in the DOM.
+- Never finish a multi-iteration task prematurely before completing the requested conversation cycles.`;
 var DEFAULT_HIDDEN_TOOLS = Object.freeze([
   TOOL_NAMES.SCREENSHOT,
   TOOL_NAMES.GET_PAGE_METADATA,
@@ -145290,12 +145900,13 @@ async function runTool(tools2, toolCall, rawName) {
     return `ERROR [${toolCall.name} - ${code || "TOOL_ERROR"}]: ${message}`;
   }
 }
-function createActorToolSession({ tabId, url: url2 = "", title = "", vault, signal, chromeApi, exposeAllTools = false }) {
+function createActorToolSession({ tabId, url: url2 = "", title = "", vault, signal, chromeApi, exposeAllTools = false, tinyfishApiKey = "" }) {
   const sessionContext = {
     activeTab: { id: tabId, url: url2, title },
     vault,
     signal,
     chromeApi,
+    tinyfishApiKey,
     lastResult: null
   };
   sessionContext.onToolResult = (res) => {
@@ -145314,6 +145925,7 @@ async function executeApprovedToolCall(pending, options = {}) {
     vault: options.vault,
     signal: options.signal,
     chromeApi: options.chromeApi,
+    tinyfishApiKey: options.tinyfishApiKey,
     exposeAllTools: true
   });
   const observation = await runTool(tools2, pending.toolCall, pending.toolCall.name);
@@ -145388,6 +146000,7 @@ async function browserActorAgentNode(state2, options = {}) {
     vault,
     signal,
     chromeApi,
+    tinyfishApiKey: options.tinyfishApiKey,
     exposeAllTools: options.exposeAllTools
   });
   const modelWithTools = bindModelTools(model, tools2);
@@ -145443,11 +146056,12 @@ async function browserActorAgentNode(state2, options = {}) {
     let observationText = "";
     const validation = validateToolCall(
       { ...toolCall, args: { ...toolCall.args, index: toolCall.args.target_id ?? toolCall.args.index } },
-      blacklistedTargets
+      blacklistedTargets,
+      pageCtx.elements
     );
     if (!validation.valid) {
       const { code, message } = errorText(new PolicyViolationError(validation.reason, { toolName: toolCall.name }), validation.reason);
-      observationText = `BLOCKED [${toolCall.name} - ${code || "POLICY_VIOLATION"}]: ${message}`;
+      observationText = `BLOCKED [${toolCall.name} - ${code || "VALIDATION_ERROR"}]: ${message}`;
     } else {
       const policyDecision = classifyAction(toolCall.name, toolCall.args, pageCtx);
       if (policyDecision.requiresApproval && interruptsEnabled) {
@@ -145486,6 +146100,7 @@ async function browserActorAgentNode(state2, options = {}) {
     if (/^(ERROR|BLOCKED)/.test(observationText)) {
       hasToolError = true;
       latestObservation = latestObservation && latestObservation.toolName === toolCall.name ? latestObservation : { ok: false, toolName: toolCall.name, args: toolCall.args, observation: observationText, error: { message: observationText } };
+      skipReason = `previous tool ${toolCall.name} encountered an error. Remaining actions stopped so agent can perceive fresh page state.`;
     }
     events?.emit?.("THINKING", {
       phase: "observation",
@@ -145504,6 +146119,18 @@ async function browserActorAgentNode(state2, options = {}) {
       skipReason = "task already finished.";
       continue;
     }
+    const currentIndex = toolCalls.indexOf(rawToolCall);
+    const hasNext = currentIndex >= 0 && currentIndex < toolCalls.length - 1;
+    if (hasNext) {
+      const nextCall = toolCalls[currentIndex + 1];
+      const nextName = nextCall?.name || "";
+      const isSearch = latestObservation?.metadata?.isSearchInput || /search/i.test(latestObservation?.observation || "");
+      if (isSearch) {
+        skipReason = "search input submitted. Remaining actions stopped so agent can view search results in updated DOM.";
+      } else if (toolCall.name === TOOL_NAMES.TYPE_INTO_ELEMENT && nextName === TOOL_NAMES.TYPE_INTO_ELEMENT) {
+        skipReason = "input was submitted. Verify the updated page snapshot before typing into the next field.";
+      }
+    }
     const afterUrl = latestObservation?.page?.url || "";
     const switchedTab = !!latestObservation?.newTabId;
     if (NAVIGATING_TOOLS.has(toolCall.name) && (switchedTab || afterUrl && stepStartUrl && afterUrl !== stepStartUrl)) {
@@ -145511,10 +146138,18 @@ async function browserActorAgentNode(state2, options = {}) {
     }
   }
   if (toolCalls.length === 0) {
-    const consecutive = trailingTextOnlyTurns(priorMessages) + 1;
-    if (consecutive >= 2 && thoughtText) {
-      latestObservation = { isFinished: true, success: true, summary: thoughtText, steps: stepCount };
-      events?.emit?.("THINKING", { phase: "finish", text: `Model answered without tools: ${truncateString(thoughtText, 120)}`, step: stepCount, maxSteps });
+    const isBrowserActionTask = /\b(solve|submit|write.*code|type|message|send|click|open|fill|navigate)\b/i.test(task2);
+    const containsCodeBlock = /```[\s\S]*```|function\s*\(|class\s*Solution|def\s+[a-z_]/i.test(thoughtText);
+    if (isBrowserActionTask && containsCodeBlock) {
+      newMessages.push(new HumanMessage(
+        "CRITICAL: You dumped code into conversational text instead of interacting with the browser! Do NOT output code in conversational chat. You MUST call write_code_editor or type_into_element on the editor element on the page, and then click the Submit button. Call the appropriate tool now."
+      ));
+    } else {
+      const consecutive = trailingTextOnlyTurns(priorMessages) + 1;
+      if (consecutive >= 2 && thoughtText) {
+        latestObservation = { isFinished: true, success: true, summary: thoughtText, steps: stepCount };
+        events?.emit?.("THINKING", { phase: "finish", text: `Model answered without tools: ${truncateString(thoughtText, 120)}`, step: stepCount, maxSteps });
+      }
     }
   }
   const finalPage = latestObservation?.page?.url ? latestObservation.page : null;
@@ -145661,11 +146296,163 @@ function verifyTaskOutcome({
         evidence: "No Send click detected in action history."
       };
     }
+    const expectsReply = /\b(wait(ing)?\s+(for\s+)?([a-z0-9_-]+\s+)*(reply|response)|until\s+([a-z0-9_-]+\s+)*(reply|response))\b/i.test(task2);
+    if (expectsReply) {
+      const waitedForReply = history.some(
+        (h) => h.toolName === "wait_for" && (h.ok !== false || h.metadata?.met || /condition\s+met|reply|response/i.test(h.observation || ""))
+      );
+      const readReply = history.some(
+        (h) => h.toolName === "read_page" && /reply|response|from/i.test(h.observation || "")
+      );
+      if (!waitedForReply && !readReply) {
+        return {
+          outcome: VERIFICATION_OUTCOMES.INCOMPLETE_RECOVERABLE,
+          verified: false,
+          reason: "Email was sent, but the task requires waiting for a reply from the other user. The agent must hold execution and wait for the response to be received in the DOM.",
+          evidence: "Send clicked, but incoming reply was not tracked or verified in DOM."
+        };
+      }
+    }
     return {
       outcome: VERIFICATION_OUTCOMES.VERIFIED_SUCCESS,
       verified: true,
-      reason: "Email workflow verified: Visited service, filled fields, and triggered Send.",
-      evidence: `Visited: ${currentUrl}, Inputs: ${typedInputs.length}, Send Clicked: true`
+      reason: expectsReply ? "Email workflow verified: Sent message and confirmed response/reply received from other user." : "Email workflow verified: Visited service, filled fields, and triggered Send.",
+      evidence: `Visited: ${currentUrl}, Inputs: ${typedInputs.length}, Send Clicked: true${expectsReply ? ", Reply Verified: true" : ""}`
+    };
+  }
+  const isWhatsAppTask = /\b(whatsapp|wa\.me)\b/i.test(task2);
+  if (isWhatsAppTask) {
+    const visitedWhatsApp = history.some((h) => /web\.whatsapp\.com/i.test(h.url || "")) || /web\.whatsapp\.com/i.test(currentUrl);
+    const typedInputs = history.filter((h) => h.toolName === "type_into_element");
+    const sentMessage = history.some(
+      (h) => h.toolName === "press_key" && /enter/i.test(h.args?.key || "") || h.toolName === "click_element" && /send/i.test(h.args?.semantic_hint || "") || h.toolName === "type_into_element" && (h.args?.press_enter || h.metadata?.pressEnter || /enter/i.test(h.observation || ""))
+    );
+    let targetChatName = null;
+    const groupMatch = task2.match(/(?:open|in|to)\s+["']?([a-zA-Z0-9_\s]{2,35}?)["']?\s+(?:group|chat|on\s+whatsapp)/i) || task2.match(/(?:group|chat)\s+["']?([a-zA-Z0-9_\s]{2,35}?)["']?\s+(?:on|in)/i) || task2.match(/whatsapp\s+(?:and\s+chat\s+(?:with\s+(?:the\s+people\s+over\s+there|them)\s+)?in\s+)?["']?([a-zA-Z0-9_\s]{2,35}?)["']?\s+group/i);
+    if (groupMatch && groupMatch[1]) {
+      targetChatName = groupMatch[1].trim();
+    }
+    const iterMatch = task2.match(/(\d+)\s+iterations?/i);
+    const requestedIterations = iterMatch ? parseInt(iterMatch[1], 10) : 1;
+    const expectsReply = requestedIterations > 1 || /\b(a?wait(ing)?\s+(for\s+)?([a-z0-9_-]+\s+)*(reply|response)|until\s+([a-z0-9_-]+\s+)*(reply|response)|iterations?)\b/i.test(task2);
+    if (!visitedWhatsApp) {
+      return {
+        outcome: VERIFICATION_OUTCOMES.INCOMPLETE_RECOVERABLE,
+        verified: false,
+        reason: "WhatsApp Web (web.whatsapp.com) was never visited or active.",
+        evidence: `Current URL: ${currentUrl}`
+      };
+    }
+    if (targetChatName) {
+      const selectedTargetChat = history.some(
+        (h) => h.toolName === "type_into_element" && new RegExp(targetChatName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i").test(h.args?.text || "") || h.toolName === "click_element" && new RegExp(targetChatName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i").test(h.args?.semantic_hint || h.observation || "") || h.toolName === "read_page" && new RegExp(targetChatName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i").test(h.observation || "")
+      );
+      if (!selectedTargetChat) {
+        return {
+          outcome: VERIFICATION_OUTCOMES.INCOMPLETE_RECOVERABLE,
+          verified: false,
+          reason: `Requested WhatsApp chat or group "${targetChatName}" was not opened. The agent must search for and select "${targetChatName}".`,
+          evidence: `Action history does not reference "${targetChatName}".`
+        };
+      }
+    }
+    if (typedInputs.length === 0) {
+      return {
+        outcome: VERIFICATION_OUTCOMES.INCOMPLETE_RECOVERABLE,
+        verified: false,
+        reason: "No message was typed into the WhatsApp chat input.",
+        evidence: "Input fields typed: 0"
+      };
+    }
+    if (!sentMessage) {
+      return {
+        outcome: VERIFICATION_OUTCOMES.INCOMPLETE_RECOVERABLE,
+        verified: false,
+        reason: "Message was typed but not dispatched into the WhatsApp chat.",
+        evidence: "Send action (press Enter or click Send) not detected."
+      };
+    }
+    if (expectsReply) {
+      const waitedForReply = history.some(
+        (h) => h.toolName === "wait_for" && (h.ok !== false && (h.metadata?.met || /condition\s+met|new\s+reply/i.test(h.observation || "")))
+      );
+      if (!waitedForReply) {
+        return {
+          outcome: VERIFICATION_OUTCOMES.INCOMPLETE_RECOVERABLE,
+          verified: false,
+          reason: "Message was dispatched, but the task requires waiting for a response from the group members. The agent must call wait_for with wait_for_reply=true to track incoming messages in the DOM.",
+          evidence: "Dispatched message, but incoming response was not tracked or verified in DOM."
+        };
+      }
+    }
+    return {
+      outcome: VERIFICATION_OUTCOMES.VERIFIED_SUCCESS,
+      verified: true,
+      reason: expectsReply ? "WhatsApp workflow verified: Sent message and confirmed response received from group." : "WhatsApp workflow verified: Opened group and sent message.",
+      evidence: `Visited: web.whatsapp.com, Sent: true${targetChatName ? `, Group: "${targetChatName}"` : ""}${expectsReply ? ", Reply Verified: true" : ""}`
+    };
+  }
+  const isCodingTask = /\b(leetcode|hackerrank|codeforces|two sum|solve.*question|solve.*problem|submit.*code)\b/i.test(task2);
+  if (isCodingTask) {
+    const visitedPlatform = history.some((h) => /leetcode\.com|hackerrank\.com|codeforces\.com/i.test(h.url || "")) || /leetcode\.com|hackerrank\.com|codeforces\.com/i.test(currentUrl);
+    const hasInjectedCode = history.some(
+      (h) => h.toolName === "write_code_editor" || h.toolName === "type_into_element" && (h.metadata?.codeModified || /editor/i.test(h.observation || ""))
+    );
+    const clickedSubmit = history.some(
+      (h) => h.toolName === "click_element" && /submit|run/i.test(h.args?.semantic_hint || h.observation || "") || h.toolName === "press_key" && /enter/i.test(h.args?.key || "") && /submit/i.test(h.observation || "")
+    );
+    const hasAcceptedVerdict = history.some(
+      (h) => h.toolName === "wait_for" && h.metadata?.met === true && /accepted/i.test(h.observation || "") || h.toolName === "read_page" && /accepted/i.test(h.observation || "")
+    ) || latestObservation?.toolName !== "finish_task" && /accepted/i.test(latestObservation?.observation || "");
+    const hasErrorVerdict = history.some(
+      (h) => h.toolName === "wait_for" && h.metadata?.met === true && /wrong answer|runtime error|time limit|compile error/i.test(h.observation || "") || h.toolName === "read_page" && /wrong answer|runtime error|time limit|compile error/i.test(h.observation || "")
+    ) || latestObservation?.toolName !== "finish_task" && /wrong answer|runtime error|time limit|compile error/i.test(latestObservation?.observation || "");
+    if (!visitedPlatform) {
+      return {
+        outcome: VERIFICATION_OUTCOMES.INCOMPLETE_RECOVERABLE,
+        verified: false,
+        reason: "Coding platform (e.g. leetcode.com) was never visited.",
+        evidence: `Current URL: ${currentUrl}`
+      };
+    }
+    if (!hasInjectedCode) {
+      return {
+        outcome: VERIFICATION_OUTCOMES.INCOMPLETE_RECOVERABLE,
+        verified: false,
+        reason: "Code solution was not injected into the code editor on the page. The agent must locate the <editor> element and call write_code_editor or type_into_element.",
+        evidence: "No write_code_editor or editor typing action detected in action history."
+      };
+    }
+    const requiresSubmit = /\b(submit)\b/i.test(task2);
+    if (requiresSubmit && !clickedSubmit) {
+      return {
+        outcome: VERIFICATION_OUTCOMES.INCOMPLETE_RECOVERABLE,
+        verified: false,
+        reason: "Code was injected into the editor, but the Submit button was not clicked.",
+        evidence: "Submit button click not detected."
+      };
+    }
+    if (hasErrorVerdict) {
+      return {
+        outcome: VERIFICATION_OUTCOMES.INCOMPLETE_RECOVERABLE,
+        verified: false,
+        reason: "Submission resulted in an error verdict (Compile Error, Wrong Answer, or Runtime Error). Inspect the editor, remove any duplicate code or leftover template, fix the solution, and resubmit.",
+        evidence: "Error verdict detected on page."
+      };
+    }
+    if (requiresSubmit && !hasAcceptedVerdict) {
+      return {
+        outcome: VERIFICATION_OUTCOMES.INCOMPLETE_RECOVERABLE,
+        verified: false,
+        reason: 'Submit was clicked, but the submission verdict ("Accepted") was not confirmed on the page. The agent must call wait_for(text_contains="Accepted", timeout_seconds=10) or inspect the submission status before finishing.',
+        evidence: "Submit clicked, but Accepted verdict not verified in DOM."
+      };
+    }
+    return {
+      outcome: VERIFICATION_OUTCOMES.VERIFIED_SUCCESS,
+      verified: true,
+      reason: "Coding problem solved, solution injected into editor, and submission confirmed.",
+      evidence: `Visited platform, code injected: true${requiresSubmit ? ", Submit clicked & verdict verified: true" : ""}`
     };
   }
   const isSearchTask = /\b(search|find|lookup|who|what|score|price)\b/i.test(task2);
@@ -145802,7 +146589,8 @@ function decideRecoveryStrategy({
       reason: "Navigation drifted away from intended target website. Backtracking browser history."
     };
   }
-  if (lastAction?.args?.target_id) {
+  const isTypeabilityError = /not an editable field|not a text field/i.test(lastError?.message || "");
+  if (lastAction?.args?.target_id && !isTypeabilityError) {
     return {
       decision: RECOVERY_DECISIONS.BLACKLIST_AND_PIVOT,
       blacklistedId: Number(lastAction.args.target_id),
@@ -146138,9 +146926,10 @@ function createAgentGraph(options = {}) {
       maxSteps,
       events,
       enableInterrupts: options.enableInterrupts,
-      exposeAllTools: options.exposeAllTools
+      exposeAllTools: options.exposeAllTools,
+      tinyfishApiKey: options.tinyfishApiKey
     });
-  }).addNode("tool_approval", createToolApprovalNode({ ...options, chromeApi, vault, events, checkpointer })).addNode("verification", async (state2) => {
+  }).addNode("tool_approval", createToolApprovalNode({ ...options, chromeApi, vault, events, checkpointer, tinyfishApiKey: options.tinyfishApiKey })).addNode("verification", async (state2) => {
     return verifierNode(state2, { events });
   }).addNode("recovery", async (state2) => {
     events?.emit?.("THINKING", {
@@ -146793,6 +147582,7 @@ var PratyakshaAgentRunner = class {
     this.geminiApiKey = (options.geminiApiKey || "").trim();
     this.openrouterApiKey = (options.openrouterApiKey || "").trim();
     this.mistralApiKey = (options.mistralApiKey || "").trim();
+    this.tinyfishApiKey = (options.tinyfishApiKey || "").trim();
     this.vault = options.vault || globalVault;
     this.maxSteps = options.maxSteps || 100;
     this.useTwoAgentGraph = options.useTwoAgentGraph ?? false;
@@ -146896,7 +147686,8 @@ var PratyakshaAgentRunner = class {
       checkpointer: this.checkpointer,
       signal: this.abortController.signal,
       maxSteps: this.maxSteps,
-      events: this.events
+      events: this.events,
+      tinyfishApiKey: this.tinyfishApiKey
     });
     const initialState = {
       threadId,

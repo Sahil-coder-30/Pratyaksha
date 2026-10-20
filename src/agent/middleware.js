@@ -59,9 +59,10 @@ export function pruneContext(messages = [], options = {}) {
  *
  * @param {Object} toolCall { name, args }
  * @param {Array<string|number>} blacklistedTargets
- * @returns {{ valid: boolean, reason?: string }}
+ * @param {Array<Object>} [elements=[]]
+ * @returns {{ valid: boolean, reason?: string, nonRetryableAction?: boolean }}
  */
-export function validateToolCall(toolCall, blacklistedTargets = []) {
+export function validateToolCall(toolCall, blacklistedTargets = [], elements = []) {
   if (!toolCall || !toolCall.name) {
     return { valid: false, reason: 'Invalid or missing tool call specification' };
   }
@@ -77,11 +78,46 @@ export function validateToolCall(toolCall, blacklistedTargets = []) {
     };
   }
 
+  if (args.target_id !== undefined && blacklistSet.has(String(args.target_id))) {
+    return {
+      valid: false,
+      reason: `Target element [#${args.target_id}] is currently blacklisted due to prior failures.`
+    };
+  }
+
   if (args.selector && blacklistSet.has(String(args.selector))) {
     return {
       valid: false,
       reason: `Target selector "${args.selector}" is currently blacklisted due to prior failures.`
     };
+  }
+
+  // Pre-action typeability gate
+  if (toolCall.name === 'type_into_element' || toolCall.name === 'write_code_editor') {
+    const targetId = args.target_id ?? args.index;
+    if (targetId !== undefined && Array.isArray(elements) && elements.length > 0) {
+      const el = elements.find(e => String(e.id) === String(targetId));
+      if (el) {
+        const tag = (el.tag || '').toLowerCase();
+        const role = (el.role || '').toLowerCase();
+        const type = (el.type || '').toLowerCase();
+        const isEditor = tag === 'editor' || role === 'code-editor' || /monaco|codemirror|ace/i.test(el.className || '');
+        const isTextInput = tag === 'input' && !['button', 'submit', 'reset', 'checkbox', 'radio', 'file', 'image'].includes(type);
+        const isTextarea = tag === 'textarea';
+        const isContentEditable = !!el.contenteditable || role === 'textbox' || role === 'combobox';
+
+        const isNonEditable = (tag === 'button' || role === 'button' || tag === 'a' || role === 'link' || role === 'tab') &&
+                              !isEditor && !isTextInput && !isTextarea && !isContentEditable;
+
+        if (isNonEditable) {
+          return {
+            valid: false,
+            nonRetryableAction: true,
+            reason: `Target [#${targetId}] <${tag || role}> is not an editable field. To interact with it, use click_element, or choose an input/textarea/editor element.`
+          };
+        }
+      }
+    }
   }
 
   return { valid: true };
@@ -220,8 +256,33 @@ export function buildActionLog(history = [], maxLines = 25) {
  */
 export function detectLoop(history = [], windowSize = 8) {
   const recent = history.slice(-windowSize).filter(h => h.toolName !== 'finish_task');
+
+  // Detect duplicate message spam (typing identical text 2+ times in chat/input)
+  const typeHistory = recent.filter(h => h.toolName === 'type_into_element' && h.args?.text);
+  const textCounts = new Map();
+  for (const h of typeHistory) {
+    const trimmedText = String(h.args.text).trim().toLowerCase();
+    if (trimmedText.length > 3) {
+      const count = (textCounts.get(trimmedText) || 0) + 1;
+      textCounts.set(trimmedText, count);
+      if (count >= 2) {
+        return `SPAM / LOOP PREVENTION: You have already typed and sent this exact message ("${String(h.args.text).slice(0, 40)}..."). Do NOT repeat identical messages or spam the chat! If you are awaiting a reply or response from other participants, call wait_for({ wait_for_reply: true, track_dom_changes: true }) to hold execution until a new response is received.`;
+      }
+    }
+  }
+
+  // Check if consecutive actions are both type_into_element into the same target
+  if (recent.length >= 2) {
+    const last = recent[recent.length - 1];
+    const prev = recent[recent.length - 2];
+    if (last.toolName === 'type_into_element' && prev.toolName === 'type_into_element' && last.args?.target_id && last.args?.target_id === prev.args?.target_id) {
+      return `SPAM / LOOP PREVENTION: You just typed into this element in the previous step. Do NOT type consecutively into the same input without checking the page or waiting for a reply! Call wait_for({ wait_for_reply: true, track_dom_changes: true }).`;
+    }
+  }
+
   const counts = new Map();
   for (const h of recent) {
+    if (h.toolName === 'wait_for') continue; // Exempt wait_for so continuous chat monitoring can poll every 5s
     const key = `${h.toolName}:${JSON.stringify(h.args || {})}`;
     counts.set(key, (counts.get(key) || 0) + 1);
   }

@@ -44,17 +44,57 @@ STRICT RULES (follow exactly)
 1. Only use [ID]s that appear in the CURRENT element list. Never invent, guess or reuse an ID that is not listed now.
 2. Never state facts you did not read on the page. Answers must come from VISIBLE TEXT or read_page output.
 3. If what you need is not listed: scroll_page, or use find_on_page, or open a better URL. Do not click random elements.
-4. Text fields: type_into_element (it replaces existing text). For search boxes set press_enter=true. Dropdowns: select_option. Popups/menus: press_key Escape.
+4. Text fields: type_into_element (it replaces existing text). For search boxes and chat message inputs set press_enter=true. Dropdowns: select_option. Popups/menus: press_key Escape.
 5. Cookie banners, sign-up popups or overlays blocking the page: close or accept-necessary them first.
 6. If an action fails, read the error and change approach. Never repeat the same failing action.
 7. You may call several tools in one step only when they do not depend on each other's result (e.g. fill 3 form fields, then click Submit). After a click that navigates, the remaining calls are skipped automatically.
 8. Do not ask the user questions like "Shall I proceed?". Act. If the task truly needs information you do not have (password, missing recipient), call finish_task with success=false and say what is missing.
 9. If you hit a login wall, CAPTCHA, or payment step you are not authorized for, stop with finish_task(success=false) and explain.
+10. If the task requires sending an email, message, or prompt AND waiting for a reply or response from the other user:
+    - After clicking Send or dispatching your message, DO NOT call finish_task immediately!
+    - Call wait_for(wait_for_reply=true, timeout_seconds=5) to monitor the DOM in 5-second intervals.
+    - If an incoming reply or DOM change is detected, read the message and act on it immediately. If no message arrives, call wait_for(wait_for_reply=true, timeout_seconds=5) again to continue waiting.
+11. When asked to message or open a specific contact or group (e.g. "Silicon Valley ke 14" on WhatsApp):
+    - DO NOT type into whatever chat is currently open on the screen!
+    - CRITICAL: NEVER batch searching for a chat and typing a message in the same step!
+    - In step 1, search for the contact/group: locate the search input (e.g. "Search or start new chat"), type the contact/group name with press_enter=true.
+    - In step 2, click into the matching contact/group in the search results list if not already open, and verify the chat header.
+    - Only after the chat is open, type your message into the compose input in the next step!
+12. When messaging or chatting on WhatsApp/chat platforms:
+    - To send a message or introduction, call type_into_element with press_enter=true (this types and dispatches the message in one step).
+    - NEVER call type_into_element again with the same or similar message, and NEVER call press_key("Enter") or click Send after typing with press_enter=true — the message is ALREADY DISPATCHED!
+    - NEVER send repeated text (like X X X X) into the chat! Once a message is sent, the compose box is cleared.
+    - NEVER click the microphone or "Voice message" button! The microphone starts an audio recording instead of sending text. Only click the Send button (paper-plane icon with aria-label="Send") if text is typed without press_enter.
+    - Immediately after sending, you MUST call wait_for(wait_for_reply=true, timeout_seconds=5) to read DOM changes every 5 seconds.
+    - Act on any incoming reply or question immediately. If no new messages appeared during the 5s window, call wait_for(wait_for_reply=true, timeout_seconds=5) again to keep waiting.
+    - If the user prompt asks to continue chatting until the user says "exit": repeat the loop (wait_for -> read reply -> answer -> wait_for) until an incoming message contains "exit", at which point call finish_task(success=true, summary="Chat conversation ended as user requested exit").
+    - NEVER call finish_task prematurely after a single intro message when multi-turn or continuous chatting was requested!
+    - NEVER fabricate or claim that group members or users responded unless their reply was verifiably observed in the DOM.
+13. EXTERNAL KNOWLEDGE & WEB RESEARCH DURING SESSIONS (WhatsApp, Gmail, chat, forms):
+    - When you are inside an active workspace application (WhatsApp Web, Gmail, chat thread, or form) and someone asks a question or a topic comes up requiring external search or factual information (e.g. "Who is dhruv rathee", "What is the price of a German shepherd"):
+    - NEVER call search_web or open_url to navigate away from the workspace! Navigating away drops the WebSocket connection, closes the active chat, destroys the session, and breaks the conversation.
+    - INSTEAD, call tinyfish_research(query="...")!
+    - tinyfish_research executes the search in an isolated cloud browser sandbox, leaving the local WhatsApp/workspace tab completely pristine.
+    - When tinyfish_research returns the factual answer, use that answer directly to type your reply into the active chat input!
+14. CODING & PROBLEM-SOLVING PLATFORMS (LeetCode, HackerRank, Codeforces, GitHub, VS Code):
+    - When asked to solve a problem, write code, or fix an editor state on coding platforms:
+    - NEVER type code into a <button>, link, or toolbar element! Buttons like "Run", "Submit", or language selectors are not editors.
+    - Locate the code editor element (tagged as <editor> or Monaco/CodeMirror) in the interactive element list.
+    - ALWAYS use write_code_editor(target_id=..., code=..., language=...) with clear_existing=true.
+    - CRITICAL: Never leave the original template or duplicate boilerplate behind! In Monaco/CodeMirror, write_code_editor completely empties and replaces the buffer.
+    - If the user or page reports that the solution was pasted before the template or has duplicate classes, immediately call write_code_editor on the editor with the single complete solution to wipe the template.
+    - NEVER dump your code as conversational text in the chat or claim the task is done without injecting the code into the editor on the page!
+    - After writing code into the editor, click "Run" or "Submit" (<button>).
+    - After clicking "Submit", you MUST wait for the verdict by calling wait_for(text_contains="Accepted", timeout_seconds=10) or inspecting page text.
+    - NEVER call finish_task before the evaluation verdict ("Accepted") is verified in the DOM! If wait_for reports no new messages or times out, do NOT claim it is Accepted — inspect the page or call wait_for again. If the judge returned "Compile Error" or "Wrong Answer", inspect and fix the code!
+    - If the user reports that code was pasted before template, compiler error occurred, or asks to "fix this": NEVER call finish_task immediately! You MUST locate the editor, re-inject the clean single solution via write_code_editor, click Submit, and wait for "Accepted".
 
 FINISHING
-- Call finish_task as soon as the goal is verifiably done on the page. Put the actual result (the answer, the data found, what was sent) in the summary.
+- Call finish_task as soon as the goal is verifiably done on the page. Put the actual result (the answer, the data found, what was sent, or the reply received) in the summary.
 - For information tasks, read the page first, then finish with the answer. Do not finish without the answer.
-- Do not call finish_task for a multi-step goal (chat, form, email) until the final step is confirmed on the page.`;
+- Do not call finish_task for a multi-step goal (chat, form, email) until the final step is confirmed on the page.
+- Never finish an email or messaging task that requested waiting for a reply until that reply has actually been observed and confirmed in the DOM.
+- Never finish a multi-iteration task prematurely before completing the requested conversation cycles.`;
 
 /**
  * Tools hidden from the model by default: they either return nothing a text model
@@ -211,12 +251,13 @@ export function createBrowserActorAgent(options = {}) {
 /**
  * Builds the tool suite + session context used by both the actor and the approval node.
  */
-export function createActorToolSession({ tabId, url = '', title = '', vault, signal, chromeApi, exposeAllTools = false }) {
+export function createActorToolSession({ tabId, url = '', title = '', vault, signal, chromeApi, exposeAllTools = false, tinyfishApiKey = '' }) {
   const sessionContext = {
     activeTab: { id: tabId, url, title },
     vault,
     signal,
     chromeApi,
+    tinyfishApiKey,
     lastResult: null
   };
   sessionContext.onToolResult = (res) => {
@@ -239,6 +280,7 @@ export async function executeApprovedToolCall(pending, options = {}) {
     vault: options.vault,
     signal: options.signal,
     chromeApi: options.chromeApi,
+    tinyfishApiKey: options.tinyfishApiKey,
     exposeAllTools: true
   });
   const observation = await runTool(tools, pending.toolCall, pending.toolCall.name);
@@ -324,6 +366,7 @@ export async function browserActorAgentNode(state, options = {}) {
     vault,
     signal,
     chromeApi,
+    tinyfishApiKey: options.tinyfishApiKey,
     exposeAllTools: options.exposeAllTools
   });
   const modelWithTools = bindModelTools(model, tools);
@@ -396,12 +439,13 @@ export async function browserActorAgentNode(state, options = {}) {
     let observationText = '';
     const validation = validateToolCall(
       { ...toolCall, args: { ...toolCall.args, index: toolCall.args.target_id ?? toolCall.args.index } },
-      blacklistedTargets
+      blacklistedTargets,
+      pageCtx.elements
     );
 
     if (!validation.valid) {
       const { code, message } = errorText(new PolicyViolationError(validation.reason, { toolName: toolCall.name }), validation.reason);
-      observationText = `BLOCKED [${toolCall.name} - ${code || 'POLICY_VIOLATION'}]: ${message}`;
+      observationText = `BLOCKED [${toolCall.name} - ${code || 'VALIDATION_ERROR'}]: ${message}`;
     } else {
       // Pre-execution policy gate. Approval runs in its own graph node so that the
       // resume after a human decision never re-runs perception or the LLM call.
@@ -446,6 +490,7 @@ export async function browserActorAgentNode(state, options = {}) {
       latestObservation = latestObservation && latestObservation.toolName === toolCall.name
         ? latestObservation
         : { ok: false, toolName: toolCall.name, args: toolCall.args, observation: observationText, error: { message: observationText } };
+      skipReason = `previous tool ${toolCall.name} encountered an error. Remaining actions stopped so agent can perceive fresh page state.`;
     }
 
     events?.emit?.('THINKING', {
@@ -468,6 +513,20 @@ export async function browserActorAgentNode(state, options = {}) {
       continue;
     }
 
+    // Stop batch execution if an action searched, or if consecutive text inputs were batched
+    const currentIndex = toolCalls.indexOf(rawToolCall);
+    const hasNext = currentIndex >= 0 && currentIndex < toolCalls.length - 1;
+    if (hasNext) {
+      const nextCall = toolCalls[currentIndex + 1];
+      const nextName = nextCall?.name || '';
+      const isSearch = latestObservation?.metadata?.isSearchInput || /search/i.test(latestObservation?.observation || '');
+      if (isSearch) {
+        skipReason = 'search input submitted. Remaining actions stopped so agent can view search results in updated DOM.';
+      } else if (toolCall.name === TOOL_NAMES.TYPE_INTO_ELEMENT && nextName === TOOL_NAMES.TYPE_INTO_ELEMENT) {
+        skipReason = 'input was submitted. Verify the updated page snapshot before typing into the next field.';
+      }
+    }
+
     // Stop the batch when the page navigated: later IDs/assumptions are stale
     const afterUrl = latestObservation?.page?.url || '';
     const switchedTab = !!latestObservation?.newTabId;
@@ -476,12 +535,24 @@ export async function browserActorAgentNode(state, options = {}) {
     }
   }
 
-  // 6. Text-only replies: nudge once, then accept the text as the final answer
+  // 6. Text-only replies: nudge once, then accept the text as the final answer ONLY if the task is an informational question.
+  // If the task requires active browser operations (solve, write code, submit, type, message), reject code-dumping into text!
   if (toolCalls.length === 0) {
-    const consecutive = trailingTextOnlyTurns(priorMessages) + 1;
-    if (consecutive >= 2 && thoughtText) {
-      latestObservation = { isFinished: true, success: true, summary: thoughtText, steps: stepCount };
-      events?.emit?.('THINKING', { phase: 'finish', text: `Model answered without tools: ${truncateString(thoughtText, 120)}`, step: stepCount, maxSteps });
+    const isBrowserActionTask = /\b(solve|submit|write.*code|type|message|send|click|open|fill|navigate)\b/i.test(task);
+    const containsCodeBlock = /```[\s\S]*```|function\s*\(|class\s*Solution|def\s+[a-z_]/i.test(thoughtText);
+
+    if (isBrowserActionTask && containsCodeBlock) {
+      newMessages.push(new HumanMessage(
+        'CRITICAL: You dumped code into conversational text instead of interacting with the browser! ' +
+        'Do NOT output code in conversational chat. You MUST call write_code_editor or type_into_element on the editor element on the page, ' +
+        'and then click the Submit button. Call the appropriate tool now.'
+      ));
+    } else {
+      const consecutive = trailingTextOnlyTurns(priorMessages) + 1;
+      if (consecutive >= 2 && thoughtText) {
+        latestObservation = { isFinished: true, success: true, summary: thoughtText, steps: stepCount };
+        events?.emit?.('THINKING', { phase: 'finish', text: `Model answered without tools: ${truncateString(thoughtText, 120)}`, step: stepCount, maxSteps });
+      }
     }
   }
 

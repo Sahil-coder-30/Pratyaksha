@@ -16,8 +16,8 @@ import {
 import { TOOL_NAMES, RISK_TIERS, TOOL_CATEGORIES } from '../src/shared/constants.js';
 
 test('Tool Registry - Integrity & Completeness', (t) => {
-  assert.equal(BROWSER_TOOL_SPECS.length, 21, 'Must have exactly 21 authoritative tools');
-  assert.equal(Object.keys(TOOL_ZOD_SCHEMAS).length, 21, 'All 21 tools must have a Zod schema');
+  assert.equal(BROWSER_TOOL_SPECS.length, 23, 'Must have exactly 23 authoritative tools');
+  assert.equal(Object.keys(TOOL_ZOD_SCHEMAS).length, 23, 'All 23 tools must have a Zod schema');
 
   for (const spec of BROWSER_TOOL_SPECS) {
     assert.ok(spec.name, 'Tool must have a name');
@@ -75,12 +75,21 @@ test('Schema Validation - Valid Arguments', () => {
   // finish_task
   const ft = validateToolArgs(TOOL_NAMES.FINISH_TASK, { summary: 'Completed goal', success: true });
   assert.equal(ft.success, true);
+  // tinyfish_research
+  const tf = validateToolArgs(TOOL_NAMES.TINYFISH_RESEARCH, { query: 'price of gold', goal: 'finance' });
+  assert.equal(tf.query, 'price of gold');
+  assert.equal(tf.goal, 'finance');
 });
 
 test('Schema Validation - Rejection of Invalid Arguments', () => {
   // search_web missing query
   assert.throws(() => {
     validateToolArgs(TOOL_NAMES.SEARCH_WEB, {});
+  });
+
+  // tinyfish_research missing query
+  assert.throws(() => {
+    validateToolArgs(TOOL_NAMES.TINYFISH_RESEARCH, {});
   });
 
   // open_url missing url
@@ -111,12 +120,12 @@ test('Schema Validation - Rejection of Invalid Arguments', () => {
 
 test('Schema Converters - Gemini & OpenAI Tool Declarations', () => {
   const geminiDecls = getGeminiToolDeclarations();
-  assert.equal(geminiDecls.length, 21);
+  assert.equal(geminiDecls.length, 23);
   assert.ok(geminiDecls[0].name);
   assert.ok(geminiDecls[0].parameters.type === 'OBJECT');
 
   const openAiDecls = getOpenAiToolDeclarations();
-  assert.equal(openAiDecls.length, 21);
+  assert.equal(openAiDecls.length, 23);
   assert.equal(openAiDecls[0].type, 'function');
   assert.ok(openAiDecls[0].function.name);
   assert.equal(openAiDecls[0].function.parameters.type, 'object');

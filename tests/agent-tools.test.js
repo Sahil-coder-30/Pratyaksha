@@ -15,7 +15,7 @@ test('LangChain Tool Adapter - Creates Complete Tool Suite', () => {
   };
 
   const tools = createLangChainBrowserTools(() => mockSession);
-  assert.equal(tools.length, 21, 'Must generate all 21 LangChain tools');
+  assert.equal(tools.length, 23, 'Must generate all 23 LangChain tools');
 
   for (const t of tools) {
     assert.ok(t.name);
@@ -25,7 +25,7 @@ test('LangChain Tool Adapter - Creates Complete Tool Suite', () => {
 
   // Without finish_task
   const toolsWithoutFinish = createLangChainBrowserTools(() => mockSession, { includeFinishTask: false });
-  assert.equal(toolsWithoutFinish.length, 20);
+  assert.equal(toolsWithoutFinish.length, 22);
   assert.equal(toolsWithoutFinish.some(t => t.name === TOOL_NAMES.FINISH_TASK), false);
 });
 

@@ -346,12 +346,13 @@ export function createAgentGraph(options = {}) {
         maxSteps,
         events,
         enableInterrupts: options.enableInterrupts,
-        exposeAllTools: options.exposeAllTools
+        exposeAllTools: options.exposeAllTools,
+        tinyfishApiKey: options.tinyfishApiKey
       });
     })
 
     // ── 5b. TOOL APPROVAL NODE (Human-in-the-Loop) ───────────────────────────
-    .addNode('tool_approval', createToolApprovalNode({ ...options, chromeApi, vault, events, checkpointer }))
+    .addNode('tool_approval', createToolApprovalNode({ ...options, chromeApi, vault, events, checkpointer, tinyfishApiKey: options.tinyfishApiKey }))
 
     // ── 6. VERIFICATION NODE ──────────────────────────────────────────────────
     .addNode('verification', async (state) => {

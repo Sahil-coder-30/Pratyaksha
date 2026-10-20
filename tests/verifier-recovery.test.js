@@ -65,7 +65,82 @@ test('Verification - Email Workflow Anti-Hallucination Gate', () => {
   });
   assert.equal(resSuccess.verified, true);
   assert.equal(resSuccess.outcome, VERIFICATION_OUTCOMES.VERIFIED_SUCCESS);
+
+  // 5. If task specifically requires waiting for reply, Send alone is rejected until reply is received
+  const replyTask = 'Send an email to john@example.com and wait for his reply';
+  const resSendOnly = verifyTaskOutcome({
+    task: replyTask,
+    browserSession: { url: 'https://mail.google.com/mail/u/0' },
+    actionHistory: [
+      { toolName: 'open_url', url: 'https://mail.google.com', ok: true },
+      { toolName: 'type_into_element', ok: true, args: { text: 'update' } },
+      { toolName: 'click_element', ok: true, args: { semantic_hint: 'Send' } }
+    ]
+  });
+  assert.equal(resSendOnly.verified, false);
+  assert.equal(resSendOnly.outcome, VERIFICATION_OUTCOMES.INCOMPLETE_RECOVERABLE);
+  assert.ok(resSendOnly.reason.includes('waiting for a reply'));
+
+  // 6. Confirmed when reply is observed in DOM via wait_for
+  const resReplyConfirmed = verifyTaskOutcome({
+    task: replyTask,
+    browserSession: { url: 'https://mail.google.com/mail/u/0' },
+    actionHistory: [
+      { toolName: 'open_url', url: 'https://mail.google.com', ok: true },
+      { toolName: 'type_into_element', ok: true, args: { text: 'update' } },
+      { toolName: 'click_element', ok: true, args: { semantic_hint: 'Send' } },
+      { toolName: 'wait_for', ok: true, observation: 'Condition met: New reply message appeared in thread' }
+    ]
+  });
+  assert.equal(resReplyConfirmed.verified, true);
+  assert.equal(resReplyConfirmed.outcome, VERIFICATION_OUTCOMES.VERIFIED_SUCCESS);
 });
+
+test('Verification - WhatsApp Workflow Anti-Hallucination & Target Group Gate', () => {
+  const task = 'Open silicon valley ke 14 group on whatsapp and chat with the people over there, await response';
+
+  // 1. Rejected if sent to a random chat without opening requested group
+  const resWrongGroup = verifyTaskOutcome({
+    task,
+    browserSession: { url: 'https://web.whatsapp.com' },
+    actionHistory: [
+      { toolName: 'type_into_element', ok: true, args: { text: 'Hello everyone!' } },
+      { toolName: 'press_key', ok: true, args: { key: 'Enter' } }
+    ]
+  });
+  assert.equal(resWrongGroup.verified, false);
+  assert.ok(resWrongGroup.reason.includes('silicon valley ke 14'));
+
+  // 2. Rejected if group selected and message sent, but finished without wait_for reply
+  const resNoWait = verifyTaskOutcome({
+    task,
+    browserSession: { url: 'https://web.whatsapp.com' },
+    actionHistory: [
+      { toolName: 'type_into_element', ok: true, args: { text: 'silicon valley ke 14' } },
+      { toolName: 'click_element', ok: true, args: { semantic_hint: 'silicon valley ke 14' } },
+      { toolName: 'type_into_element', ok: true, args: { text: 'Hello everyone!' } },
+      { toolName: 'press_key', ok: true, args: { key: 'Enter' } }
+    ]
+  });
+  assert.equal(resNoWait.verified, false);
+  assert.ok(resNoWait.reason.includes('waiting for a response'));
+
+  // 3. Verified if group selected, message sent, and reply observed via wait_for
+  const resSuccess = verifyTaskOutcome({
+    task,
+    browserSession: { url: 'https://web.whatsapp.com' },
+    actionHistory: [
+      { toolName: 'type_into_element', ok: true, args: { text: 'silicon valley ke 14' } },
+      { toolName: 'click_element', ok: true, args: { semantic_hint: 'silicon valley ke 14' } },
+      { toolName: 'type_into_element', ok: true, args: { text: 'Hello everyone!' } },
+      { toolName: 'press_key', ok: true, args: { key: 'Enter' } },
+      { toolName: 'wait_for', ok: true, observation: 'Condition met: new reply from group member' }
+    ]
+  });
+  assert.equal(resSuccess.verified, true);
+  assert.equal(resSuccess.outcome, VERIFICATION_OUTCOMES.VERIFIED_SUCCESS);
+});
+
 
 test('Verification - Search Query Verification', () => {
   const task = 'Search who won the 2023 Cricket World Cup';

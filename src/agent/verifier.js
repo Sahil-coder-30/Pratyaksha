@@ -74,11 +74,202 @@ export function verifyTaskOutcome({
       };
     }
 
+    const expectsReply = /\b(wait(ing)?\s+(for\s+)?([a-z0-9_-]+\s+)*(reply|response)|until\s+([a-z0-9_-]+\s+)*(reply|response))\b/i.test(task);
+    if (expectsReply) {
+      const waitedForReply = history.some(h =>
+        h.toolName === 'wait_for' && (h.ok !== false || h.metadata?.met || /condition\s+met|reply|response/i.test(h.observation || ''))
+      );
+      const readReply = history.some(h =>
+        h.toolName === 'read_page' && /reply|response|from/i.test(h.observation || '')
+      );
+      if (!waitedForReply && !readReply) {
+        return {
+          outcome: VERIFICATION_OUTCOMES.INCOMPLETE_RECOVERABLE,
+          verified: false,
+          reason: 'Email was sent, but the task requires waiting for a reply from the other user. The agent must hold execution and wait for the response to be received in the DOM.',
+          evidence: 'Send clicked, but incoming reply was not tracked or verified in DOM.'
+        };
+      }
+    }
+
     return {
       outcome: VERIFICATION_OUTCOMES.VERIFIED_SUCCESS,
       verified: true,
-      reason: 'Email workflow verified: Visited service, filled fields, and triggered Send.',
-      evidence: `Visited: ${currentUrl}, Inputs: ${typedInputs.length}, Send Clicked: true`
+      reason: expectsReply
+        ? 'Email workflow verified: Sent message and confirmed response/reply received from other user.'
+        : 'Email workflow verified: Visited service, filled fields, and triggered Send.',
+      evidence: `Visited: ${currentUrl}, Inputs: ${typedInputs.length}, Send Clicked: true${expectsReply ? ', Reply Verified: true' : ''}`
+    };
+  }
+
+  // ── 1b. WhatsApp Verification Gate ──
+    const isWhatsAppTask = /\b(whatsapp|wa\.me)\b/i.test(task);
+    if (isWhatsAppTask) {
+      const visitedWhatsApp = history.some(h => /web\.whatsapp\.com/i.test(h.url || '')) || /web\.whatsapp\.com/i.test(currentUrl);
+      const typedInputs = history.filter(h => h.toolName === 'type_into_element');
+      const sentMessage = history.some(h =>
+        (h.toolName === 'press_key' && /enter/i.test(h.args?.key || '')) ||
+        (h.toolName === 'click_element' && /send/i.test(h.args?.semantic_hint || '')) ||
+        (h.toolName === 'type_into_element' && (h.args?.press_enter || h.metadata?.pressEnter || /enter/i.test(h.observation || '')))
+      );
+
+    let targetChatName = null;
+    const groupMatch = task.match(/(?:open|in|to)\s+["']?([a-zA-Z0-9_\s]{2,35}?)["']?\s+(?:group|chat|on\s+whatsapp)/i) ||
+                       task.match(/(?:group|chat)\s+["']?([a-zA-Z0-9_\s]{2,35}?)["']?\s+(?:on|in)/i) ||
+                       task.match(/whatsapp\s+(?:and\s+chat\s+(?:with\s+(?:the\s+people\s+over\s+there|them)\s+)?in\s+)?["']?([a-zA-Z0-9_\s]{2,35}?)["']?\s+group/i);
+    if (groupMatch && groupMatch[1]) {
+      targetChatName = groupMatch[1].trim();
+    }
+
+    const iterMatch = task.match(/(\d+)\s+iterations?/i);
+    const requestedIterations = iterMatch ? parseInt(iterMatch[1], 10) : 1;
+    const expectsReply = requestedIterations > 1 || /\b(a?wait(ing)?\s+(for\s+)?([a-z0-9_-]+\s+)*(reply|response)|until\s+([a-z0-9_-]+\s+)*(reply|response)|iterations?)\b/i.test(task);
+
+    if (!visitedWhatsApp) {
+      return {
+        outcome: VERIFICATION_OUTCOMES.INCOMPLETE_RECOVERABLE,
+        verified: false,
+        reason: 'WhatsApp Web (web.whatsapp.com) was never visited or active.',
+        evidence: `Current URL: ${currentUrl}`
+      };
+    }
+
+    if (targetChatName) {
+      const selectedTargetChat = history.some(h =>
+        (h.toolName === 'type_into_element' && new RegExp(targetChatName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i').test(h.args?.text || '')) ||
+        (h.toolName === 'click_element' && new RegExp(targetChatName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i').test(h.args?.semantic_hint || h.observation || '')) ||
+        (h.toolName === 'read_page' && new RegExp(targetChatName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i').test(h.observation || ''))
+      );
+      if (!selectedTargetChat) {
+        return {
+          outcome: VERIFICATION_OUTCOMES.INCOMPLETE_RECOVERABLE,
+          verified: false,
+          reason: `Requested WhatsApp chat or group "${targetChatName}" was not opened. The agent must search for and select "${targetChatName}".`,
+          evidence: `Action history does not reference "${targetChatName}".`
+        };
+      }
+    }
+
+    if (typedInputs.length === 0) {
+      return {
+        outcome: VERIFICATION_OUTCOMES.INCOMPLETE_RECOVERABLE,
+        verified: false,
+        reason: 'No message was typed into the WhatsApp chat input.',
+        evidence: 'Input fields typed: 0'
+      };
+    }
+
+    if (!sentMessage) {
+      return {
+        outcome: VERIFICATION_OUTCOMES.INCOMPLETE_RECOVERABLE,
+        verified: false,
+        reason: 'Message was typed but not dispatched into the WhatsApp chat.',
+        evidence: 'Send action (press Enter or click Send) not detected.'
+      };
+    }
+
+    if (expectsReply) {
+      const waitedForReply = history.some(h =>
+        h.toolName === 'wait_for' && (h.ok !== false && (h.metadata?.met || /condition\s+met|new\s+reply/i.test(h.observation || '')))
+      );
+      if (!waitedForReply) {
+        return {
+          outcome: VERIFICATION_OUTCOMES.INCOMPLETE_RECOVERABLE,
+          verified: false,
+          reason: 'Message was dispatched, but the task requires waiting for a response from the group members. The agent must call wait_for with wait_for_reply=true to track incoming messages in the DOM.',
+          evidence: 'Dispatched message, but incoming response was not tracked or verified in DOM.'
+        };
+      }
+    }
+
+    return {
+      outcome: VERIFICATION_OUTCOMES.VERIFIED_SUCCESS,
+      verified: true,
+      reason: expectsReply
+        ? 'WhatsApp workflow verified: Sent message and confirmed response received from group.'
+        : 'WhatsApp workflow verified: Opened group and sent message.',
+      evidence: `Visited: web.whatsapp.com, Sent: true${targetChatName ? `, Group: "${targetChatName}"` : ''}${expectsReply ? ', Reply Verified: true' : ''}`
+    };
+  }
+
+  // ── 1c. Coding & Problem Solving Platform Verification Gate ──
+  const isCodingTask = /\b(leetcode|hackerrank|codeforces|two sum|solve.*question|solve.*problem|submit.*code)\b/i.test(task);
+  if (isCodingTask) {
+    const visitedPlatform = history.some(h => /leetcode\.com|hackerrank\.com|codeforces\.com/i.test(h.url || '')) ||
+                            /leetcode\.com|hackerrank\.com|codeforces\.com/i.test(currentUrl);
+
+    const hasInjectedCode = history.some(h =>
+      h.toolName === 'write_code_editor' ||
+      (h.toolName === 'type_into_element' && (h.metadata?.codeModified || /editor/i.test(h.observation || '')))
+    );
+
+    const clickedSubmit = history.some(h =>
+      (h.toolName === 'click_element' && /submit|run/i.test(h.args?.semantic_hint || h.observation || '')) ||
+      (h.toolName === 'press_key' && /enter/i.test(h.args?.key || '') && /submit/i.test(h.observation || ''))
+    );
+
+    // A genuine verdict requires verified observation from the DOM, never from finish_task's summary
+    const hasAcceptedVerdict = history.some(h =>
+      (h.toolName === 'wait_for' && h.metadata?.met === true && /accepted/i.test(h.observation || '')) ||
+      (h.toolName === 'read_page' && /accepted/i.test(h.observation || ''))
+    ) || (latestObservation?.toolName !== 'finish_task' && /accepted/i.test(latestObservation?.observation || ''));
+
+    const hasErrorVerdict = history.some(h =>
+      (h.toolName === 'wait_for' && h.metadata?.met === true && /wrong answer|runtime error|time limit|compile error/i.test(h.observation || '')) ||
+      (h.toolName === 'read_page' && /wrong answer|runtime error|time limit|compile error/i.test(h.observation || ''))
+    ) || (latestObservation?.toolName !== 'finish_task' && /wrong answer|runtime error|time limit|compile error/i.test(latestObservation?.observation || ''));
+
+    if (!visitedPlatform) {
+      return {
+        outcome: VERIFICATION_OUTCOMES.INCOMPLETE_RECOVERABLE,
+        verified: false,
+        reason: 'Coding platform (e.g. leetcode.com) was never visited.',
+        evidence: `Current URL: ${currentUrl}`
+      };
+    }
+
+    if (!hasInjectedCode) {
+      return {
+        outcome: VERIFICATION_OUTCOMES.INCOMPLETE_RECOVERABLE,
+        verified: false,
+        reason: 'Code solution was not injected into the code editor on the page. The agent must locate the <editor> element and call write_code_editor or type_into_element.',
+        evidence: 'No write_code_editor or editor typing action detected in action history.'
+      };
+    }
+
+    const requiresSubmit = /\b(submit)\b/i.test(task);
+    if (requiresSubmit && !clickedSubmit) {
+      return {
+        outcome: VERIFICATION_OUTCOMES.INCOMPLETE_RECOVERABLE,
+        verified: false,
+        reason: 'Code was injected into the editor, but the Submit button was not clicked.',
+        evidence: 'Submit button click not detected.'
+      };
+    }
+
+    if (hasErrorVerdict) {
+      return {
+        outcome: VERIFICATION_OUTCOMES.INCOMPLETE_RECOVERABLE,
+        verified: false,
+        reason: 'Submission resulted in an error verdict (Compile Error, Wrong Answer, or Runtime Error). Inspect the editor, remove any duplicate code or leftover template, fix the solution, and resubmit.',
+        evidence: 'Error verdict detected on page.'
+      };
+    }
+
+    if (requiresSubmit && !hasAcceptedVerdict) {
+      return {
+        outcome: VERIFICATION_OUTCOMES.INCOMPLETE_RECOVERABLE,
+        verified: false,
+        reason: 'Submit was clicked, but the submission verdict ("Accepted") was not confirmed on the page. The agent must call wait_for(text_contains="Accepted", timeout_seconds=10) or inspect the submission status before finishing.',
+        evidence: 'Submit clicked, but Accepted verdict not verified in DOM.'
+      };
+    }
+
+    return {
+      outcome: VERIFICATION_OUTCOMES.VERIFIED_SUCCESS,
+      verified: true,
+      reason: 'Coding problem solved, solution injected into editor, and submission confirmed.',
+      evidence: `Visited platform, code injected: true${requiresSubmit ? ', Submit clicked & verdict verified: true' : ''}`
     };
   }
 
