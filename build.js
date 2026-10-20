@@ -22,8 +22,11 @@ async function buildExtension() {
   console.log('🚀 Building PRATYAKSHA Agent Extension Bundle with esbuild...');
 
   try {
-    // 1. Ensure output directories exist
+    // 1. Ensure output directories exist and sync content scripts
     mkdirSync(join(EXT_DIR, 'agent'), { recursive: true });
+    mkdirSync(join(EXT_DIR, 'content'), { recursive: true });
+    copyFileSync(join(__dirname, 'src', 'browser', 'dom-actions.js'), join(EXT_DIR, 'content', 'dom-actions.js'));
+    copyFileSync(join(__dirname, 'src', 'browser', 'content-main.js'), join(EXT_DIR, 'content', 'content-main.js'));
 
     // 2. Esbuild plugin stubbing server logger from faultkit in browser bundle
     const stubFaultkitLoggerPlugin = {

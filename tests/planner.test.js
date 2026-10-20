@@ -102,11 +102,24 @@ test('Deterministic Planner - WhatsApp Specific Group & Multi-Turn Iterations', 
   const plan = generateDeterministicPlan(task);
 
   assert.equal(plan.targetService?.name, 'WhatsApp');
-  assert.equal(plan.subgoals.length, 5);
+  assert.equal(plan.subgoals.length, 4);
   // Check target group search subgoal
   const searchSubgoal = plan.subgoals.find(s => /silicon valley ke 14/i.test(s.description));
   assert.ok(searchSubgoal);
   assert.ok(plan.verificationCriteria.some(c => /silicon valley ke 14/i.test(c)));
   assert.ok(plan.verificationCriteria.some(c => /iterations/i.test(c)));
+});
+
+test('Deterministic Planner - WhatsApp Continuous Chat Until Exit', () => {
+  const task = 'Open silicon valley ke 14 group on whatsapp and chat with the group memebrs, you must await for a response from the user and answer it or respond to it, you will start by introducing yourself on the group Make sure to wait until you receive a query, don\'t refresh the page, in case you take more time in fetching some information prompt the user for that case.. next you need to continue chatting until the user says "exit" don\'t spam or repeat the message again n again';
+  const plan = generateDeterministicPlan(task);
+
+  assert.equal(plan.targetService?.name, 'WhatsApp');
+  assert.equal(plan.subgoals.length, 4);
+  const groupSubgoal = plan.subgoals.find(s => /silicon valley ke 14/i.test(s.description));
+  assert.ok(groupSubgoal);
+  const loopSubgoal = plan.subgoals.find(s => /exit/i.test(s.description));
+  assert.ok(loopSubgoal);
+  assert.ok(plan.verificationCriteria.some(c => /exit/i.test(c)));
 });
 

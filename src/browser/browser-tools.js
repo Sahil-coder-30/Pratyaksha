@@ -567,13 +567,135 @@ export async function executeBrowserTool(toolName, rawArgs = {}, activeTab, opti
         }
         const info = resp.result && typeof resp.result === 'object' ? resp.result : {};
         const desc = info.typedInto || (targetId ? `[#${targetId}]` : `"${hint}"`);
-        // Read-back lets the model confirm the field really holds the text (scrubbed before it reaches the model)
-        const valueNote = typeof info.value === 'string' ? ` Field now contains: "${info.value}".` : '';
+        // Read-back lets the model confirm the field really holds the text or was dispatched
+        const isSearch = !!info.isSearchInput || /search/i.test(desc) || /search/i.test(hint);
+        const isDispatched = !isSearch && (info.dispatched || args.press_enter);
+        const changeNote = info.change ? ` (${info.change})` : '';
+        const valueNote = isDispatched ? ' Message dispatched into chat thread.' : (typeof info.value === 'string' && info.value ? ` Field now contains: "${info.value}".` : '');
+        const isEditor = !!info.editorType || !!info.lines;
+        const editorNote = isEditor ? ` Code editor (${info.editorType || 'editor'}) buffer updated with ${info.lines || text.split('\n').length} lines.` : '';
         return createToolResult({
           toolName,
-          observation: `Typed into ${desc}${args.press_enter ? ' + Enter' : ''}.${valueNote}${navigated ? ` Page navigated to ${currentTab.url}.` : ''}`,
+          observation: `Typed into ${desc}${args.press_enter ? ' + Enter' : ''}.${editorNote}${valueNote}${changeNote}${navigated ? ` Page navigated to ${currentTab.url}.` : ''}`,
           page: currentTab,
-          metadata: { pressEnter: !!args.press_enter, navigated, target_id: targetId }
+          metadata: { pressEnter: !!args.press_enter, dispatched: !!isDispatched, isSearchInput: isSearch, navigated, target_id: targetId, codeModified: isEditor }
+        });
+      }
+
+      // ── write_code_editor ────────────────────────────────────────────────────
+      case TOOL_NAMES.WRITE_CODE_EDITOR: {
+        const targetId = args.target_id ? Number(args.target_id) : undefined;
+        const hint = args.semantic_hint || (targetId ? `[#${targetId}]` : 'code editor');
+        let code = args.code || args.text || '';
+        if (vault?.rehydrate) {
+          code = vault.rehydrate(code) ?? code;
+        }
+
+        // Tier 1: Try direct page-context scripting on Monaco/CodeMirror models
+        // When running in real Chrome, this communicates directly with window.monaco in the MAIN world,
+        // replacing 100% of the editor model without touching clipboard or leaving template fragments behind.
+        let pageWorldUpdated = false;
+        let pageWorldInfo = null;
+        if (chromeApi?.scripting?.executeScript) {
+          try {
+            const results = await chromeApi.scripting.executeScript({
+              target: { tabId },
+              world: 'MAIN',
+              func: (newCode, clearExisting) => {
+                // 1. Monaco Editor (LeetCode, VSCode Web)
+                if (window.monaco?.editor) {
+                  try {
+                    const editors = window.monaco.editor.getEditors?.() || [];
+                    for (const ed of editors) {
+                      const model = ed.getModel?.();
+                      if (model) {
+                        if (clearExisting) {
+                          model.setValue(newCode);
+                        } else {
+                          const pos = ed.getPosition?.() || { lineNumber: 1, column: 1 };
+                          ed.executeEdits('pratyaksha', [{
+                            range: new window.monaco.Range(pos.lineNumber, pos.column, pos.lineNumber, pos.column),
+                            text: newCode
+                          }]);
+                        }
+                        return { success: true, editorType: 'monaco', lines: newCode.split('\n').length };
+                      }
+                    }
+                    const models = window.monaco.editor.getModels?.() || [];
+                    if (models.length > 0) {
+                      models[0].setValue(newCode);
+                      return { success: true, editorType: 'monaco', lines: newCode.split('\n').length };
+                    }
+                  } catch (_) {}
+                }
+
+                // 2. CodeMirror
+                try {
+                  const cmEl = document.querySelector('.CodeMirror');
+                  if (cmEl && cmEl.CodeMirror) {
+                    cmEl.CodeMirror.setValue(newCode);
+                    return { success: true, editorType: 'codemirror', lines: newCode.split('\n').length };
+                  }
+                } catch (_) {}
+
+                // 3. Ace Editor
+                try {
+                  const aceEl = document.querySelector('.ace_editor');
+                  if (aceEl && window.ace) {
+                    window.ace.edit(aceEl).setValue(newCode, -1);
+                    return { success: true, editorType: 'ace', lines: newCode.split('\n').length };
+                  }
+                } catch (_) {}
+
+                return { success: false };
+              },
+              args: [code, args.clear_existing !== false]
+            });
+            if (results?.[0]?.result?.success) {
+              pageWorldUpdated = true;
+              pageWorldInfo = results[0].result;
+            }
+          } catch (_) {}
+        }
+
+        if (pageWorldUpdated) {
+          const currentTab = await getTabSafe(tabId, chromeApi);
+          const lines = pageWorldInfo.lines || code.split('\n').length;
+          const editorType = pageWorldInfo.editorType || 'monaco';
+          return createToolResult({
+            toolName,
+            observation: `Successfully injected ${lines} lines of code into ${editorType} (${hint}). Existing template completely replaced.`,
+            page: currentTab,
+            metadata: { lines, editorType, target_id: targetId, codeModified: true }
+          });
+        }
+
+        const resp = await sendToTab(tabId, {
+          type: 'EXECUTE_ACTION',
+          payload: {
+            action: 'WRITE_CODE',
+            target_id: targetId,
+            semantic_hint: hint,
+            code,
+            language: args.language,
+            clear_existing: args.clear_existing !== false
+          }
+        }, 15000, chromeApi);
+
+        if (!resp?.success) {
+          throw new ToolExecutionError(resp?.error || `Could not write code into [${targetId ? `#${targetId}` : hint}]`, { toolName });
+        }
+
+        const currentTab = await getTabSafe(tabId, chromeApi);
+        const info = resp.result && typeof resp.result === 'object' ? resp.result : {};
+        const lines = info.lines || code.split('\n').length;
+        const editorType = info.editorType || 'editor';
+
+        return createToolResult({
+          toolName,
+          observation: `Successfully injected ${lines} lines of code into ${editorType} (${hint}). Existing template completely replaced. Code buffer updated.`,
+          page: currentTab,
+          metadata: { lines, editorType, target_id: targetId, codeModified: true }
         });
       }
 
@@ -728,10 +850,10 @@ export async function executeBrowserTool(toolName, rawArgs = {}, activeTab, opti
 
       // ── wait_for ─────────────────────────────────────────────────────────────
       case TOOL_NAMES.WAIT_FOR: {
-        const timeoutSeconds = Math.min(Math.max(args.timeout_seconds || 60, 1), 600);
+        const timeoutSeconds = Math.min(Math.max(args.timeout_seconds !== undefined ? args.timeout_seconds : 5, 1), 60);
         const timeoutMs = timeoutSeconds * 1000;
         const trackerId = `track_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
-        const sliceMs = 3000;
+        const sliceMs = 500;
         const startTime = Date.now();
         let lastReportedSec = 0;
         let found = false;
@@ -757,7 +879,7 @@ export async function executeBrowserTool(toolName, rawArgs = {}, activeTab, opti
                 selector: args.selector || null,
                 textContains: args.text_contains || null,
                 waitForReply: args.wait_for_reply !== false && (!!args.wait_for_reply || (!args.selector && !args.text_contains)),
-                trackDomChanges: !!args.track_dom_changes,
+                trackDomChanges: args.track_dom_changes !== false,
                 expectedSender: args.expected_sender || null,
                 timeoutMs: sliceMs
               }
@@ -788,9 +910,9 @@ export async function executeBrowserTool(toolName, rawArgs = {}, activeTab, opti
         if (!found) {
           return createToolResult({
             toolName,
-            observation: `wait_for held process for ${timeoutSeconds}s — no incoming reply or matching condition detected in DOM.`,
+            observation: `Polled DOM for ${timeoutSeconds}s: No new incoming messages or changes detected. Continuing to monitor.`,
             page: currentTab,
-            metadata: { met: false }
+            metadata: { met: false, waiting: true }
           });
         }
 

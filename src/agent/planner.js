@@ -120,7 +120,8 @@ export function generateDeterministicPlan(task = '', pageContext = {}) {
 
     const iterMatch = task.match(/(\d+)\s+iterations?/i);
     const requestedIterations = iterMatch ? parseInt(iterMatch[1], 10) : 1;
-    const expectsReply = requestedIterations > 1 || /\b(a?wait(ing)?\s+(for\s+)?([a-z0-9_-]+\s+)*(reply|response)|until\s+([a-z0-9_-]+\s+)*(reply|response)|iterations?)\b/i.test(task);
+    const untilExit = /\buntil\s+(the\s+)?(user|members?|someone|they)?\s*says?\s*["']?exit["']?\b/i.test(task);
+    const expectsReply = requestedIterations > 1 || untilExit || /\b(a?wait(ing)?\s+(for\s+)?([a-z0-9_-]+\s+)*(reply|response)|until\s+([a-z0-9_-]+\s+)*(reply|response)|iterations?)\b/i.test(task);
 
     subgoals.push({
       id: 1,
@@ -150,31 +151,27 @@ export function generateDeterministicPlan(task = '', pageContext = {}) {
 
     subgoals.push({
       id: 3,
-      description: 'Type initial message/introduction into WhatsApp compose input',
+      description: 'Type and dispatch initial message/introduction into WhatsApp compose input (with press_enter=true)',
       expectedAction: 'type_into_element',
       riskTier: RISK_TIERS.REVERSIBLE,
-      completionEvidence: 'Message text typed into WhatsApp input'
-    });
-
-    subgoals.push({
-      id: 4,
-      description: 'Send message (press Enter or click Send icon)',
-      expectedAction: 'press_key',
-      riskTier: RISK_TIERS.IRREVERSIBLE,
-      completionEvidence: 'Message dispatched into chat thread'
+      completionEvidence: 'Message text typed and dispatched into WhatsApp chat'
     });
 
     if (expectsReply) {
       subgoals.push({
-        id: 5,
-        description: requestedIterations > 1
-          ? `Execute multi-turn conversation loop: wait for incoming reply, read response, and answer (cycle through ${requestedIterations} iterations)`
-          : 'Hold execution and wait for response from group members, monitoring DOM for incoming messages',
+        id: 4,
+        description: untilExit
+          ? 'Execute continuous conversation loop: wait for incoming reply, answer questions (using tinyfish_research for external info), and continue chatting until user says "exit"'
+          : (requestedIterations > 1
+            ? `Execute multi-turn conversation loop: wait for incoming reply, read response, and answer (cycle through ${requestedIterations} iterations)`
+            : 'Hold execution and wait for response from group members, monitoring DOM for incoming messages'),
         expectedAction: 'wait_for',
         riskTier: RISK_TIERS.READ_ONLY,
-        completionEvidence: requestedIterations > 1
-          ? `Conversation loop completed for ${requestedIterations} iterations`
-          : 'Incoming response detected in WhatsApp DOM'
+        completionEvidence: untilExit
+          ? 'Conversation loop completed when user said "exit"'
+          : (requestedIterations > 1
+            ? `Conversation loop completed for ${requestedIterations} iterations`
+            : 'Incoming response detected in WhatsApp DOM')
       });
     }
 
@@ -188,8 +185,79 @@ export function generateDeterministicPlan(task = '', pageContext = {}) {
     if (expectsReply) {
       verificationCriteria.push('Incoming response tracked and verified in DOM without hallucination');
     }
-    if (requestedIterations > 1) {
+    if (untilExit) {
+      verificationCriteria.push('Conversation maintained until user exit condition received');
+    } else if (requestedIterations > 1) {
       verificationCriteria.push('Multi-turn conversation maintained across iterations');
+    }
+  }
+  // ── Coding & Problem-Solving Workflow (LeetCode, HackerRank, etc.) ──
+  else if (/\b(leetcode|hackerrank|codeforces|two sum|twosum|solve.*problem|solve.*question|fix.*(code|solution|this)|pasted.*solution|template.*looks)\b/i.test(task)) {
+    targetService = targetService || { name: 'LeetCode', url: 'https://leetcode.com' };
+
+    const isFixTask = /\b(fix|pasted|duplicate|template|compile error|wrong answer|not accepted|error)\b/i.test(task);
+
+    if (isFixTask) {
+      subgoals.push({
+        id: 1,
+        description: 'Locate code editor on problem page and completely clear duplicate template and boilerplate using write_code_editor(clear_existing=true)',
+        expectedAction: 'write_code_editor',
+        riskTier: RISK_TIERS.REVERSIBLE,
+        completionEvidence: 'Code editor completely wiped and re-injected with single clean solution'
+      });
+      subgoals.push({
+        id: 2,
+        description: 'Click Submit button to test corrected code against judge',
+        expectedAction: 'click_element',
+        riskTier: RISK_TIERS.REVERSIBLE,
+        completionEvidence: 'Submit button clicked and testcase evaluation triggered'
+      });
+      subgoals.push({
+        id: 3,
+        description: 'Wait for judge submission verdict ("Accepted") and confirm result',
+        expectedAction: 'wait_for',
+        riskTier: RISK_TIERS.READ_ONLY,
+        completionEvidence: 'Accepted verdict verified in DOM'
+      });
+
+      verificationCriteria.push('Editor was cleared of duplicate templates and updated with clean solution');
+      verificationCriteria.push('Submit was triggered and Accepted verdict verified in DOM');
+    } else {
+      subgoals.push({
+        id: 1,
+        description: 'Navigate to coding platform problem page',
+        expectedAction: 'open_url',
+        riskTier: RISK_TIERS.REVERSIBLE,
+        completionEvidence: 'Problem description and editor active on page'
+      });
+
+      subgoals.push({
+        id: 2,
+        description: 'Locate code editor and inject clean solution using write_code_editor (with clear_existing=true)',
+        expectedAction: 'write_code_editor',
+        riskTier: RISK_TIERS.REVERSIBLE,
+        completionEvidence: 'Code editor buffer updated with algorithm implementation'
+      });
+
+      subgoals.push({
+        id: 3,
+        description: 'Click Submit button to test code against judge testcases',
+        expectedAction: 'click_element',
+        riskTier: RISK_TIERS.REVERSIBLE,
+        completionEvidence: 'Submit button clicked and testcase evaluation triggered'
+      });
+
+      subgoals.push({
+        id: 4,
+        description: 'Wait for judge submission verdict ("Accepted") and confirm result',
+        expectedAction: 'wait_for',
+        riskTier: RISK_TIERS.READ_ONLY,
+        completionEvidence: 'Submission verdict (Accepted) verified in DOM'
+      });
+
+      verificationCriteria.push('Coding platform was visited and problem opened');
+      verificationCriteria.push('Solution was injected into code editor');
+      verificationCriteria.push('Submit was triggered and Accepted verdict verified in DOM');
     }
   }
   // ── Web Search / Fact Lookup ──

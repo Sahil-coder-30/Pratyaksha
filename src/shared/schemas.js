@@ -131,6 +131,16 @@ export const TOOL_ZOD_SCHEMAS = {
     goal: z.string().optional().describe('Optional high-level goal or context for the research.')
   }),
 
+  [TOOL_NAMES.WRITE_CODE_EDITOR]: z.object({
+    target_id: z.union([z.number().int(), z.string().regex(/^\d+$/)]).optional().describe('Numeric [ID] of the code editor element (e.g. [24] <editor>).'),
+    semantic_hint: z.string().optional().describe('Fallback: description of the code editor (e.g. "Monaco code editor", "solution editor").'),
+    code: z.string().describe('The complete source code to inject into the editor.'),
+    language: z.string().optional().describe('Optional programming language (e.g. cpp, python, javascript).'),
+    clear_existing: z.boolean().default(true).optional().describe('Whether to clear existing boilerplate code before writing (default true).')
+  }).refine(data => data.target_id !== undefined || !!data.semantic_hint, {
+    message: 'write_code_editor requires either target_id or semantic_hint'
+  }),
+
   [TOOL_NAMES.FINISH_TASK]: z.object({
     summary: z.string().min(1, 'Summary is required').describe('Detailed summary of what was accomplished.'),
     success: z.boolean().describe('true if goal achieved, false only if impossible after exhausting all options.')
@@ -138,7 +148,7 @@ export const TOOL_ZOD_SCHEMAS = {
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 2. AUTHORITATIVE TOOL SPECIFICATIONS REGISTRY (22 TOOLS)
+// 2. AUTHORITATIVE TOOL SPECIFICATIONS REGISTRY (23 TOOLS)
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const BROWSER_TOOL_SPECS = [
@@ -432,6 +442,23 @@ export const BROWSER_TOOL_SPECS = [
     }
   },
   {
+    name: TOOL_NAMES.WRITE_CODE_EDITOR,
+    description: 'Writes source code into a virtualized code editor (Monaco on LeetCode/VSCode, CodeMirror, Ace). Uses atomic clipboard/buffer injection to prevent bracket duplication and indentation corruption.',
+    category: TOOL_CATEGORIES.INTERACTION,
+    defaultRisk: RISK_TIERS.SENSITIVE,
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        target_id: { type: 'NUMBER', description: 'Numeric [ID] of the code editor from the element list.' },
+        semantic_hint: { type: 'STRING', description: 'Fallback: describe the code editor.' },
+        code: { type: 'STRING', description: 'The complete source code to inject into the editor.' },
+        language: { type: 'STRING', description: 'Optional programming language (e.g. cpp, python, javascript).' },
+        clear_existing: { type: 'BOOLEAN', description: 'Whether to clear existing template/boilerplate code first (default true).' }
+      },
+      required: ['code']
+    }
+  },
+  {
     name: TOOL_NAMES.FINISH_TASK,
     description: 'Marks the task complete with a detailed summary. Call ONLY when the user goal is fully achieved and verified.',
     category: TOOL_CATEGORIES.COMPLETION,
@@ -634,7 +661,13 @@ export function normalizeToolInvocation(toolName = '', rawArgs = {}) {
     selectoption: TOOL_NAMES.SELECT_OPTION,
     key: TOOL_NAMES.PRESS_KEY,
     send_keys: TOOL_NAMES.PRESS_KEY,
-    presskey: TOOL_NAMES.PRESS_KEY
+    presskey: TOOL_NAMES.PRESS_KEY,
+    write_code: TOOL_NAMES.WRITE_CODE_EDITOR,
+    writecode: TOOL_NAMES.WRITE_CODE_EDITOR,
+    write_code_editor: TOOL_NAMES.WRITE_CODE_EDITOR,
+    type_code: TOOL_NAMES.WRITE_CODE_EDITOR,
+    set_code: TOOL_NAMES.WRITE_CODE_EDITOR,
+    insert_code: TOOL_NAMES.WRITE_CODE_EDITOR
   };
 
   const lower = String(toolName || '').toLowerCase().trim();
@@ -655,6 +688,24 @@ export function normalizeToolInvocation(toolName = '', rawArgs = {}) {
     } else if (typeof args.target_id === 'string' && !/^\d+$/.test(args.target_id)) {
       args.semantic_hint = args.semantic_hint || args.target_id;
       delete args.target_id;
+    }
+  } else if (canonicalName === TOOL_NAMES.WRITE_CODE_EDITOR) {
+    if (args.target_id === undefined) {
+      const rawTarget = args.id ?? args.target ?? args.element_id ?? args.targetId;
+      if (rawTarget !== undefined) {
+        const num = Number(rawTarget);
+        if (Number.isFinite(num) && num > 0) {
+          args.target_id = num;
+        } else {
+          args.semantic_hint = args.semantic_hint || String(rawTarget);
+        }
+      }
+    } else if (typeof args.target_id === 'string' && !/^\d+$/.test(args.target_id)) {
+      args.semantic_hint = args.semantic_hint || args.target_id;
+      delete args.target_id;
+    }
+    if (args.code === undefined) {
+      args.code = args.text ?? args.value ?? args.snippet ?? '';
     }
   } else if (canonicalName === TOOL_NAMES.TYPE_INTO_ELEMENT) {
     if (args.target_id === undefined) {

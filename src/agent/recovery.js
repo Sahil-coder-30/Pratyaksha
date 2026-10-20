@@ -51,7 +51,10 @@ export function decideRecoveryStrategy({
   }
 
   // If last action targeted an element that failed repeatedly -> blacklist and pivot
-  if (lastAction?.args?.target_id) {
+  // Note: if the failure was a typeability error (e.g. tried typing into a button), do not blacklist the element
+  // because the button itself is valid to click later!
+  const isTypeabilityError = /not an editable field|not a text field/i.test(lastError?.message || '');
+  if (lastAction?.args?.target_id && !isTypeabilityError) {
     return {
       decision: RECOVERY_DECISIONS.BLACKLIST_AND_PIVOT,
       blacklistedId: Number(lastAction.args.target_id),

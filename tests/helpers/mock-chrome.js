@@ -77,9 +77,14 @@ export function createMockChrome(initialState = {}) {
           return callback ? callback(undefined) : Promise.reject(err);
         }
 
-        const resp = nextMessageResponse !== null
-          ? nextMessageResponse
-          : { success: true, result: 'OK' };
+        let resp;
+        if (typeof nextMessageResponse === 'function') {
+          resp = nextMessageResponse(message);
+        } else if (nextMessageResponse !== null) {
+          resp = nextMessageResponse;
+        } else {
+          resp = { success: true, result: 'OK' };
+        }
 
         if (callback) {
           callback(resp);

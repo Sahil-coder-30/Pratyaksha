@@ -406,6 +406,9 @@ async function handleRunPrompt() {
       chrome.tabs.sendMessage(activeTab.id, { type: 'SET_CONTROL_ACTIVE', active: true }, () => {
         if (chrome.runtime.lastError) { }
       });
+      chrome.tabs.sendMessage(activeTab.id, { type: 'START_SESSION_TRACKER' }, () => {
+        if (chrome.runtime.lastError) { }
+      });
     } catch (_) { }
   }
   log(`User Request: "${rawPrompt}"`, 'info');
