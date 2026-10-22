@@ -23,7 +23,13 @@ class NERDetector:
             device=device,
         )
 
-    def detect(self, text: str) -> list[Detection]:
+    
+    def detect(
+        self,
+        text: str,
+        *,
+        context_id: str | None = None,
+    ) -> list[Detection]:
         if not text or not text.strip():
             return []
 
@@ -33,6 +39,10 @@ class NERDetector:
         for entity in predictions:
             start = int(entity["start"])
             end = int(entity["end"])
+
+            # Validate offsets before extracting the entity text.
+            if start < 0 or end <= start or end > len(text):
+                continue
 
             detections.append(
                 Detection(
@@ -44,10 +54,12 @@ class NERDetector:
                         "start": start,
                         "end": end,
                     },
+                    context_id="ocr_text",
                 )
             )
 
         return detections
+
 
 
 if __name__ == "__main__":
