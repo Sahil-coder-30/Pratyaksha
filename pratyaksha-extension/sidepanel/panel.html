@@ -21,7 +21,7 @@
     <header class="app-header">
       <div class="header-left">
         <div class="brand-badge" title="PRATYAKSHA — Sovereign Agentic Shield">
-          <img src="../assets/dark_logo.svg" alt="PRATYAKSHA" class="brand-header-logo">
+          <img src="../assets/light_logo.svg" alt="PRATYAKSHA" class="brand-header-logo">
         </div>
       </div>
 
@@ -46,45 +46,9 @@
       </div>
     </header>
 
-    <!-- Living AI Background 3D Atmosphere (Continuously active behind chats) -->
+    <!-- Dynamic 3D Cyber Cosmic Background (Three.js & GPU Particles) -->
     <div class="ambient-chat-aura" id="ambientAura" data-state="idle" aria-hidden="true">
-      <!-- Floating 3D Translucent Glass Orbs -->
-      <div class="bg-3d-orb bg-orb-1">
-        <div class="bg-orb-body"></div>
-        <div class="bg-orb-specular"></div>
-        <div class="bg-orb-ring"></div>
-        <div class="bg-orb-satellite sat-1"></div>
-      </div>
-
-      <div class="bg-3d-orb bg-orb-2">
-        <div class="bg-orb-body"></div>
-        <div class="bg-orb-specular"></div>
-        <div class="bg-orb-ring"></div>
-        <div class="bg-orb-satellite sat-2"></div>
-      </div>
-
-      <div class="bg-3d-orb bg-orb-3">
-        <div class="bg-orb-body"></div>
-        <div class="bg-orb-specular"></div>
-      </div>
-
-      <!-- Flowing Liquid Aurora Mesh -->
-      <div class="bg-aurora-mesh"></div>
-
-      <!-- Floating Quantum Stardust Particles -->
-      <div class="bg-particles-layer">
-        <span class="bg-particle bp-1"></span>
-        <span class="bg-particle bp-2"></span>
-        <span class="bg-particle bp-3"></span>
-        <span class="bg-particle bp-4"></span>
-        <span class="bg-particle bp-5"></span>
-        <span class="bg-particle bp-6"></span>
-        <span class="bg-particle bp-7"></span>
-        <span class="bg-particle bp-8"></span>
-      </div>
-
-      <!-- Neural Dot Matrix Grid -->
-      <div class="aura-neural-grid"></div>
+      <canvas id="particleWaveCanvas" class="particle-wave-canvas"></canvas>
     </div>
 
     <!-- Main Scrollable Chat Stream Container -->
@@ -92,15 +56,13 @@
 
       <div class="chat-messages" id="chatMessages">
         <section class="welcome-state" id="welcomeScreen" aria-labelledby="welcomeTitle">
-          <!-- 3D Multi-Orb System (Volumetric Central Sphere & 3D Orbiting Satellites) -->
-          <div class="pratyaksha-orb-container" id="welcomeOrb" data-state="idle" role="img"
-            aria-label="PRATYAKSHA 3D AI Orb">
-            <div class="orb-halo"></div>
-            <canvas id="orb3dCanvas" class="orb-3d-canvas" width="220" height="220"></canvas>
-            <div class="orb-ground-shadow"></div>
+          <div class="welcome-hero-badge">
+            <span class="hero-badge-dot"></span>
+            <span class="hero-badge-text">PRATYAKSHA AGENTIC VOID</span>
           </div>
 
-          <h1 id="welcomeTitle">What can I help you with?</h1>
+          <h1 id="welcomeTitle">What would you like me to do on this page?</h1>
+          <p class="welcome-subtitle">Direct, zero-lag browser autonomy powered by sovereign on-device visual shield.</p>
 
           <!-- Pre-Task Suggestion Pills -->
           <div class="welcome-pretasks" id="welcomePretasks" role="group" aria-label="Suggested quick tasks">
@@ -200,7 +162,8 @@
             <option value="gemini">Google Gemini (gemini-3.5-flash)</option>
             <option value="deterministic">Deterministic Semantic Planner (Offline / 0-Config)</option>
           </select>
-          <small class="form-hint">Supports verified production models: Mistral (codestral-latest), OpenRouter (deepseek/deepseek-v4.1-flash), and Gemini (gemini-3.5-flash).</small>
+          <small class="form-hint">Supports verified production models: Mistral (codestral-latest), OpenRouter
+            (deepseek/deepseek-v4.1-flash), and Gemini (gemini-3.5-flash).</small>
         </div>
 
         <div class="form-group" id="openrouterGroup" style="display:none;">
@@ -210,9 +173,11 @@
             <option value="deepseek/deepseek-chat">deepseek/deepseek-chat (DeepSeek V3)</option>
             <option value="deepseek/deepseek-chat:free">deepseek/deepseek-chat:free (100% Free)</option>
             <option value="deepseek/deepseek-r1:free">deepseek/deepseek-r1:free (Free Reasoning)</option>
-            <option value="meta-llama/llama-3.3-70b-instruct:free">meta-llama/llama-3.3-70b-instruct:free (Free)</option>
+            <option value="meta-llama/llama-3.3-70b-instruct:free">meta-llama/llama-3.3-70b-instruct:free (Free)
+            </option>
           </select>
-          <small class="form-hint">Tip: If your OpenRouter balance is low or zero, choose a free-tier model (:free).</small>
+          <small class="form-hint">Tip: If your OpenRouter balance is low or zero, choose a free-tier model
+            (:free).</small>
         </div>
 
         <div class="form-group" id="mistralGroup">
@@ -262,27 +227,35 @@
         <div class="vault-security-card" style="border-color: rgba(245, 158, 11, 0.4);">
           <div class="vault-icon-pill" style="color: #f59e0b;">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
-              <path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              <path
+                d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
             </svg>
           </div>
           <div class="vault-info">
             <div class="vault-heading" id="approvalToolTitle">Sensitive Operation</div>
-            <div class="vault-sub" id="approvalReasonText">The agent is about to execute a state-modifying browser action.</div>
+            <div class="vault-sub" id="approvalReasonText">The agent is about to execute a state-modifying browser
+              action.</div>
           </div>
           <span class="vault-badge" style="color: #f59e0b;">● Confirmation Needed</span>
         </div>
         <div class="form-group">
           <label>Target Action</label>
-          <div id="approvalActionDetails" style="padding: 10px; background: rgba(0,0,0,0.25); border-radius: 6px; font-family: monospace; font-size: 12px; word-break: break-all; color: #e2e8f0;"></div>
+          <div id="approvalActionDetails"
+            style="padding: 10px; background: rgba(0,0,0,0.25); border-radius: 6px; font-family: monospace; font-size: 12px; word-break: break-all; color: #e2e8f0;">
+          </div>
         </div>
       </div>
       <div class="modal-footer" style="display: flex; gap: 8px; justify-content: flex-end;">
-        <button id="rejectApprovalBtn" class="btn-secondary" style="padding: 8px 14px; border-radius: 6px; background: rgba(239,68,68,0.15); color: #ef4444; border: 1px solid rgba(239,68,68,0.3); cursor: pointer;">Reject Action</button>
-        <button id="confirmApprovalBtn" class="btn-primary" style="padding: 8px 14px; border-radius: 6px; cursor: pointer;">Approve & Execute</button>
+        <button id="rejectApprovalBtn" class="btn-secondary"
+          style="padding: 8px 14px; border-radius: 6px; background: rgba(239,68,68,0.15); color: #ef4444; border: 1px solid rgba(239,68,68,0.3); cursor: pointer;">Reject
+          Action</button>
+        <button id="confirmApprovalBtn" class="btn-primary"
+          style="padding: 8px 14px; border-radius: 6px; cursor: pointer;">Approve & Execute</button>
       </div>
     </div>
   </div>
 
+  <script src="gsap.min.js"></script>
   <script type="module" src="panel.js"></script>
 </body>
 

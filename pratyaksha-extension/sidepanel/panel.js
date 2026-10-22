@@ -5,13 +5,13 @@
 import { globalVault } from '../vault/pii-vault.js';
 import { getEffectiveConfig } from '../env.js';
 import { LangGraphAgent } from '../agent/graph-engine.js';
-import { Orb3DController } from './orb-3d.js';
+import { DynamicCosmicBackground } from './dynamic-bg-3d.js';
 
 let activeTab = null;
 let pageContext = null;
 let isExecuting = false;
 let activeAgent = null;
-let activeOrb3D = null;
+let activeBackground3D = null;
 
 // DOM Elements — Header
 const settingsBtn = document.getElementById('settingsBtn');
@@ -67,20 +67,49 @@ document.addEventListener('DOMContentLoaded', async () => {
   await loadSettings();
   await refreshActiveTab();
   setupEventListeners();
-  initOrb3D();
+  initDynamicBackground();
+  animateWelcomeScreen();
 });
 
-function initOrb3D() {
+function animateWelcomeScreen() {
+  if (typeof window.gsap === 'undefined') return;
   try {
-    const canvas = document.getElementById('orb3dCanvas');
-    if (canvas) {
-      if (activeOrb3D) {
-        try { activeOrb3D.destroy(); } catch (_) { }
-      }
-      activeOrb3D = new Orb3DController(canvas);
+    const welcome = document.getElementById('welcomeScreen');
+    if (!welcome) return;
+    const badge = welcome.querySelector('.welcome-hero-badge');
+    const title = welcome.querySelector('#welcomeTitle');
+    const subtitle = welcome.querySelector('.welcome-subtitle');
+    const pills = welcome.querySelectorAll('.pretask-pill');
+
+    const tl = window.gsap.timeline({ defaults: { ease: 'power3.out' } });
+    if (badge) {
+      tl.fromTo(badge, { scale: 0.8, opacity: 0, y: -12 }, { scale: 1, opacity: 1, y: 0, duration: 0.6 });
+    }
+    if (title) {
+      tl.fromTo(title, { opacity: 0, y: 15 }, { opacity: 1, y: 0, duration: 0.6 }, '-=0.4');
+    }
+    if (subtitle) {
+      tl.fromTo(subtitle, { opacity: 0, y: 10 }, { opacity: 1, y: 0, duration: 0.5 }, '-=0.4');
+    }
+    if (pills && pills.length) {
+      tl.fromTo(pills, { opacity: 0, y: 18, scale: 0.96 }, { opacity: 1, y: 0, scale: 1, duration: 0.45, stagger: 0.07 }, '-=0.3');
     }
   } catch (err) {
-    console.warn('[PRATYAKSHA] Error initializing Orb3DController:', err);
+    console.warn('[PRATYAKSHA] animateWelcomeScreen error:', err);
+  }
+}
+
+function initDynamicBackground() {
+  try {
+    const canvas = document.getElementById('particleWaveCanvas');
+    if (canvas) {
+      if (activeBackground3D) {
+        try { activeBackground3D.destroy(); } catch (_) { }
+      }
+      activeBackground3D = new DynamicCosmicBackground(canvas);
+    }
+  } catch (err) {
+    console.warn('[PRATYAKSHA] Error initializing DynamicCosmicBackground:', err);
   }
 }
 
@@ -135,6 +164,9 @@ function setupEventListeners() {
     promptInput.addEventListener('input', () => {
       promptInput.style.height = 'auto';
       promptInput.style.height = Math.min(promptInput.scrollHeight, 100) + 'px';
+      if (activeBackground3D && Math.random() > 0.5) {
+        activeBackground3D.triggerShockwave();
+      }
     });
 
     promptInput.addEventListener('keydown', (e) => {
@@ -369,11 +401,15 @@ async function handleRunPrompt() {
   promptInput.value = '';
   promptInput.style.height = 'auto';
 
-  // The welcome state belongs only to the empty conversation.
-  if (activeOrb3D) {
-    activeOrb3D.stop();
+  // Trigger cosmic dynamic background shockwave on submit
+  if (activeBackground3D) {
+    activeBackground3D.triggerShockwave();
   }
-  document.getElementById('welcomeScreen')?.remove();
+
+  const welcomeEl = document.getElementById('welcomeScreen');
+  if (welcomeEl) {
+    welcomeEl.remove();
+  }
 
   // 1. Render User Message Bubble
   renderUserMessage(rawPrompt);
@@ -481,6 +517,15 @@ function renderUserMessage(text) {
     row.className = 'chat-row user';
     row.innerHTML = `<div class="user-bubble">${escapeHtml(text)}</div>`;
     chatMessages.appendChild(row);
+
+    const bubble = row.querySelector('.user-bubble');
+    if (typeof window.gsap !== 'undefined' && bubble) {
+      window.gsap.fromTo(
+        bubble,
+        { opacity: 0.1, scale: 0.94, y: 8 },
+        { opacity: 1, scale: 1, y: 0, duration: 0.28, ease: 'power2.out', clearProps: 'transform' }
+      );
+    }
     scrollToBottom();
   } catch (err) {
     console.warn('[PRATYAKSHA] renderUserMessage error:', err);
@@ -489,16 +534,12 @@ function renderUserMessage(text) {
 
 function setOrbState(state) {
   try {
-    const orbs = document.querySelectorAll('.pratyaksha-orb-container, .header-mini-orb');
-    orbs.forEach(orb => {
-      if (orb?.dataset) orb.dataset.state = state;
-    });
     const aura = document.getElementById('ambientAura');
     if (aura?.dataset) {
       aura.dataset.state = state;
     }
-    if (activeOrb3D && typeof activeOrb3D.setState === 'function') {
-      activeOrb3D.setState(state);
+    if (activeBackground3D && typeof activeBackground3D.setState === 'function') {
+      activeBackground3D.setState(state);
     }
   } catch (err) {
     console.warn('[PRATYAKSHA] setOrbState warning:', err);
@@ -550,14 +591,13 @@ function renderWelcomeScreen() {
     welcomeSection.setAttribute('aria-labelledby', 'welcomeTitle');
 
     welcomeSection.innerHTML = `
-      <!-- 3D Multi-Orb System (Volumetric Central Sphere & 3D Orbiting Satellites) -->
-      <div class="pratyaksha-orb-container" id="welcomeOrb" data-state="idle" role="img" aria-label="PRATYAKSHA 3D AI Orb">
-        <div class="orb-halo"></div>
-        <canvas id="orb3dCanvas" class="orb-3d-canvas" width="220" height="220"></canvas>
-        <div class="orb-ground-shadow"></div>
+      <div class="welcome-hero-badge">
+        <span class="hero-badge-dot"></span>
+        <span class="hero-badge-text">PRATYAKSHA AGENTIC VOID</span>
       </div>
 
-      <h1 id="welcomeTitle">What can I help you with?</h1>
+      <h1 id="welcomeTitle">What would you like me to do on this page?</h1>
+      <p class="welcome-subtitle">Direct, zero-lag browser autonomy powered by sovereign on-device visual shield.</p>
 
       <!-- Pre-Task Suggestion Pills -->
       <div class="welcome-pretasks" id="welcomePretasks" role="group" aria-label="Suggested quick tasks">
@@ -581,7 +621,7 @@ function renderWelcomeScreen() {
     `;
 
     chatMessages.appendChild(welcomeSection);
-    initOrb3D();
+    animateWelcomeScreen();
   } catch (err) {
     console.warn('[PRATYAKSHA] renderWelcomeScreen error:', err);
   }
@@ -628,6 +668,14 @@ function createAgentMessageSlot() {
     `;
 
     chatMessages.appendChild(row);
+
+    if (typeof window.gsap !== 'undefined') {
+      window.gsap.fromTo(
+        row,
+        { opacity: 0, y: 15 },
+        { opacity: 1, y: 0, duration: 0.4, ease: 'power2.out' }
+      );
+    }
 
     currentAgentMessageEl = row;
     currentAnswerBubbleEl = row.querySelector(`#answer-${msgId}`);
@@ -685,7 +733,7 @@ function appendThinkingEntry(icon, text, meta = {}) {
       content.scrollTop = content.scrollHeight;
     }
     scrollToBottom();
-  } catch (_) {}
+  } catch (_) { }
 }
 
 function handleAgentEvent(event) {
@@ -857,6 +905,13 @@ function finishAgentMessage(summaryText, isSuccess = true) {
     if (currentAnswerBubbleEl && summaryText) {
       currentAnswerBubbleEl.style.display = 'block';
       currentAnswerBubbleEl.innerHTML = formatMarkdown(summaryText);
+      if (typeof window.gsap !== 'undefined') {
+        window.gsap.fromTo(
+          currentAnswerBubbleEl,
+          { opacity: 0, y: 10, scale: 0.98 },
+          { opacity: 1, y: 0, scale: 1, duration: 0.45, ease: 'power2.out' }
+        );
+      }
     }
     scrollToBottom();
   } catch (err) {

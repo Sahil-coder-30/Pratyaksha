@@ -4,20 +4,20 @@
    ══════════════════════════════════════════════════════════════════════════════ */
 
 :root {
-  color-scheme: light;
-  --bg-main:         #F5F7FC;
-  --surface:         #FFFFFF;
-  --surface-alt:     #EDF2FB;
+  color-scheme: dark;
+  --bg-main:         #080E1C;
+  --surface:         rgba(14, 25, 48, 0.85);
+  --surface-alt:     rgba(22, 42, 80, 0.9);
   --primary-blue:    #315EF7;
   --primary-hover:   #254EDB;
   --secondary-blue:  #6387FF;
-  --cyan-highlight:  #83E8FF;
-  --text-main:       #17264B;
-  --text-secondary:  #7887A6;
-  --border-color:    #E0E7F5;
+  --cyan-highlight:  #00E5FF;
+  --text-main:       #FFFFFF;
+  --text-secondary:  #94A3B8;
+  --border-color:    rgba(59, 130, 246, 0.35);
   --green:           #10B981;
-  --green-bg:        rgba(16, 185, 129, 0.08);
-  --green-border:    rgba(16, 185, 129, 0.22);
+  --green-bg:        rgba(16, 185, 129, 0.15);
+  --green-border:    rgba(16, 185, 129, 0.35);
 }
 
 *, *::before, *::after {
