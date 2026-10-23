@@ -57,6 +57,10 @@ export const AgentState = Annotation.Root({
 
   // Safety & Human-in-the-Loop Approval
   approvalStatus: Annotation({ reducer: replaceReducer, default: () => 'NONE' }),
+  // Tool call proposed by the actor that is waiting on a human decision (null = none)
+  pendingToolCall: Annotation({ reducer: replaceReducer, default: () => null }),
+  // Consecutive failure count per element ID, used to blacklist only repeat offenders
+  failedTargets: Annotation({ reducer: replaceReducer, default: () => ({}) }),
   pendingApproval: Annotation({ reducer: replaceReducer, default: () => null }),
   planApprovalStatus: Annotation({ reducer: replaceReducer, default: () => 'NONE' }),
   pendingPlanApproval: Annotation({ reducer: replaceReducer, default: () => null }),

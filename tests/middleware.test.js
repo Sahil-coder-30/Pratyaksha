@@ -5,7 +5,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { HumanMessage, ToolMessage, AIMessage } from '@langchain/core/messages';
-import { pruneContext, validateToolCall, filterRetries } from '../src/agent/middleware.js';
+import { pruneContext, validateToolCall, filterRetries, detectLoop } from '../src/agent/middleware.js';
 
 test('Middleware - Context Pruning Bounds Long Observation History', () => {
   const bigObservation = 'x'.repeat(2000);
@@ -70,4 +70,17 @@ test('Middleware - Retry Filtering and Circuit Breaker', () => {
   const rFatal = filterRetries('open_url', new Error('Forbidden URL protocol'), failureCounters, 2);
   assert.equal(rFatal.retryable, false);
   assert.equal(rFatal.tripCircuit, true);
+});
+
+test('Middleware - detectLoop prevents duplicate chat spam', () => {
+  const history = [
+    { toolName: 'type_into_element', args: { text: 'Dhruv Rathee is an Indian YouTuber' }, ok: true, observation: 'Typed' },
+    { toolName: 'press_key', args: { key: 'Enter' }, ok: true, observation: 'Pressed Enter' },
+    { toolName: 'type_into_element', args: { text: 'Dhruv Rathee is an Indian YouTuber' }, ok: true, observation: 'Typed' }
+  ];
+
+  const warning = detectLoop(history);
+  assert.ok(warning);
+  assert.ok(warning.includes('SPAM / LOOP PREVENTION'));
+  assert.ok(warning.includes('Dhruv Rathee'));
 });

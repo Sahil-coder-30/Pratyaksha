@@ -121,6 +121,16 @@ export function classifyAction(toolName, args = {}, pageContext = {}) {
     };
   }
 
+  // 5b. Writing code into editors
+  if (toolName === TOOL_NAMES.WRITE_CODE_EDITOR) {
+    const hint = args.semantic_hint || '';
+    return {
+      riskTier: RISK_TIERS.REVERSIBLE,
+      requiresApproval: false,
+      summary: `Write code into editor: "${hint || '#' + args.target_id}"`
+    };
+  }
+
   // Default fallback
   return {
     riskTier: RISK_TIERS.REVERSIBLE,

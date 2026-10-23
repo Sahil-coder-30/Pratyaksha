@@ -180,13 +180,20 @@
         <div class="form-group">
           <label for="engineSelect">Planner Engine / AI Provider</label>
           <select id="engineSelect" class="form-input">
-            <option value="mistral" selected>Mistral AI (codestral-latest)</option>
+            <option value="tinyfish">🐟 TinyFish Agent API (Cloud Browser) ★ Sponsored</option>
+            <option value="mistral">Mistral AI (codestral-latest)</option>
             <option value="openrouter">OpenRouter (deepseek/deepseek-v4.1-flash)</option>
             <option value="gemini">Google Gemini (gemini-3.5-flash)</option>
             <option value="deterministic">Deterministic Semantic Planner (Offline / 0-Config)</option>
           </select>
-          <small class="form-hint">Supports verified production models: Mistral (codestral-latest), OpenRouter
-            (deepseek/deepseek-v4.1-flash), and Gemini (gemini-3.5-flash).</small>
+          <small class="form-hint">TinyFish runs tasks in a managed cloud browser. Other options run locally via LangGraph (Mistral, OpenRouter, Gemini).</small>
+        </div>
+
+        <!-- TinyFish API Key -->
+        <div class="form-group" id="tinyfishGroup" style="display:none;">
+          <label for="tinyfishApiKey">TinyFish API Key</label>
+          <input type="password" id="tinyfishApiKey" class="form-input" placeholder="tf-…" autocomplete="off">
+          <small class="form-hint">Get your API key at <a href="https://agent.tinyfish.ai/api-keys" target="_blank" style="color:#6ee7f7;">agent.tinyfish.ai/api-keys</a>. TinyFish is the hackathon sponsor — try it first!</small>
         </div>
 
         <div class="form-group" id="openrouterGroup" style="display:none;">

@@ -12,7 +12,8 @@ import { ChromeStorageSaver } from './persistence/checkpointer.js';
 import { ThreadStore } from './persistence/thread-store.js';
 import { AgentEventEmitter, AGENT_EVENT_TYPES } from './ui/agent-events.js';
 import { globalVault } from './safety/privacy.js';
-import { verifyApproval, consumeApproval } from './safety/approval.js';
+import { Command } from '@langchain/langgraph';
+import { verifyApproval, consumeApproval, createApprovalRequest } from './safety/approval.js';
 import { formatError, toErrorResponse } from './shared/errors.js';
 
 export class PratyakshaAgentRunner {
@@ -27,6 +28,7 @@ export class PratyakshaAgentRunner {
     this.geminiApiKey = (options.geminiApiKey || '').trim();
     this.openrouterApiKey = (options.openrouterApiKey || '').trim();
     this.mistralApiKey = (options.mistralApiKey || '').trim();
+    this.tinyfishApiKey = (options.tinyfishApiKey || '').trim();
     this.vault = options.vault || globalVault;
     this.maxSteps = options.maxSteps || 100;
     this.useTwoAgentGraph = options.useTwoAgentGraph ?? false;
@@ -139,7 +141,8 @@ export class PratyakshaAgentRunner {
       checkpointer: this.checkpointer,
       signal: this.abortController.signal,
       maxSteps: this.maxSteps,
-      events: this.events
+      events: this.events,
+      tinyfishApiKey: this.tinyfishApiKey
     });
 
     const initialState = {
@@ -201,6 +204,12 @@ export class PratyakshaAgentRunner {
     if (this.isCancelled) {
       await this._clearHighlights();
       return { success: false, summary: 'Agent stopped immediately by user.', steps: result.stepCount || 1 };
+    }
+
+    // LangGraph interrupt(): the graph is paused inside a node and must be resumed with Command
+    const interrupts = Array.isArray(result.__interrupt__) ? result.__interrupt__ : [];
+    if (interrupts.length > 0) {
+      return this._handleInterrupt(interrupts[0].value || {}, result, threadId);
     }
 
     // Check if human approval is requested
@@ -278,6 +287,47 @@ export class PratyakshaAgentRunner {
   }
 
   /**
+   * Surfaces a paused graph (interrupt) to the UI as an approval request.
+   */
+  async _handleInterrupt(value, result, threadId) {
+    let request = value.request;
+    if (!request) {
+      const isPlan = value.type === 'PLAN_APPROVAL_REQUIRED';
+      request = createApprovalRequest({
+        threadId,
+        action: isPlan
+          ? { toolName: 'approve_plan', args: { subgoals: (value.plan?.subgoals || []).map(sg => sg.description) } }
+          : { toolName: value.action?.name || value.action?.toolName || 'browser_action', args: value.action?.args || {} },
+        reason: value.reason || 'Sensitive operation requires user confirmation',
+        pageContext: result.browserSession || this.activeTab || {}
+      });
+    }
+
+    this.pendingApproval = { ...request, viaInterrupt: true };
+
+    this.events.emit(AGENT_EVENT_TYPES.APPROVAL_REQUIRED, {
+      request,
+      threadId,
+      toolName: request.action?.toolName,
+      reason: request.reason,
+      riskTier: value.riskTier
+    });
+
+    await this.threadStore.updateThread(threadId, {
+      status: 'AWAITING_APPROVAL',
+      summary: `Action requires approval: ${request.reason}`
+    });
+
+    return {
+      success: false,
+      awaitingApproval: true,
+      pendingApproval: request,
+      summary: `Action requires approval: ${request.reason}`,
+      steps: result.stepCount || 1
+    };
+  }
+
+  /**
    * Resumes graph execution following explicit human approval.
    */
   async approveAction(token) {
@@ -290,7 +340,8 @@ export class PratyakshaAgentRunner {
       token: approvalToken,
       threadId: this.activeThreadId,
       currentAction: this.pendingApproval.action,
-      currentPageUrl: this.activeTab?.url
+      // Bind to the page the request was created on (the tab may have moved since the run started)
+      currentPageUrl: this.pendingApproval.page?.url ?? this.activeTab?.url
     });
 
     if (!verify.valid) {
@@ -304,18 +355,21 @@ export class PratyakshaAgentRunner {
       throw new Error('Graph execution context unavailable to resume.');
     }
 
-    const resumeState = {
-      ...this.lastState,
-      status: 'POLICY_ALLOWED',
-      approvalStatus: 'APPROVED',
-      approvalToken
-    };
+    const viaInterrupt = !!this.pendingApproval.viaInterrupt;
+    const resumeInput = viaInterrupt
+      ? new Command({ resume: { approved: true, token: approvalToken } })
+      : {
+        ...this.lastState,
+        status: 'POLICY_ALLOWED',
+        approvalStatus: 'APPROVED',
+        approvalToken
+      };
 
     this.pendingApproval = null;
     this.events.emitStateChange('ACTING', `Executing approved action…`);
 
     try {
-      const result = await this.app.invoke(resumeState, this.graphConfig);
+      const result = await this.app.invoke(resumeInput, this.graphConfig);
       return await this._handleResult(result, this.activeThreadId);
     } catch (err) {
       await this._clearHighlights();
@@ -343,7 +397,15 @@ export class PratyakshaAgentRunner {
   async rejectAction(reason = 'Action rejected by user.') {
     if (!this.pendingApproval) return;
     this.events.emit(AGENT_EVENT_TYPES.APPROVAL_REJECTED, { reason });
+    const viaInterrupt = !!this.pendingApproval.viaInterrupt;
     this.pendingApproval = null;
+
+    // Let the paused graph finalize cleanly instead of leaving the thread suspended
+    if (viaInterrupt && this.app && this.graphConfig) {
+      try {
+        await this.app.invoke(new Command({ resume: { approved: false, terminate: true, reason } }), this.graphConfig);
+      } catch (_) {}
+    }
 
     if (this.activeThreadId) {
       await this.threadStore.updateThread(this.activeThreadId, {

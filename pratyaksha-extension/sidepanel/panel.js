@@ -6,6 +6,7 @@ import { globalVault } from '../vault/pii-vault.js';
 import { getEffectiveConfig } from '../env.js';
 import { LangGraphAgent } from '../agent/graph-engine.js';
 import { HexagonalVault, HEXAGONAL_VAULT_DEFAULTS } from './hexagonal-vault.js';
+import { TinyFishAgent } from '../agent/tinyfish-agent.js';
 
 let activeTab = null;
 let pageContext = null;
@@ -43,6 +44,8 @@ const geminiModel = document.getElementById('geminiModel');
 const openrouterGroup = document.getElementById('openrouterGroup');
 const openrouterApiKey = document.getElementById('openrouterApiKey');
 const openrouterModel = document.getElementById('openrouterModel');
+const tinyfishGroup = document.getElementById('tinyfishGroup');
+const tinyfishApiKey = document.getElementById('tinyfishApiKey');
 const privacyLevel = document.getElementById('privacyLevel');
 
 // DOM Elements — Approval Modal
@@ -244,6 +247,7 @@ function setupEventListeners() {
   if (engineSelect) {
     engineSelect.addEventListener('change', () => {
       const val = engineSelect.value;
+      if (tinyfishGroup) tinyfishGroup.style.display = val === 'tinyfish' ? 'flex' : 'none';
       if (mistralGroup) mistralGroup.style.display = val === 'mistral' ? 'flex' : 'none';
       if (openrouterGroup) openrouterGroup.style.display = val === 'openrouter' ? 'flex' : 'none';
       if (geminiKeyGroup) geminiKeyGroup.style.display = val === 'gemini' ? 'flex' : 'none';
@@ -270,7 +274,8 @@ function setupEventListeners() {
     rejectApprovalBtn.addEventListener('click', async () => {
       if (approvalModal) approvalModal.style.display = 'none';
       if (activeAgent) {
-        await activeAgent.rejectAction('Action rejected by user.');
+        const result = await activeAgent.rejectAction('Action rejected by user.');
+        if (result?.summary) finishAgentMessage(result.summary, false);
       }
     });
   }
@@ -308,17 +313,19 @@ async function loadSettings() {
   const data = await chrome.storage.local.get([
     'engineMode', 'provider', 'mistralApiKey', 'mistralModel',
     'geminiApiKey', 'geminiModel', 'openrouterApiKey', 'openrouterModel',
-    'privacyMode', 'autonomousMode'
+    'tinyfishApiKey', 'privacyMode', 'autonomousMode'
   ]);
 
   const provider = data.provider || config.provider || 'mistral';
   if (engineSelect) engineSelect.value = provider;
 
+  if (tinyfishGroup) tinyfishGroup.style.display = provider === 'tinyfish' ? 'flex' : 'none';
   if (mistralGroup) mistralGroup.style.display = provider === 'mistral' ? 'flex' : 'none';
   if (openrouterGroup) openrouterGroup.style.display = provider === 'openrouter' ? 'flex' : 'none';
   if (geminiKeyGroup) geminiKeyGroup.style.display = provider === 'gemini' ? 'flex' : 'none';
   if (geminiModelGroup) geminiModelGroup.style.display = provider === 'gemini' ? 'flex' : 'none';
 
+  if (tinyfishApiKey) tinyfishApiKey.value = data.tinyfishApiKey || config.tinyfishApiKey || '';
   if (mistralApiKey) mistralApiKey.value = data.mistralApiKey || config.mistralApiKey || '';
   if (mistralModel) mistralModel.value = data.mistralModel || config.mistralModel || 'codestral-latest';
 
@@ -330,11 +337,21 @@ async function loadSettings() {
   if (geminiModel) geminiModel.value = activeGeminiModel;
   if (data.privacyMode && privacyLevel) privacyLevel.value = data.privacyMode;
 
+  if (!data.provider && config.provider) {
+    await chrome.storage.local.set({
+      provider: config.provider,
+      engineMode: config.provider
+    });
+  }
+  if (!data.tinyfishApiKey && config.tinyfishApiKey) {
+    await chrome.storage.local.set({
+      tinyfishApiKey: config.tinyfishApiKey
+    });
+  }
   if (!data.mistralApiKey && config.mistralApiKey) {
     await chrome.storage.local.set({
       mistralApiKey: config.mistralApiKey,
-      mistralModel: config.mistralModel || 'codestral-latest',
-      provider: 'mistral'
+      mistralModel: config.mistralModel || 'codestral-latest'
     });
   }
 }
@@ -344,8 +361,9 @@ async function saveSettings() {
   try {
     const provider = engineSelect ? engineSelect.value : 'mistral';
     const config = await getEffectiveConfig();
-    const data = await chrome.storage.local.get(['mistralApiKey', 'geminiApiKey', 'openrouterApiKey']);
+    const data = await chrome.storage.local.get(['mistralApiKey', 'geminiApiKey', 'openrouterApiKey', 'tinyfishApiKey']);
 
+    const activeTinyfishKey = (tinyfishApiKey?.value || '').trim() || data.tinyfishApiKey || config.tinyfishApiKey || '';
     const activeMistralKey = (mistralApiKey?.value || '').trim() || data.mistralApiKey || config.mistralApiKey || '';
     const activeGeminiKey = (geminiApiKey?.value || '').trim() || data.geminiApiKey || config.geminiApiKey || '';
     const activeOpenRouterKey = (openrouterApiKey?.value || '').trim() || data.openrouterApiKey || config.openrouterApiKey || '';
@@ -353,6 +371,7 @@ async function saveSettings() {
     await chrome.storage.local.set({
       provider,
       engineMode: provider,
+      tinyfishApiKey: activeTinyfishKey,
       mistralApiKey: activeMistralKey,
       mistralModel: mistralModel ? mistralModel.value : 'codestral-latest',
       geminiApiKey: activeGeminiKey,
@@ -466,6 +485,9 @@ async function handleRunPrompt() {
       chrome.tabs.sendMessage(activeTab.id, { type: 'SET_CONTROL_ACTIVE', active: true }, () => {
         if (chrome.runtime.lastError) { }
       });
+      chrome.tabs.sendMessage(activeTab.id, { type: 'START_SESSION_TRACKER' }, () => {
+        if (chrome.runtime.lastError) { }
+      });
     } catch (_) { }
   }
   log(`User Request: "${rawPrompt}"`, 'info');
@@ -474,13 +496,36 @@ async function handleRunPrompt() {
     {
       const config = await getEffectiveConfig();
       const settings = await chrome.storage.local.get([
-        'provider', 'mistralApiKey', 'mistralModel', 'geminiApiKey', 'geminiModel',
+        'provider', 'tinyfishApiKey', 'mistralApiKey', 'mistralModel', 'geminiApiKey', 'geminiModel',
         'openrouterApiKey', 'openrouterModel'
       ]);
 
       const provider = settings.provider || config.provider || 'mistral';
       let apiKey = '';
       let model = '';
+      if (provider === 'tinyfish') {
+        // ── TinyFish Cloud Agent ────────────────────────────────────────────
+        apiKey = (settings.tinyfishApiKey || config.tinyfishApiKey || '').trim();
+        if (!apiKey) {
+          throw new Error('TinyFish API Key is missing. Click ⚙ Settings, choose TinyFish, and enter your key from agent.tinyfish.ai/api-keys');
+        }
+
+        activeAgent = new TinyFishAgent({
+          apiKey,
+          onEvent: handleAgentEvent
+        });
+
+        const result = await activeAgent.run(rawPrompt, activeTab);
+        if (activeAgent?.isCancelled) return;
+        if (result.success) {
+          log(`🎉 TinyFish Task Completed in ${result.steps} step(s)!`, 'success');
+          finishAgentMessage(result.summary || 'Task completed successfully.');
+        } else {
+          log(`TinyFish task ended: ${result.summary}`, 'warn');
+          finishAgentMessage(result.summary || 'Task stopped — see TinyFish dashboard for details.', false);
+        }
+      } else {
+      // ── Local LangGraph Agent (Mistral / OpenRouter / Gemini) ────────────
       if (provider === 'mistral') {
         apiKey = (settings.mistralApiKey || config.mistralApiKey || '').trim();
         model = settings.mistralModel || config.mistralModel || 'codestral-latest';
@@ -506,6 +551,7 @@ async function handleRunPrompt() {
         mistralApiKey: (settings.mistralApiKey || config.mistralApiKey || '').trim(),
         geminiApiKey: (settings.geminiApiKey || config.geminiApiKey || '').trim(),
         openrouterApiKey: (settings.openrouterApiKey || config.openrouterApiKey || '').trim(),
+        tinyfishApiKey: (settings.tinyfishApiKey || config.tinyfishApiKey || '').trim(),
         onEvent: handleAgentEvent
       });
 
@@ -514,7 +560,10 @@ async function handleRunPrompt() {
         // Stopped cleanly via 1-click stopBtn handler
         return;
       }
-      if (result.awaitingUserInput) {
+      if (result.awaitingApproval) {
+        // Paused for the approval modal: the resumed run reports completion via agent events
+        log(`Task awaiting approval: ${result.summary}`, 'warn');
+      } else if (result.awaitingUserInput) {
         log(`Task awaiting input: ${result.summary}`, 'warn');
         finishAgentMessage(result.summary, false);
       } else if (result.success) {
@@ -524,6 +573,7 @@ async function handleRunPrompt() {
         log(`Task ended: ${result.summary}`, 'warn');
         finishAgentMessage(result.summary || 'Task stopped: verification criteria not fulfilled on current page.', false);
       }
+      } // end local LangGraph block
     }
   } catch (err) {
     if (activeAgent?.isCancelled || err.message === 'STOPPED_BY_USER') {

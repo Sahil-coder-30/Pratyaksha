@@ -22,6 +22,7 @@ desktop.ini
 *.swo
 *.swp
 *~
+.agents
 
 # AI & Agent Customizations
 .agent/

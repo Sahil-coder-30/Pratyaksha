@@ -2,7 +2,7 @@
  * PRATYAKSHA Authoritative Tool Registry & Schema System
  * Sovereign Privacy-First Browser Agent
  *
- * Single Source of Truth for all 19 browser tools.
+ * Single Source of Truth for all 21 browser tools.
  * Exposes Zod schemas, Gemini function declarations, OpenAI tool declarations,
  * and standard internal tool result builders.
  */
@@ -11,7 +11,7 @@ import { z } from 'zod';
 import { TOOL_NAMES, TOOL_CATEGORIES, RISK_TIERS } from './constants.js';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 1. AUTHORITATIVE ZOD SCHEMAS FOR ALL 19 BROWSER TOOLS
+// 1. AUTHORITATIVE ZOD SCHEMAS FOR ALL 21 BROWSER TOOLS
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const TOOL_ZOD_SCHEMAS = {
@@ -72,10 +72,23 @@ export const TOOL_ZOD_SCHEMAS = {
     target_id: z.union([z.number().int(), z.string().regex(/^\d+$/)]).optional().describe('Numeric [ID] from the DOM elements table.'),
     semantic_hint: z.string().optional().describe('Fallback: describe the field.'),
     text: z.string().describe('The exact text to type.'),
-    clear_first: z.boolean().default(false).optional().describe('Clear existing content before typing (default false).'),
+    clear_first: z.boolean().default(true).optional().describe('Replace existing content (default true). Set false to append.'),
     press_enter: z.boolean().default(false).optional().describe('Press Enter after typing (for search bars and forms).')
   }).refine(data => data.target_id !== undefined || !!data.semantic_hint, {
     message: 'type_into_element requires either target_id or semantic_hint'
+  }),
+
+  [TOOL_NAMES.SELECT_OPTION]: z.object({
+    target_id: z.union([z.number().int(), z.string().regex(/^\d+$/)]).optional().describe('Numeric [ID] of the dropdown from the element list.'),
+    semantic_hint: z.string().optional().describe('Fallback: describe the dropdown.'),
+    option: z.string().min(1, 'Option text is required').describe('Visible text (or value) of the option to choose.')
+  }).refine(data => data.target_id !== undefined || !!data.semantic_hint, {
+    message: 'select_option requires either target_id or semantic_hint'
+  }),
+
+  [TOOL_NAMES.PRESS_KEY]: z.object({
+    key: z.enum(['Enter', 'Escape', 'Tab', 'Backspace', 'Delete', 'ArrowDown', 'ArrowUp', 'ArrowLeft', 'ArrowRight', 'Space', 'PageDown', 'PageUp', 'Home', 'End']).describe('Key to press.'),
+    target_id: z.union([z.number().int(), z.string().regex(/^\d+$/)]).optional().describe('Optional element [ID] to press the key on (default: focused element).')
   }),
 
   [TOOL_NAMES.EXECUTE_JS]: z.object({
@@ -93,20 +106,39 @@ export const TOOL_ZOD_SCHEMAS = {
 
   [TOOL_NAMES.SCROLL_PAGE]: z.object({
     direction: z.enum(['down', 'up', 'top', 'bottom']).describe('Scroll direction.'),
-    pixels: z.number().min(1).max(5000).default(600).optional().describe('Pixels to scroll (for "down"/"up"). Default 600.')
+    pixels: z.number().min(1).max(5000).default(600).optional().describe('Pixels to scroll (for "down"/"up"). Default 600.'),
+    target_id: z.union([z.number().int(), z.string().regex(/^\d+$/)]).optional().describe('Optional [ID] of a scrollable panel to scroll instead of the page.')
   }),
 
   [TOOL_NAMES.WAIT_FOR]: z.object({
     selector: z.string().optional().describe('CSS selector to wait for.'),
     text_contains: z.string().optional().describe('Text that must appear on the page.'),
-    timeout_seconds: z.number().min(1).max(30).default(8).optional().describe('Max seconds to wait (default 8, max 30).')
-  }).refine(data => !!data.selector || !!data.text_contains, {
-    message: 'wait_for requires either selector or text_contains'
+    wait_for_reply: z.boolean().optional().describe('Set to true to wait for a reply/response from the other user in email or chat, tracking incoming message DOM changes.'),
+    track_dom_changes: z.boolean().optional().describe('Set to true to hold until meaningful DOM mutations or new elements arrive on the page.'),
+    expected_sender: z.string().optional().describe('Optional sender name or email address whose reply is expected.'),
+    timeout_seconds: z.number().min(1).max(600).default(60).optional().describe('Max seconds to hold and wait for the response/condition (up to 600s / 10 minutes).')
+  }).refine(data => !!data.selector || !!data.text_contains || !!data.wait_for_reply || !!data.track_dom_changes, {
+    message: 'wait_for requires selector, text_contains, wait_for_reply, or track_dom_changes'
   }),
 
   [TOOL_NAMES.WAIT_SECONDS]: z.object({
-    seconds: z.number().min(0.5).max(10).describe('Seconds to wait (0.5–10).'),
+    seconds: z.number().min(0.5).max(300).describe('Seconds to wait (0.5–300).'),
     reason: z.string().optional().describe('Why you are waiting.')
+  }),
+
+  [TOOL_NAMES.TINYFISH_RESEARCH]: z.object({
+    query: z.string().min(1, 'Search query is required').describe('Information or factual question to research via isolated TinyFish cloud agent.'),
+    goal: z.string().optional().describe('Optional high-level goal or context for the research.')
+  }),
+
+  [TOOL_NAMES.WRITE_CODE_EDITOR]: z.object({
+    target_id: z.union([z.number().int(), z.string().regex(/^\d+$/)]).optional().describe('Numeric [ID] of the code editor element (e.g. [24] <editor>).'),
+    semantic_hint: z.string().optional().describe('Fallback: description of the code editor (e.g. "Monaco code editor", "solution editor").'),
+    code: z.string().describe('The complete source code to inject into the editor.'),
+    language: z.string().optional().describe('Optional programming language (e.g. cpp, python, javascript).'),
+    clear_existing: z.boolean().default(true).optional().describe('Whether to clear existing boilerplate code before writing (default true).')
+  }).refine(data => data.target_id !== undefined || !!data.semantic_hint, {
+    message: 'write_code_editor requires either target_id or semantic_hint'
   }),
 
   [TOOL_NAMES.FINISH_TASK]: z.object({
@@ -116,7 +148,7 @@ export const TOOL_ZOD_SCHEMAS = {
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 2. AUTHORITATIVE TOOL SPECIFICATIONS REGISTRY (19 TOOLS)
+// 2. AUTHORITATIVE TOOL SPECIFICATIONS REGISTRY (23 TOOLS)
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const BROWSER_TOOL_SPECS = [
@@ -179,7 +211,7 @@ export const BROWSER_TOOL_SPECS = [
   },
   {
     name: TOOL_NAMES.READ_PAGE,
-    description: 'Reads and extracts the visible text content of the current page. Optionally focus on a specific CSS region.',
+    description: 'Returns the main text content of the whole page (not only the viewport). Use it to read articles, results or answers before reporting them. Optionally scope with a CSS selector.',
     category: TOOL_CATEGORIES.READING,
     defaultRisk: RISK_TIERS.READ_ONLY,
     parameters: {
@@ -254,7 +286,7 @@ export const BROWSER_TOOL_SPECS = [
   },
   {
     name: TOOL_NAMES.CLICK_ELEMENT,
-    description: 'Clicks an interactive element — buttons, links, tabs, checkboxes. Use target_id from the DOM table for accuracy.',
+    description: 'Clicks a button, link, tab, checkbox, menu item or other control. Pass target_id = an [ID] from the CURRENT element list. Not for <select> dropdowns (use select_option).',
     category: TOOL_CATEGORIES.INTERACTION,
     defaultRisk: RISK_TIERS.REVERSIBLE,
     parameters: {
@@ -268,7 +300,7 @@ export const BROWSER_TOOL_SPECS = [
   },
   {
     name: TOOL_NAMES.TYPE_INTO_ELEMENT,
-    description: 'Types text into any input, search bar, textarea, or rich-text editor. Use target_id from the DOM table.',
+    description: 'Types text into an input, search box, textarea or rich-text editor (replaces existing text by default). Pass target_id from the CURRENT element list. Set press_enter=true to submit a search box.',
     category: TOOL_CATEGORIES.INTERACTION,
     defaultRisk: RISK_TIERS.SENSITIVE,
     parameters: {
@@ -277,10 +309,39 @@ export const BROWSER_TOOL_SPECS = [
         target_id: { type: 'NUMBER', description: 'Numeric [ID] from the DOM elements table.' },
         semantic_hint: { type: 'STRING', description: 'Fallback: describe the field.' },
         text: { type: 'STRING', description: 'The exact text to type.' },
-        clear_first: { type: 'BOOLEAN', description: 'Clear existing content before typing (default false).' },
+        clear_first: { type: 'BOOLEAN', description: 'Replace existing content (default true). Set false to append.' },
         press_enter: { type: 'BOOLEAN', description: 'Press Enter after typing.' }
       },
       required: ['text']
+    }
+  },
+  {
+    name: TOOL_NAMES.SELECT_OPTION,
+    description: 'Chooses an option in a dropdown (native <select> or custom listbox) by its visible text. Use instead of clicking dropdown options one by one.',
+    category: TOOL_CATEGORIES.INTERACTION,
+    defaultRisk: RISK_TIERS.REVERSIBLE,
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        target_id: { type: 'NUMBER', description: 'Numeric [ID] of the dropdown from the element list.' },
+        semantic_hint: { type: 'STRING', description: 'Fallback: describe the dropdown.' },
+        option: { type: 'STRING', description: 'Visible text (or value) of the option to choose.' }
+      },
+      required: ['option']
+    }
+  },
+  {
+    name: TOOL_NAMES.PRESS_KEY,
+    description: 'Presses a keyboard key: Escape closes popups/menus, Enter submits, Tab/Arrow keys move through suggestions.',
+    category: TOOL_CATEGORIES.INTERACTION,
+    defaultRisk: RISK_TIERS.REVERSIBLE,
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        key: { type: 'STRING', enum: ['Enter', 'Escape', 'Tab', 'Backspace', 'Delete', 'ArrowDown', 'ArrowUp', 'ArrowLeft', 'ArrowRight', 'Space', 'PageDown', 'PageUp', 'Home', 'End'], description: 'Key to press.' },
+        target_id: { type: 'NUMBER', description: 'Optional element [ID] to press the key on (default: focused element).' }
+      },
+      required: ['key']
     }
   },
   {
@@ -328,14 +389,15 @@ export const BROWSER_TOOL_SPECS = [
       type: 'OBJECT',
       properties: {
         direction: { type: 'STRING', enum: ['down', 'up', 'top', 'bottom'], description: 'Direction to scroll.' },
-        pixels: { type: 'NUMBER', description: 'Pixels to scroll (for "down"/"up"). Default 600.' }
+        pixels: { type: 'NUMBER', description: 'Pixels to scroll (for "down"/"up"). Default 600.' },
+        target_id: { type: 'NUMBER', description: 'Optional [ID] of a scrollable panel to scroll instead of the page.' }
       },
       required: ['direction']
     }
   },
   {
     name: TOOL_NAMES.WAIT_FOR,
-    description: 'Waits until a specific element appears in the DOM or specific text becomes visible on the page.',
+    description: 'Waits until a specific element appears, text becomes visible, or an incoming reply/response arrives from another user by tracking live DOM mutations.',
     category: TOOL_CATEGORIES.WAITING,
     defaultRisk: RISK_TIERS.READ_ONLY,
     parameters: {
@@ -343,7 +405,10 @@ export const BROWSER_TOOL_SPECS = [
       properties: {
         selector: { type: 'STRING', description: 'CSS selector to wait for.' },
         text_contains: { type: 'STRING', description: 'Text that must appear on the page.' },
-        timeout_seconds: { type: 'NUMBER', description: 'Max seconds to wait (default 8, max 30).' }
+        wait_for_reply: { type: 'BOOLEAN', description: 'Wait for incoming reply or response from other user in email/chat threads.' },
+        track_dom_changes: { type: 'BOOLEAN', description: 'Track live DOM changes and hold until new response elements appear.' },
+        expected_sender: { type: 'STRING', description: 'Optional expected sender name or email.' },
+        timeout_seconds: { type: 'NUMBER', description: 'Max seconds to hold and wait (default 60, up to 600).' }
       },
       required: []
     }
@@ -356,10 +421,41 @@ export const BROWSER_TOOL_SPECS = [
     parameters: {
       type: 'OBJECT',
       properties: {
-        seconds: { type: 'NUMBER', description: 'Seconds to wait (0.5–10).' },
+        seconds: { type: 'NUMBER', description: 'Seconds to wait (0.5–300).' },
         reason: { type: 'STRING', description: 'Why you are waiting.' }
       },
       required: ['seconds']
+    }
+  },
+  {
+    name: TOOL_NAMES.TINYFISH_RESEARCH,
+    description: 'Researches questions, prices, facts, or external web information in an isolated cloud browser sandbox using TinyFish. Leaves the current tab and DOM completely untouched (vital when chatting in WhatsApp or composing in Gmail so active sessions are never lost).',
+    category: TOOL_CATEGORIES.READING,
+    defaultRisk: RISK_TIERS.READ_ONLY,
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        query: { type: 'STRING', description: 'The question, topic, or factual query to research.' },
+        goal: { type: 'STRING', description: 'Optional context on how the result will be used.' }
+      },
+      required: ['query']
+    }
+  },
+  {
+    name: TOOL_NAMES.WRITE_CODE_EDITOR,
+    description: 'Writes source code into a virtualized code editor (Monaco on LeetCode/VSCode, CodeMirror, Ace). Uses atomic clipboard/buffer injection to prevent bracket duplication and indentation corruption.',
+    category: TOOL_CATEGORIES.INTERACTION,
+    defaultRisk: RISK_TIERS.SENSITIVE,
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        target_id: { type: 'NUMBER', description: 'Numeric [ID] of the code editor from the element list.' },
+        semantic_hint: { type: 'STRING', description: 'Fallback: describe the code editor.' },
+        code: { type: 'STRING', description: 'The complete source code to inject into the editor.' },
+        language: { type: 'STRING', description: 'Optional programming language (e.g. cpp, python, javascript).' },
+        clear_existing: { type: 'BOOLEAN', description: 'Whether to clear existing template/boilerplate code first (default true).' }
+      },
+      required: ['code']
     }
   },
   {
@@ -559,7 +655,19 @@ export function normalizeToolInvocation(toolName = '', rawArgs = {}) {
     finish: TOOL_NAMES.FINISH_TASK,
     complete: TOOL_NAMES.FINISH_TASK,
     done: TOOL_NAMES.FINISH_TASK,
-    finishtask: TOOL_NAMES.FINISH_TASK
+    finishtask: TOOL_NAMES.FINISH_TASK,
+    select: TOOL_NAMES.SELECT_OPTION,
+    select_dropdown_option: TOOL_NAMES.SELECT_OPTION,
+    selectoption: TOOL_NAMES.SELECT_OPTION,
+    key: TOOL_NAMES.PRESS_KEY,
+    send_keys: TOOL_NAMES.PRESS_KEY,
+    presskey: TOOL_NAMES.PRESS_KEY,
+    write_code: TOOL_NAMES.WRITE_CODE_EDITOR,
+    writecode: TOOL_NAMES.WRITE_CODE_EDITOR,
+    write_code_editor: TOOL_NAMES.WRITE_CODE_EDITOR,
+    type_code: TOOL_NAMES.WRITE_CODE_EDITOR,
+    set_code: TOOL_NAMES.WRITE_CODE_EDITOR,
+    insert_code: TOOL_NAMES.WRITE_CODE_EDITOR
   };
 
   const lower = String(toolName || '').toLowerCase().trim();
@@ -581,6 +689,24 @@ export function normalizeToolInvocation(toolName = '', rawArgs = {}) {
       args.semantic_hint = args.semantic_hint || args.target_id;
       delete args.target_id;
     }
+  } else if (canonicalName === TOOL_NAMES.WRITE_CODE_EDITOR) {
+    if (args.target_id === undefined) {
+      const rawTarget = args.id ?? args.target ?? args.element_id ?? args.targetId;
+      if (rawTarget !== undefined) {
+        const num = Number(rawTarget);
+        if (Number.isFinite(num) && num > 0) {
+          args.target_id = num;
+        } else {
+          args.semantic_hint = args.semantic_hint || String(rawTarget);
+        }
+      }
+    } else if (typeof args.target_id === 'string' && !/^\d+$/.test(args.target_id)) {
+      args.semantic_hint = args.semantic_hint || args.target_id;
+      delete args.target_id;
+    }
+    if (args.code === undefined) {
+      args.code = args.text ?? args.value ?? args.snippet ?? '';
+    }
   } else if (canonicalName === TOOL_NAMES.TYPE_INTO_ELEMENT) {
     if (args.target_id === undefined) {
       const rawTarget = args.id ?? args.target ?? args.element_id ?? args.targetId;
@@ -599,6 +725,12 @@ export function normalizeToolInvocation(toolName = '', rawArgs = {}) {
     if (args.text === undefined && args.value !== undefined) {
       args.text = String(args.value);
     }
+  } else if (canonicalName === TOOL_NAMES.SELECT_OPTION) {
+    if (args.target_id === undefined) {
+      const rawTarget = args.id ?? args.target ?? args.element_id ?? args.index;
+      if (rawTarget !== undefined && Number.isFinite(Number(rawTarget))) args.target_id = Number(rawTarget);
+    }
+    if (args.option === undefined) args.option = args.text ?? args.value ?? args.label;
   } else if (canonicalName === TOOL_NAMES.OPEN_URL) {
     if (!args.url && args.link) args.url = args.link;
     if (!args.url && args.destination) args.url = args.destination;
