@@ -1,48 +1,60 @@
-# PRATYAKSHA UI design system
+# PRATYAKSHA UI Design System — Hexagonal Vault
 
 ## Direction
 
-Use a light, neutral interface with white surfaces, quiet gray borders, readable charcoal text, and a restrained professional blue for actions and focus. The side panel contains only the product name, settings access, conversation, and prompt composer. Keep the browser page visually in control: during actions show one small pointer that travels smoothly to its target and ripples on click. Do not draw target rectangles, labels, badges, or floating text over the page.
+The PRATYAKSHA extension user interface is built on the **Hexagonal Vault** aesthetic: a tactile warm stone canvas (`#e0dcd8`) illuminated by an interactive GPU-accelerated hexagonal wireframe lattice lit by soft, reactive neon light (`#5227FF` electric violet and `#ff2a7d` neon magenta) that follows the user's cursor.
 
-## Color tokens
+Surfaces and dialogs utilize frosted warm porcelain glass (`rgba(255, 255, 255, 0.74–0.92)` with `backdrop-filter: blur(16–24px)`), razor-thin warm-charcoal keylines, deep slate typography, and vibrant electric violet to neon magenta gradients for actions, active badges, and focus rings.
+
+## Color Tokens
 
 | Token | Value | Use |
 | --- | --- | --- |
-| `bg-root` | `#F7F8FA` | Side-panel and popup background |
-| `bg-header` | `#FFFFFF` | Header and fixed chrome |
-| `bg-surface` | `#FFFFFF` | Cards, agent messages, drawers |
-| `bg-card` | `#F1F4F8` | Subtle nested surfaces |
-| `bg-input` | `#FFFFFF` | Prompt and form controls |
-| `bg-hover` | `#E9EDF3` | Hovered controls |
-| `text-main` | `#182230` | Primary copy |
-| `text-body` | `#344054` | Body copy |
-| `text-muted` | `#667085` | Hints and metadata |
-| `accent` | `#315BD6` | Focus, selection, primary control |
-| `accent-strong` | `#2449B8` | Primary button and active states |
-| `success` | `#16805D` | Ready, privacy protection, successful action |
-| `info` | `#2463B8` | Informational status |
-| `danger` | `#B42318` | Stop and error |
-| `border` | `#E1E6ED` | Quiet separators and card outlines |
+| `bg-main` | `#e0dcd8` | Base warm stone background |
+| `surface` | `rgba(255, 255, 255, 0.74)` | Frosted glass containers and header |
+| `surface-card` | `rgba(255, 255, 255, 0.88)` | Message bubbles, status cards, pre-task pills |
+| `primary-violet` | `#5227FF` | Electric violet accent, primary controls, user bubble |
+| `accent-magenta` | `#ff2a7d` | Neon magenta pulse, thinking status, gradient highlights |
+| `text-main` | `#18181B` | Primary headings and high-contrast titles |
+| `text-body` | `#27272A` | Standard conversational copy and body text |
+| `text-secondary`| `#52525B` | Metadata, hints, and secondary descriptions |
+| `border-subtle` | `rgba(70, 60, 55, 0.12)` | Subtle card outlines and quiet dividers |
+| `border-color` | `rgba(82, 39, 255, 0.20)`| Interactive card outlines and focus states |
+| `success` | `#059669` | On-device privacy protection status |
+| `error` | `#E11D48` | Stop and error states |
 
-## Typography and shape
+## Hexagonal Vault Component Configuration
 
-- UI font: Inter, falling back to the native system sans-serif stack. Use 12–13 px for compact extension controls, 11–12 px for body copy, and 9–10 px for uppercase metadata.
-- Use tabular or monospace numerals only for domains, IDs, and trace data.
-- Corner radii: 6 px compact, 10 px control, 12–14 px panel/card.
-- Keep surfaces flat with subtle borders; reserve shadows for overlays and key actions.
+The engine implements the exact React Bits Pro specification:
 
-## Interaction
+```javascript
+export const HEXAGONAL_VAULT_DEFAULTS = {
+  colors: ["#5227FF", "#ff2a7d"],
+  backgroundColor: "#e0dcd8",
+  lineWidth: 0.6000000000000001,
+  litWidth: 2.7,
+  lattice: 1.4000000000000001,
+  glowRadius: 0.9000000000000001,
+  core: 0.75,
+  trailLength: 2,
+  follow: 0.65,
+  flow: 0.68,
+  speed: 1.1500000000000001,
+  pulseSpeed: 1.1500000000000001
+};
+```
 
-- Primary action: professional blue fill, white text, visible focus ring, and restrained hover lift.
-- Ready/privacy state: green. Agent activity and focus: blue. Errors and stop: red. Retain labels and icons so color is not the only status cue.
-- Keep internal traces, tool calls, metrics, status pills, and suggestion tiles out of the customer-facing chat.
-- Motion: smooth ease-in/ease-out pointer travel, with duration based on travel distance; honor `prefers-reduced-motion`.
-- Page interaction indicator: one compact forest-green pointer silhouette with a white keyline and a restrained green click ripple. Do not add a second shaft line or a trailing cursor effect. It is `aria-hidden`, pointer-events-none, and never blocks website controls.
-- Progressive text entry uses a randomized 250–300 WPM pace (five characters per word), with short punctuation pauses.
-- The cursor is an in-page visual indicator. Chrome content scripts cannot move the operating system’s real mouse pointer; actual activation still uses the extension’s page interaction code.
+## Typography and Shape
 
-## Implementation map
+- UI Fonts: Inter for UI and conversation, Outfit for brand titles and hero headings, JetBrains Mono for status and code blocks.
+- Corner Radii: 8px compact, 12px controls, 18px cards/bubbles, full pill (9999px) for buttons and status indicators.
+- Elevation: Soft diffuse ambient shadows with violet aura under glow elements.
 
-- `sidepanel/panel.css`: light theme tokens and minimal chat components.
-- `popup/popup.css`: matching quick-launcher surfaces and action treatment.
-- `content/highlighter.css` and `content/dom-actions.js`: in-tab cursor animation and progressive typing; no target boxes or action badges.
+## Implementation Map
+
+- `sidepanel/hexagonal-vault.js`: Sovereign WebGL2 hexagonal lattice shader engine with pointer follow, trail decay, flow wave, and shockwave pulses.
+- `sidepanel/panel.css`: Hexagonal Vault light stone theme tokens and frosted glass components.
+- `sidepanel/panel.html`: Cockpit template with dark emblem logo and Hexagonal Vault canvas.
+- `popup/popup.html` & `popup/popup.css`: Quick launcher popup matching the Hexagonal Vault aesthetic.
+- `src/components/HexagonalVault.jsx`: React wrapper component for seamless React/shadcn integration.
+- `demo/hexagonal-vault-preview.html`: Interactive preview stage with live parameter controls and extension mockup.

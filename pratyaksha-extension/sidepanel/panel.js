@@ -5,7 +5,7 @@
 import { globalVault } from '../vault/pii-vault.js';
 import { getEffectiveConfig } from '../env.js';
 import { LangGraphAgent } from '../agent/graph-engine.js';
-import { DynamicCosmicBackground } from './dynamic-bg-3d.js';
+import { HexagonalVault, HEXAGONAL_VAULT_DEFAULTS } from './hexagonal-vault.js';
 
 let activeTab = null;
 let pageContext = null;
@@ -19,6 +19,9 @@ const settingsBtn = document.getElementById('settingsBtn');
 // DOM Elements — Chat Area
 const chatContainer = document.getElementById('chatContainer');
 const chatMessages = document.getElementById('chatMessages');
+const agentPatrolBanner = document.getElementById('agentPatrolBanner');
+const patrolStatusText = document.getElementById('patrolStatusText');
+const patrolRobotMedia = document.getElementById('patrolRobotMedia');
 
 // DOM Elements — Bottom Input Dock
 const promptInput = document.getElementById('promptInput');
@@ -61,9 +64,35 @@ let currentThinkingBadgeEl = null;
 let thinkingStartTime = null;
 let thinkingTimerInterval = null;
 let currentStepNumber = 1;
+let currentAppTheme = 'dark';
+
+function applyTheme(theme) {
+  currentAppTheme = theme;
+  document.documentElement.setAttribute('data-theme', theme);
+  const darkIcon = document.getElementById('themeIconDark');
+  const lightIcon = document.getElementById('themeIconLight');
+  if (darkIcon && lightIcon) {
+    darkIcon.style.display = theme === 'dark' ? 'none' : 'inline-block';
+    lightIcon.style.display = theme === 'dark' ? 'inline-block' : 'none';
+  }
+  if (activeBackground3D && typeof activeBackground3D.setTheme === 'function') {
+    activeBackground3D.setTheme(theme);
+  }
+  const brandLogos = document.querySelectorAll('.brand-header-logo');
+  brandLogos.forEach(logo => {
+    logo.src = theme === 'dark' ? '../assets/light_logo.svg' : '../assets/dark_logo.svg';
+  });
+}
 
 // Initialize
 document.addEventListener('DOMContentLoaded', async () => {
+  try {
+    const stored = await chrome.storage.local.get(['appTheme']);
+    currentAppTheme = stored.appTheme || 'dark';
+    applyTheme(currentAppTheme);
+  } catch (_) {
+    applyTheme('dark');
+  }
   await loadSettings();
   await refreshActiveTab();
   setupEventListeners();
@@ -76,14 +105,14 @@ function animateWelcomeScreen() {
   try {
     const welcome = document.getElementById('welcomeScreen');
     if (!welcome) return;
-    const badge = welcome.querySelector('.welcome-hero-badge');
+    const robotStage = welcome.querySelector('.welcome-robot-stage');
     const title = welcome.querySelector('#welcomeTitle');
     const subtitle = welcome.querySelector('.welcome-subtitle');
     const pills = welcome.querySelectorAll('.pretask-pill');
 
     const tl = window.gsap.timeline({ defaults: { ease: 'power3.out' } });
-    if (badge) {
-      tl.fromTo(badge, { scale: 0.8, opacity: 0, y: -12 }, { scale: 1, opacity: 1, y: 0, duration: 0.6 });
+    if (robotStage) {
+      tl.fromTo(robotStage, { scale: 0.75, opacity: 0, y: -16 }, { scale: 1, opacity: 1, y: 0, duration: 0.65 });
     }
     if (title) {
       tl.fromTo(title, { opacity: 0, y: 15 }, { opacity: 1, y: 0, duration: 0.6 }, '-=0.4');
@@ -106,15 +135,29 @@ function initDynamicBackground() {
       if (activeBackground3D) {
         try { activeBackground3D.destroy(); } catch (_) { }
       }
-      activeBackground3D = new DynamicCosmicBackground(canvas);
+      activeBackground3D = new HexagonalVault(canvas, {
+        theme: currentAppTheme
+      });
     }
   } catch (err) {
-    console.warn('[PRATYAKSHA] Error initializing DynamicCosmicBackground:', err);
+    console.warn('[PRATYAKSHA] Error initializing HexagonalVault:', err);
   }
 }
 
 // Setup event handlers
 function setupEventListeners() {
+  // Theme Toggle Button (Dark: Template 1 / Light: Template 2)
+  const themeToggleBtn = document.getElementById('themeToggleBtn');
+  if (themeToggleBtn) {
+    themeToggleBtn.addEventListener('click', () => {
+      const nextTheme = currentAppTheme === 'dark' ? 'light' : 'dark';
+      applyTheme(nextTheme);
+      try {
+        chrome.storage.local.set({ appTheme: nextTheme });
+      } catch (_) { }
+    });
+  }
+
   // Emergency Stop Button (1-Click Immediate Halt & Abort)
   if (stopBtn) {
     stopBtn.addEventListener('click', async () => {
@@ -577,6 +620,7 @@ function handleNewChat() {
     currentAgentMessageEl = null;
     currentAnswerBubbleEl = null;
     setOrbState('idle');
+    setPatrolBotState(false);
   } catch (err) {
     console.warn('[PRATYAKSHA] handleNewChat error:', err);
   }
@@ -591,9 +635,12 @@ function renderWelcomeScreen() {
     welcomeSection.setAttribute('aria-labelledby', 'welcomeTitle');
 
     welcomeSection.innerHTML = `
-      <div class="welcome-hero-badge">
-        <span class="hero-badge-dot"></span>
-        <span class="hero-badge-text">PRATYAKSHA AGENTIC VOID</span>
+      <!-- Floating Waving Robot (Greets user and waves hi infinitely until command is given) -->
+      <div class="welcome-robot-stage" id="welcomeRobotStage" aria-hidden="true">
+        <picture>
+          <source srcset="../assets/robot-waving.webp" type="image/webp">
+          <img src="../assets/robot-waving.gif" alt="Autonomous AI Robot Greeting" class="welcome-robot-media" id="welcomeRobotMedia" />
+        </picture>
       </div>
 
       <h1 id="welcomeTitle">What would you like me to do on this page?</h1>
@@ -693,7 +740,7 @@ function createAgentMessageSlot() {
       });
     }
 
-    // Start live elapsed timer
+    // Start live elapsed timer (throttled to 500ms to eliminate DOM churn and lag)
     thinkingStartTime = Date.now();
     currentStepNumber = 1;
     if (thinkingTimerInterval) clearInterval(thinkingTimerInterval);
@@ -702,7 +749,7 @@ function createAgentMessageSlot() {
         const elapsedSec = ((Date.now() - thinkingStartTime) / 1000).toFixed(1);
         currentThinkingTimerEl.textContent = `${elapsedSec}s`;
       }
-    }, 100);
+    }, 500);
 
     scrollToBottom();
   } catch (err) {
@@ -757,6 +804,7 @@ function handleAgentEvent(event) {
         };
         const icon = phaseIcons[event.phase] || '•';
         appendThinkingEntry(icon, event.text, event);
+        if (event.text) updatePatrolBotStatus(event.text);
         break;
       }
 
@@ -764,13 +812,16 @@ function handleAgentEvent(event) {
         if (['REASONING', 'ACTING', 'PERCEIVING', 'BACKTRACKING', 'AWAITING_INPUT'].includes(event.state)) {
           setOrbState(event.state === 'AWAITING_INPUT' ? 'idle' : 'thinking');
           if (event.label) {
-            appendThinkingEntry('•', event.label.replace(/^Step \d+:\s*/, ''), { phase: 'state' });
+            const cleanLabel = event.label.replace(/^Step \d+:\s*/, '');
+            appendThinkingEntry('•', cleanLabel, { phase: 'state' });
+            updatePatrolBotStatus(cleanLabel);
           }
         }
         break;
 
       case 'TOOL_CALL':
         appendThinkingEntry('⚡', `Action: ${event.toolName}`, { step: event.step, phase: 'action' });
+        updatePatrolBotStatus(`Action: ${event.toolName}`);
         break;
 
       case 'OBSERVATION':
@@ -781,6 +832,7 @@ function handleAgentEvent(event) {
         break;
 
       case 'TASK_COMPLETE': {
+        setPatrolBotState(false);
         setOrbState('responding');
         if (thinkingTimerInterval) {
           clearInterval(thinkingTimerInterval);
@@ -890,6 +942,7 @@ function clearTabHighlightsAndCursor() {
 
 function finishAgentMessage(summaryText, isSuccess = true) {
   try {
+    setPatrolBotState(false);
     if (thinkingTimerInterval) {
       clearInterval(thinkingTimerInterval);
       thinkingTimerInterval = null;
@@ -919,21 +972,49 @@ function finishAgentMessage(summaryText, isSuccess = true) {
   }
 }
 
+function setPatrolBotState(active, statusText = '') {
+  try {
+    if (!agentPatrolBanner) return;
+    if (active) {
+      agentPatrolBanner.classList.add('active');
+      if (patrolStatusText && statusText) {
+        patrolStatusText.textContent = statusText;
+      }
+    } else {
+      agentPatrolBanner.classList.remove('active');
+    }
+  } catch (err) {
+    console.warn('[PRATYAKSHA] setPatrolBotState error:', err);
+  }
+}
+
+function updatePatrolBotStatus(text) {
+  try {
+    if (patrolStatusText && text) {
+      patrolStatusText.textContent = text;
+    }
+  } catch (_) { }
+}
+
 function setBusyState(busy) {
   try {
     isExecuting = busy;
     if (runBtn) runBtn.disabled = busy;
     if (stopBtn) stopBtn.style.display = busy ? 'inline-flex' : 'none';
     setOrbState(busy ? 'thinking' : 'idle');
+    setPatrolBotState(busy, busy ? 'Agent analyzing & reasoning…' : '');
   } catch (err) {
     console.warn('[PRATYAKSHA] setBusyState error:', err);
   }
 }
 
+let isScrollPending = false;
 function scrollToBottom() {
   try {
-    if (!chatContainer) return;
+    if (!chatContainer || isScrollPending) return;
+    isScrollPending = true;
     requestAnimationFrame(() => {
+      isScrollPending = false;
       try {
         chatContainer.scrollTop = chatContainer.scrollHeight;
       } catch (_) { }

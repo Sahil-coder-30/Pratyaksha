@@ -21,7 +21,7 @@
     <header class="app-header">
       <div class="header-left">
         <div class="brand-badge" title="PRATYAKSHA — Sovereign Agentic Shield">
-          <img src="../assets/light_logo.svg" alt="PRATYAKSHA" class="brand-header-logo">
+          <img src="../assets/dark_logo.svg" alt="PRATYAKSHA" class="brand-header-logo">
         </div>
       </div>
 
@@ -35,6 +35,11 @@
           <span>New Chat</span>
         </button>
 
+        <button id="themeToggleBtn" class="header-icon-btn" title="Toggle Theme (Dark: Template 1 / Light: Template 2)" aria-label="Toggle Theme">
+          <span id="themeIconDark">🌙</span>
+          <span id="themeIconLight" style="display:none;">☀️</span>
+        </button>
+
         <button id="settingsBtn" class="header-icon-btn" title="Agent Settings" aria-label="Settings">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
             stroke-linecap="round" stroke-linejoin="round">
@@ -46,7 +51,7 @@
       </div>
     </header>
 
-    <!-- Dynamic 3D Cyber Cosmic Background (Three.js & GPU Particles) -->
+    <!-- Hexagonal Vault WebGL2 Background (Interactive Hex Grid with Cursor Follow Soft Light) -->
     <div class="ambient-chat-aura" id="ambientAura" data-state="idle" aria-hidden="true">
       <canvas id="particleWaveCanvas" class="particle-wave-canvas"></canvas>
     </div>
@@ -56,13 +61,17 @@
 
       <div class="chat-messages" id="chatMessages">
         <section class="welcome-state" id="welcomeScreen" aria-labelledby="welcomeTitle">
-          <div class="welcome-hero-badge">
-            <span class="hero-badge-dot"></span>
-            <span class="hero-badge-text">PRATYAKSHA AGENTIC VOID</span>
+          <!-- Floating Waving Robot (Greets user and waves hi infinitely until command is given) -->
+          <div class="welcome-robot-stage" id="welcomeRobotStage" aria-hidden="true">
+            <picture>
+              <source srcset="../assets/robot-waving.webp" type="image/webp">
+              <img src="../assets/robot-waving.gif" alt="Autonomous AI Robot Greeting" class="welcome-robot-media" id="welcomeRobotMedia" />
+            </picture>
           </div>
 
           <h1 id="welcomeTitle">What would you like me to do on this page?</h1>
-          <p class="welcome-subtitle">Direct, zero-lag browser autonomy powered by sovereign on-device visual shield.</p>
+          <p class="welcome-subtitle">Direct, zero-lag browser autonomy powered by sovereign on-device visual shield.
+          </p>
 
           <!-- Pre-Task Suggestion Pills -->
           <div class="welcome-pretasks" id="welcomePretasks" role="group" aria-label="Suggested quick tasks">
@@ -94,6 +103,20 @@
 
     <!-- Bottom Input Dock -->
     <footer class="chat-input-dock" id="inputDock">
+      <!-- Agent Thinking & Working Flying Robot Patrol — Positioned directly on top of the "Ask me to do something" bar -->
+      <div class="agent-patrol-banner" id="agentPatrolBanner" aria-live="polite" aria-label="Agent thinking and working">
+        <div class="patrol-robot-stage">
+          <picture>
+            <source srcset="../assets/robot-patrol.webp" type="image/webp">
+            <img src="../assets/robot-patrol.gif" alt="Autonomous Agent Patrolling" class="patrol-robot-media" id="patrolRobotMedia" />
+          </picture>
+        </div>
+        <div class="patrol-status-pill">
+          <span class="patrol-pulse-beacon"></span>
+          <span class="patrol-status-text" id="patrolStatusText">Agent analyzing & reasoning…</span>
+        </div>
+      </div>
+
       <div class="dock-input-row">
         <textarea id="promptInput" rows="1" placeholder="Ask me to do something on this page…"
           autocomplete="off"></textarea>
