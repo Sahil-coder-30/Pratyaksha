@@ -134,6 +134,49 @@ npm run docs:serve
 ```
 Open [http://localhost:8080/index.html](http://localhost:8080/index.html) in any browser.
 
+### 7. Run the Live Agent Evaluation
+Unit tests use mocked models. The eval harness measures the real agent on real pages with a real LLM.
+
+It runs `src/runner.js` in Node and drives a Chromium browser (Brave by default) through a puppeteer-backed `chrome.*` shim. The same content scripts as the extension (`src/browser/dom-actions.js`, `content-main.js`) are injected into each page.
+
+```bash
+# Key comes from the environment only. Never commit it, never put it in the repo.
+export MISTRAL_API_KEY=...        # or GEMINI_API_KEY / OPENROUTER_API_KEY
+npm run eval
+```
+
+| Option | Meaning |
+|---|---|
+| `--mock` | Scripted model, no key. Checks the harness plumbing only (tasks are expected to fail). |
+| `--offline` | Skip tasks that need the public internet (Wikipedia). |
+| `--only a,b` | Run only these task ids. |
+| `--repeat N` | Runs per task, to measure flakiness. |
+| `--max-steps N` / `--timeout S` | Step budget (default 25) and wall-clock limit per run (default 240s). |
+| `--headful` | Show the browser window. |
+
+| Env var | Meaning |
+|---|---|
+| `PRATYAKSHA_EVAL_PROVIDER` | `mistral`, `gemini` or `openrouter`. Default: first provider with a key set. |
+| `PRATYAKSHA_EVAL_MODEL` | Model id override. |
+| `PRATYAKSHA_EVAL_API_KEY` | Key for the chosen provider (else the provider's own env var). |
+| `PRATYAKSHA_EVAL_BROWSER` | Path to a Chromium-based binary, if Brave or Chrome is not in `/Applications`. |
+
+Tasks live in `scripts/eval/tasks.mjs`. Local fixture pages in `scripts/eval/fixtures/` are served on `127.0.0.1`:
+
+| Task | What it tests |
+|---|---|
+| `kb-search-answer` | Search box, click a result, answer from the article. |
+| `wikipedia-answer` | Same on a real public site. |
+| `shipping-form-select` | Text input plus two `<select>` fields, then submit. |
+| `cookie-banner-read` | Content is hidden until a cookie banner is dismissed. |
+| `settings-modal` | Open a `<dialog>`, tick a checkbox, save. |
+| `shop-multipage` | Navigate home, category, product, then read a spec. |
+| `login-wall-infeasible` | No credentials given. Must end with `finish_task(success=false)` and not guess a login. |
+
+Each run records: pass, reported success, steps, wall time, LLM calls (provider HTTP requests), failed tool calls (`ERROR`/`BLOCKED` observations), approvals, and whether the final answer is grounded in page text the agent saw. A run passes when the reported success matches the expected value, the expected answer is in the summary, and the page-state check holds. Gated actions are auto-approved by the harness.
+
+Results go to `eval-results/latest.json` and `eval-results/latest.md` (plus timestamped copies). The folder is git-ignored.
+
 ---
 
 ## 📦 Project Structure

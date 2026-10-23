@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "test": "node --test tests/**/*.test.js",
+    "eval": "node scripts/eval-agent.mjs",
     "build": "node build.js",
     "dev": "python3 -m http.server 8080 --directory Docs",
     "docs:serve": "python3 -m http.server 8080 --directory Docs",
