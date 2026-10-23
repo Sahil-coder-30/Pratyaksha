@@ -1456,3 +1456,8 @@ body {
     transform: none !important;
   }
 }
+
+/* A provider group can hold both a key and a model field */
+.form-group .form-hint + label {
+  margin-top: 6px;
+}

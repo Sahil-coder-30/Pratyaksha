@@ -56,5 +56,4 @@ export const HEXAGONAL_VAULT_DEFAULTS = {
 - `sidepanel/panel.css`: Hexagonal Vault light stone theme tokens and frosted glass components.
 - `sidepanel/panel.html`: Cockpit template with dark emblem logo and Hexagonal Vault canvas.
 - `popup/popup.html` & `popup/popup.css`: Quick launcher popup matching the Hexagonal Vault aesthetic.
-- `src/components/HexagonalVault.jsx`: React wrapper component for seamless React/shadcn integration.
 - `demo/hexagonal-vault-preview.html`: Interactive preview stage with live parameter controls and extension mockup.

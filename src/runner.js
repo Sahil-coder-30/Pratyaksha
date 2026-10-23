@@ -34,6 +34,8 @@ export class PratyakshaAgentRunner {
     this.useTwoAgentGraph = options.useTwoAgentGraph ?? false;
     this.onEvent = options.onEvent || (() => {});
     this.chromeApi = options.chromeApi || (typeof chrome !== 'undefined' ? chrome : null);
+    // Prebuilt chat model (evaluation harness / tests); skips provider setup when set
+    this.modelOverride = options.chatModel || null;
 
     this.checkpointer = new ChromeStorageSaver();
     this.threadStore = new ThreadStore();
@@ -103,9 +105,9 @@ export class PratyakshaAgentRunner {
     });
 
     // 2. Resolve Model with Automatic Degradation Fallbacks
-    let model = null;
+    let model = this.modelOverride;
     try {
-      if (this.apiKey) {
+      if (!model && this.apiKey) {
         const primaryConfig = {
           provider: this.provider,
           apiKey: this.apiKey,
@@ -421,6 +423,10 @@ export class PratyakshaAgentRunner {
 
 export { CANONICAL_SERVICES } from './shared/constants.js';
 export { detectTargetService } from './browser/page-context.js';
+// The side panel imports everything it needs from this bundle, so it shares
+// one PII vault instance with the agent.
+export { globalVault };
+export { TinyFishAgent, validateTinyFishKey } from './agent/tinyfish-agent.js';
 export class LangGraphAgent extends PratyakshaAgentRunner {}
 
 /**
