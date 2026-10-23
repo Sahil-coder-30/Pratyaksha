@@ -3,8 +3,11 @@
   "version": "1.0.0",
   "description": "PRATYAKSHA (प्रत्यक्ष) — On-Device Visual Perception & Privacy Shield for Light-Weight Browser Agents",
   "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
-    "test": "node --test tests/**/*.test.js",
+    "test": "node --test \"tests/**/*.test.js\"",
     "eval": "node scripts/eval-agent.mjs",
     "build": "node build.js",
     "docs:serve": "python3 -m http.server 8080 --directory Docs",

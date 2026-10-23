@@ -275,9 +275,9 @@ Linear ReAct agents execute an unconstrained loop of `thought ➔ action ➔ obs
 
 #### On macOS:
 ```bash
-# Install Node.js 20+ and Docker
-brew install node@20 docker docker-compose
-brew link node@20
+# Install Node.js 22+ and Docker
+brew install node@22 docker docker-compose
+brew link node@22
 ```
 
 #### On Windows:
