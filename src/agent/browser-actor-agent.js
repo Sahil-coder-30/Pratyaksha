@@ -14,7 +14,7 @@
 
 import { HumanMessage, SystemMessage, ToolMessage } from '@langchain/core/messages';
 import { getPageContext, buildPageObservation } from '../browser/page-context.js';
-import { createLangChainBrowserTools } from './browser-tools.js';
+import { createLangChainBrowserTools } from './langchain-tools.js';
 import { sanitizeObservationForModel } from '../safety/privacy.js';
 import {
   validateToolCall,

@@ -4,7 +4,7 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createLangChainBrowserTools } from '../src/agent/browser-tools.js';
+import { createLangChainBrowserTools } from '../src/agent/langchain-tools.js';
 import { createMockChrome } from './helpers/mock-chrome.js';
 import { TOOL_NAMES } from '../src/shared/constants.js';
 

@@ -36,7 +36,7 @@ Every permission requested in `manifest.json` adheres to the principle of least 
 |---|---|
 | `activeTab` | Required to read the DOM structure of the webpage currently active in the user's browser window to identify interactive elements (buttons, search inputs, forms) upon user prompt. |
 | `scripting` | Required to programmatically inject the target bounding-box highlighter stylesheet and synthetic DOM event dispatcher into the active tab. |
-| `storage` | Required to persist user operational preferences (such as Step Approval mode toggle, privacy firewall strictness, and optional user-provided Gemini API key) securely in `chrome.storage.local`. |
+| `storage` | Required to persist user operational preferences (such as the selected AI provider, privacy firewall strictness, and the user's own API key for that provider) securely in `chrome.storage.local`. |
 | `sidePanel` | Required to provide the persistent agent cockpit and real-time execution HUD docked alongside the user's browsing session without obstructing webpage contents. |
 | `tabs` | Required to query the active tab's domain and title to verify whether the agent is operating on a supported HTTP/HTTPS page or a restricted browser page. |
 | Host `<all_urls>` | Required so that the user can run browser automation tasks across arbitrary public and intranet websites they navigate to. |
@@ -50,7 +50,7 @@ Every permission requested in `manifest.json` adheres to the principle of least 
 2. **Where are passwords, authentication tokens, or personal identifiers stored?**
    They are never stored on disk or sent over the network. The session vault is strictly in-memory (`Map`) and resets immediately upon session close.
 3. **Remote Server Communication**:
-   Zero telemetry. Outbound network requests only occur if the user explicitly configures their own personal Google Gemini API key in the extension settings.
+   Zero telemetry. The extension ships with no API keys. Outbound requests to an AI provider (Mistral, OpenRouter, Google Gemini or TinyFish) only occur after the user adds their own API key for that provider in the extension settings, and go only to that provider.
 
 ---
 

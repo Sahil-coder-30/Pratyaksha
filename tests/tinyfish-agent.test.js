@@ -4,7 +4,7 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { TinyFishAgent, validateTinyFishKey } from '../pratyaksha-extension/agent/tinyfish-agent.js';
+import { TinyFishAgent, validateTinyFishKey } from '../src/agent/tinyfish-agent.js';
 
 test('TinyFish Agent - Key Validation', () => {
   assert.equal(validateTinyFishKey(''), false);

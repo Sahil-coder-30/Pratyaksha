@@ -51,15 +51,15 @@ Explore the complete interactive documentation portal by running `npm run docs:s
 
 | Module | Document | Focus |
 |:---:|:---|:---|
-| **HUB** | [`Docs/index.html`](file:///Users/home/Desktop/PS-%2026171/Docs/index.html) | **Master Portal**: Unified dashboard, visual comparison diagrams, interactive system topology |
-| **HLD** | [`Docs/04_hld.html`](file:///Users/home/Desktop/PS-%2026171/Docs/04_hld.html) | **High-Level Design**: 8-tier microservices architecture, API contracts, WebSocket protocol, and ADRs |
-| **ML & Privacy** | [`Docs/08_ml_privacy_module.html`](file:///Users/home/Desktop/PS-%2026171/Docs/08_ml_privacy_module.html) | **ML & Privacy Engine**: On-device YOLO26n ONNX, PaddleOCR.js, BERT NER, IoU spatial resolver, and 17-feature spec |
-| **Agent Engine** | [`Docs/02_browser_agent.html`](file:///Users/home/Desktop/PS-%2026171/Docs/02_browser_agent.html) | **Autonomous Loop**: Perception-action loop, synthetic DOM events, local rehydration vault, and prompt injection defense |
-| **Perception** | [`Docs/03_perception_problem.html`](file:///Users/home/Desktop/PS-%2026171/Docs/03_perception_problem.html) | **Neural Vision & DOM Blindspots**: Canvas/PDF blindspots, 8x8 dHash filters, quantized ONNX models |
-| **Extension** | [`Docs/05_browser_extension.html`](file:///Users/home/Desktop/PS-%2026171/Docs/05_browser_extension.html) | **Chrome MV3 Deep Dive**: Service Worker, Offscreen Document, Content Script, Side Panel HUD, WebGPU execution |
-| **Innovations** | [`Docs/07_reality_check_and_innovations.html`](file:///Users/home/Desktop/PS-%2026171/Docs/07_reality_check_and_innovations.html) | **Architecture Audit**: Latency benchmarks, sustainable ML stack, and 6 core architectural moats |
-| **Strategy** | [`Docs/01_master_plan.html`](file:///Users/home/Desktop/PS-%2026171/Docs/01_master_plan.html) | **Master Strategic Blueprint**: Full research, competitive analysis, and sprint roadmap |
-| **Presentation** | [`Docs/06_team_presentation.html`](file:///Users/home/Desktop/PS-%2026171/Docs/06_team_presentation.html) | **System Walkthrough & Deck**: User journey, visual matrix, and technical benchmark breakdown |
+| **HUB** | [`Docs/index.html`](./Docs/index.html) | **Master Portal**: Unified dashboard, visual comparison diagrams, interactive system topology |
+| **HLD** | [`Docs/04_hld.html`](./Docs/04_hld.html) | **High-Level Design**: 8-tier microservices architecture, API contracts, WebSocket protocol, and ADRs |
+| **ML & Privacy** | [`Docs/08_ml_privacy_module.html`](./Docs/08_ml_privacy_module.html) | **ML & Privacy Engine**: On-device YOLO26n ONNX, PaddleOCR.js, BERT NER, IoU spatial resolver, and 17-feature spec |
+| **Agent Engine** | [`Docs/02_browser_agent.html`](./Docs/02_browser_agent.html) | **Autonomous Loop**: Perception-action loop, synthetic DOM events, local rehydration vault, and prompt injection defense |
+| **Perception** | [`Docs/03_perception_problem.html`](./Docs/03_perception_problem.html) | **Neural Vision & DOM Blindspots**: Canvas/PDF blindspots, 8x8 dHash filters, quantized ONNX models |
+| **Extension** | [`Docs/05_browser_extension.html`](./Docs/05_browser_extension.html) | **Chrome MV3 Deep Dive**: Service Worker, Offscreen Document, Content Script, Side Panel HUD, WebGPU execution |
+| **Innovations** | [`Docs/07_reality_check_and_innovations.html`](./Docs/07_reality_check_and_innovations.html) | **Architecture Audit**: Latency benchmarks, sustainable ML stack, and 6 core architectural moats |
+| **Strategy** | [`Docs/01_master_plan.html`](./Docs/01_master_plan.html) | **Master Strategic Blueprint**: Full research, competitive analysis, and sprint roadmap |
+| **Presentation** | [`Docs/06_team_presentation.html`](./Docs/06_team_presentation.html) | **System Walkthrough & Deck**: User journey, visual matrix, and technical benchmark breakdown |
 
 ---
 
@@ -93,43 +93,47 @@ Explore the complete interactive documentation portal by running `npm run docs:s
 
 ## ⚡ Quick Start & Development
 
-### 1. Run Comprehensive Unit & Integration Tests
+### 1. Install and Test
 ```bash
-# Execute the full 44-test test suite across all 9 modules
-npm test
+npm install
+npm test        # 102 tests across 18 suites
 ```
 
-### 2. Build the Extension Bundle
+### 2. Build the Extension
 ```bash
-# Compile modular LangGraph architecture from src/ into production Chrome bundle
-npm run build
-```
-*(You can also run `node build.js` from either the project root or inside `pratyaksha-extension/`)*
-
-### 3. Package the Extension for Distribution
-```bash
-# Assemble and package into pratyaksha-extension-v1.0.0.zip
-npm run ext:pack
+npm run build   # writes the loadable extension to build/
 ```
 
-### 4. Load the Extension in Chrome
-1. Open Google Chrome and navigate to `chrome://extensions/`.
-2. Enable **Developer mode** (toggle in the top-right corner).
-3. Click **Load unpacked** and select either:
-   - The production [`build/`](file:///Users/home/Desktop/PS-%2026171/build) folder *(Clean, standalone production distribution)*
-   - Or the [`pratyaksha-extension/`](file:///Users/home/Desktop/PS-%2026171/pratyaksha-extension) folder *(Direct development extension directory)*
-4. Pin the **PRATYAKSHA** extension to your toolbar and click it to open the Side Panel Cockpit.
+### 3. Load the Extension in Chrome
+1. Open `chrome://extensions/`.
+2. Turn on **Developer mode** (top-right).
+3. Click **Load unpacked** and select the [`build/`](./build) folder.
+4. Pin **PRATYAKSHA** and click it to open the side panel.
 
-### 5. Run the Interactive Testbed
+> After any code change, run `npm run build` again and click the reload icon on the extension card.
+
+### 4. Add Your API Key (Bring Your Own Key)
+The extension ships with **no API keys**. Open the side panel, click **⚙ Settings**, pick a provider (Mistral, OpenRouter, Gemini or TinyFish) and paste your own key.
+
+- The key is stored only in `chrome.storage.local` on your device.
+- It is sent only to the provider you selected.
+- The **Deterministic** planner works offline with no key.
+
+Never put real keys in source files. `build.js` fails the build if an `env.js` or `.env` file ends up in `build/`.
+
+### 5. Package for the Chrome Web Store
 ```bash
-# Start the local test server for the operations portal demo
+npm run ext:pack   # creates dist/pratyaksha-extension.zip
+```
+
+### 6. Run the Interactive Testbed
+```bash
 npm run demo
 ```
-Open [http://localhost:8080/test-demo.html](http://localhost:8080/test-demo.html) in Chrome and command the agent to test automatic form filling, web navigation, and PII redaction.
+Open [http://localhost:8080/demo/test-demo.html](http://localhost:8080/demo/test-demo.html) in Chrome and ask the agent to fill forms, navigate, and redact PII.
 
-### 6. Explore Full Interactive Documentation
+### 7. Explore the Documentation Portal
 ```bash
-# Serve the complete documentation suite
 npm run docs:serve
 ```
 Open [http://localhost:8080/index.html](http://localhost:8080/index.html) in any browser.
@@ -181,36 +185,34 @@ Results go to `eval-results/latest.json` and `eval-results/latest.md` (plus time
 
 ## 📦 Project Structure
 
+**Rule of thumb:** edit `src/` and `pratyaksha-extension/`. Never edit `build/`, it is regenerated on every build.
+
 ```
 .
-├── src/                               # Sovereign LangChain + LangGraph Agent Source
-│   ├── shared/                        # Constants, standardized errors, 19 Zod tool schemas
-│   ├── browser/                       # Navigation, tab management, DOM table builder, blacklisting
-│   ├── safety/                        # PII vault, action policy, approval tokens, execution limits
-│   ├── persistence/                   # ChromeStorageSaver checkpointer, thread state isolation
-│   ├── agent/                         # Models factory, LangChain tools, planner, verifier, recovery, graph
-│   ├── ui/                            # Event emitter, telemetry relays, secret redactions
-│   └── runner.js                      # PratyakshaAgentRunner & LangGraphAgent drop-in facade
-├── pratyaksha-extension/              # Chrome Manifest V3 Extension
-│   ├── manifest.json                  # Extension manifest configuration
-│   ├── agent/
-│   │   └── graph-engine.js            # Standalone esbuild bundle (LangChain + LangGraph)
-│   ├── background/
-│   │   └── service-worker.js          # Background service worker & tab management
-│   ├── content/
-│   │   ├── dom-actions.js             # Synthetic DOM events & visual indicators
-│   │   └── content-main.js            # Injected DOM perception & action executor
-│   ├── popup/                         # Quick launcher popup
-│   ├── sidepanel/                     # 3D Orb HUD cockpit & execution trace view
-│   ├── vault/                         # In-memory PII vault & Verhoeff checksum validator
-│   └── env.js                         # Provider configuration (Mistral, Gemini, OpenRouter)
-├── tests/                             # 9 test suites covering all units and integration paths (44 tests)
-├── demo/                              # Interactive testing testbed (test-demo.html)
-├── Docs/                              # Comprehensive architectural specs & interactive portal
-│   ├── architecture.md                # System design & LangGraph engine technical specification
-│   ├── agent-graph.mmd                # Compiled Mermaid graph topology
-│   └── implementation-plan.md         # Phased implementation audit and plan
-├── build.js                           # esbuild bundling script for MV3 compliance
-└── package.json                       # Dependencies & execution scripts
+├── src/                          # Agent logic (bundled into build/agent/graph-engine.js)
+│   ├── agent/                    # Models, LangChain tools, planner, verifier, recovery, graph, TinyFish client
+│   ├── browser/                  # Browser tools + content scripts (dom-actions.js, content-main.js)
+│   ├── safety/                   # PII vault, privacy shield, action/URL policy, approvals, limits
+│   ├── persistence/              # ChromeStorageSaver checkpointer, thread store
+│   ├── shared/                   # Constants, errors, Zod tool schemas
+│   ├── ui/                       # Agent event emitter
+│   └── runner.js                 # Bundle entry: everything the side panel imports
+├── pratyaksha-extension/         # Hand-written Chrome MV3 shell
+│   ├── manifest.json
+│   ├── background/               # Service worker
+│   ├── sidepanel/                # Chat UI, settings modal, 3D orb
+│   ├── popup/                    # Toolbar popup
+│   ├── shared/settings.js        # BYOK settings (chrome.storage.local)
+│   ├── content/highlighter.css   # Content script styles
+│   └── assets/                   # Icons and logos
+├── tests/                        # node:test suites (npm test)
+├── demo/                         # Local testbed pages
+├── Docs/                         # Documentation website (deployed via vercel.json)
+│   └── engineering/              # Architecture notes, guardrail design, implementation reports
+├── observability/                # Optional telemetry stack (Prometheus, Loki, Grafana)
+├── ML/                           # On-device ML privacy module prototype
+├── build.js                      # Build script: src/ + pratyaksha-extension/ → build/
+└── .github/workflows/ci.yml      # Runs tests and build on every push and PR
 ```
 
+**Generated, not in git:** `build/` (loadable extension) and `dist/` (Web Store zip).
