@@ -6,7 +6,7 @@
  * local execution rehydration, and DOM observation / event scrubbing.
  */
 
-import { PIIVault, globalVault } from '../../pratyaksha-extension/vault/pii-vault.js';
+import { PIIVault, globalVault } from './pii-vault.js';
 
 export { PIIVault, globalVault };
 

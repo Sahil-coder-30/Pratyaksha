@@ -2,43 +2,51 @@
  * PRATYAKSHA Extension Build Script (esbuild)
  * Sovereign Privacy-First Browser Agent
  *
- * Compiles modular LangChain and LangGraph agent architecture from `src/`
- * into optimized, browser-ready ES modules inside `pratyaksha-extension/agent/`
- * and creates a self-contained production `build/` directory ready for Chrome "Load unpacked".
+ * Inputs (hand-written, tracked in git):
+ *   pratyaksha-extension/   Extension shell: manifest, background, side panel, popup, assets
+ *   src/                    Agent logic, bundled into one ES module
+ *
+ * Output (generated, gitignored):
+ *   build/                  Ready for Chrome "Load unpacked"
+ *     agent/graph-engine.js   Bundle of src/runner.js
+ *     content/*.js            Content scripts copied from src/browser/
+ *
+ * The extension ships without API keys. Users add their own keys in the side
+ * panel settings (see pratyaksha-extension/shared/settings.js).
  */
 
 import * as esbuild from 'esbuild';
 import { fileURLToPath } from 'node:url';
-import { dirname, join } from 'node:path';
-import { existsSync, mkdirSync, cpSync, copyFileSync, rmSync } from 'node:fs';
+import { dirname, join, basename } from 'node:path';
+import { existsSync, mkdirSync, cpSync, copyFileSync, rmSync, readdirSync } from 'node:fs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 const EXT_DIR = join(__dirname, 'pratyaksha-extension');
+const SRC_DIR = join(__dirname, 'src');
 const BUILD_DIR = join(__dirname, 'build');
 
-async function buildExtension() {
-  console.log('🚀 Building PRATYAKSHA Agent Extension Bundle with esbuild...');
+const CONTENT_SCRIPTS = ['dom-actions.js', 'content-main.js'];
 
-  try {
-    // 1. Ensure output directories exist and sync content scripts
-    mkdirSync(join(EXT_DIR, 'agent'), { recursive: true });
-    mkdirSync(join(EXT_DIR, 'content'), { recursive: true });
-    copyFileSync(join(__dirname, 'src', 'browser', 'dom-actions.js'), join(EXT_DIR, 'content', 'dom-actions.js'));
-    copyFileSync(join(__dirname, 'src', 'browser', 'content-main.js'), join(EXT_DIR, 'content', 'content-main.js'));
+// Files that may hold secrets must never reach the build output.
+const isSecretFile = (name) => name === 'env.js' || name.startsWith('.env');
+const isShellFile = (path) => {
+  const name = basename(path);
+  return !isSecretFile(name) && name !== '.DS_Store' && !name.endsWith('.md');
+};
 
-    // 2. Esbuild plugin stubbing server logger from faultkit in browser bundle
-    const stubFaultkitLoggerPlugin = {
-      name: 'stub-faultkit-logger',
-      setup(build) {
-        build.onResolve({ filter: /logger(\.js)?$/ }, (args) => {
-          if (args.importer && args.importer.includes('faultkit')) {
-            return { path: 'stub-faultkit-logger', namespace: 'faultkit-stub' };
-          }
-        });
-        build.onLoad({ filter: /.*/, namespace: 'faultkit-stub' }, () => ({
-          contents: `
+// Esbuild plugin stubbing the Node-only faultkit logger in the browser bundle
+const stubFaultkitLoggerPlugin = {
+  name: 'stub-faultkit-logger',
+  setup(build) {
+    build.onResolve({ filter: /logger(\.js)?$/ }, (args) => {
+      if (args.importer && args.importer.includes('faultkit')) {
+        return { path: 'stub-faultkit-logger', namespace: 'faultkit-stub' };
+      }
+    });
+    build.onLoad({ filter: /.*/, namespace: 'faultkit-stub' }, () => ({
+      contents: `
 export const logger = {
   info: () => {},
   error: () => {},
@@ -57,15 +65,45 @@ export const createAppErrorSerializer = () => (err) => ({
 });
 export const DEFAULT_REDACT_KEYS = [];
 `,
-          loader: 'js'
-        }));
-      }
-    };
+      loader: 'js'
+    }));
+  }
+};
 
-    // 3. Bundle src/runner.js into pratyaksha-extension/agent/graph-engine.js
-    const bundleResult = await esbuild.build({
-      entryPoints: [join(__dirname, 'src/runner.js')],
-      outfile: join(EXT_DIR, 'agent/graph-engine.js'),
+function assertNoSecretFiles(dir) {
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const path = join(dir, entry.name);
+    if (entry.isDirectory()) {
+      assertNoSecretFiles(path);
+    } else if (isSecretFile(entry.name)) {
+      throw new Error(`Secret file found in build output: ${path}`);
+    }
+  }
+}
+
+async function buildExtension() {
+  console.log('🚀 Building PRATYAKSHA extension into build/ ...');
+
+  try {
+    // 1. Start from a clean output folder
+    if (existsSync(BUILD_DIR)) {
+      rmSync(BUILD_DIR, { recursive: true, force: true });
+    }
+    mkdirSync(BUILD_DIR, { recursive: true });
+
+    // 2. Copy the hand-written extension shell
+    cpSync(EXT_DIR, BUILD_DIR, { recursive: true, filter: isShellFile });
+
+    // 3. Copy content scripts from src/browser/
+    mkdirSync(join(BUILD_DIR, 'content'), { recursive: true });
+    for (const file of CONTENT_SCRIPTS) {
+      copyFileSync(join(SRC_DIR, 'browser', file), join(BUILD_DIR, 'content', file));
+    }
+
+    // 4. Bundle the agent (src/runner.js) for the side panel
+    await esbuild.build({
+      entryPoints: [join(SRC_DIR, 'runner.js')],
+      outfile: join(BUILD_DIR, 'agent', 'graph-engine.js'),
       bundle: true,
       format: 'esm',
       platform: 'browser',
@@ -74,7 +112,7 @@ export const DEFAULT_REDACT_KEYS = [];
       sourcemap: false,
       plugins: [stubFaultkitLoggerPlugin],
       banner: {
-        js: `/* PRATYAKSHA Sovereign LangChain + LangGraph Autonomous Agent Bundle */
+        js: `/* PRATYAKSHA Sovereign LangChain + LangGraph Autonomous Agent Bundle (generated by build.js, do not edit) */
 if (typeof globalThis.process === 'undefined') {
   globalThis.process = {
     env: {
@@ -97,48 +135,11 @@ var process = globalThis.process;`
       }
     });
 
-    console.log('✔ Built pratyaksha-extension/agent/graph-engine.js successfully.');
+    // 5. Fail loudly if anything secret slipped in
+    assertNoSecretFiles(BUILD_DIR);
 
-    // 3. Assemble clean standalone production `build/` folder for Chrome unpacked loading
-    console.log('📦 Assembling standalone production `build/` directory for Chrome...');
-
-    if (existsSync(BUILD_DIR)) {
-      rmSync(BUILD_DIR, { recursive: true, force: true });
-    }
-    mkdirSync(BUILD_DIR, { recursive: true });
-
-    // Copy runtime folders
-    const foldersToCopy = ['assets', 'background', 'content', 'popup', 'sidepanel', 'vault'];
-    for (const folder of foldersToCopy) {
-      const srcFolder = join(EXT_DIR, folder);
-      if (existsSync(srcFolder)) {
-        cpSync(srcFolder, join(BUILD_DIR, folder), { recursive: true });
-      }
-    }
-
-    // Copy all agent modules (graph-engine.js, tinyfish-agent.js, browser-tools.js, etc.)
-    cpSync(join(EXT_DIR, 'agent'), join(BUILD_DIR, 'agent'), { recursive: true });
-
-    // Copy top-level extension files
-    const filesToCopy = ['manifest.json', 'env.js', 'env.example.js', '.env'];
-    for (const file of filesToCopy) {
-      const srcFile = join(EXT_DIR, file);
-      if (existsSync(srcFile)) {
-        copyFileSync(srcFile, join(BUILD_DIR, file));
-      }
-    }
-
-    console.log(`✔ Assembled standalone build directory: ${BUILD_DIR}`);
-    console.log('\n======================================================');
-    console.log('✅ EXTENSION READY TO UNPACK IN CHROME');
-    console.log('👉 To load in Chrome:');
-    console.log('   1. Open chrome://extensions/');
-    console.log('   2. Turn on "Developer mode" (top-right)');
-    console.log('   3. Click "Load unpacked"');
-    console.log(`   4. Select EITHER folder:`);
-    console.log(`      • ${BUILD_DIR} (clean standalone build)`);
-    console.log(`      • ${EXT_DIR} (development extension folder)`);
-    console.log('======================================================\n');
+    console.log(`✅ Extension ready: ${BUILD_DIR}`);
+    console.log('👉 Load it in Chrome: chrome://extensions → Developer mode → Load unpacked → select build/');
   } catch (err) {
     console.error('❌ Build failed:', err);
     process.exit(1);

@@ -421,6 +421,10 @@ export class PratyakshaAgentRunner {
 
 export { CANONICAL_SERVICES } from './shared/constants.js';
 export { detectTargetService } from './browser/page-context.js';
+// The side panel imports everything it needs from this bundle, so it shares
+// one PII vault instance with the agent.
+export { globalVault };
+export { TinyFishAgent, validateTinyFishKey } from './agent/tinyfish-agent.js';
 export class LangGraphAgent extends PratyakshaAgentRunner {}
 
 /**

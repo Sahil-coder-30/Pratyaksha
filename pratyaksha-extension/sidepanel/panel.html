@@ -170,7 +170,7 @@
         <button id="closeSettingsBtn" class="icon-close">&times;</button>
       </div>
       <div class="modal-body">
-        <!-- Secure Vault Status (Hides raw API keys from user view) -->
+        <!-- Bring Your Own Key notice -->
         <div class="vault-security-card">
           <div class="vault-icon-pill">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
@@ -180,17 +180,12 @@
             </svg>
           </div>
           <div class="vault-info">
-            <div class="vault-heading">Sovereign Vault Active</div>
-            <div class="vault-sub">API keys are loaded securely on-device from your private environment config and
-              masked for safety.</div>
+            <div class="vault-heading">Your Keys Stay On This Device</div>
+            <div class="vault-sub">Paste your own API key below. It is saved only in this browser and sent only to the
+              provider you pick.</div>
           </div>
-          <span class="vault-badge">● Configured</span>
+          <span class="vault-badge">● Local</span>
         </div>
-
-        <!-- Hidden input elements retain full functional configuration without exposing keys -->
-        <input type="hidden" id="mistralApiKey">
-        <input type="hidden" id="geminiApiKey">
-        <input type="hidden" id="openrouterApiKey">
 
         <div class="form-group">
           <label for="engineSelect">Planner Engine / AI Provider</label>
@@ -204,14 +199,17 @@
           <small class="form-hint">TinyFish runs tasks in a managed cloud browser — ideal for complex multi-step automation without local resource limits. Other options use local LangGraph execution.</small>
         </div>
 
-        <!-- TinyFish API Key -->
-        <div class="form-group" id="tinyfishGroup" style="display:none;">
+        <!-- Provider fields: panel.js shows only the group matching the selected provider -->
+        <div class="form-group" data-provider="tinyfish" style="display:none;">
           <label for="tinyfishApiKey">TinyFish API Key</label>
           <input type="password" id="tinyfishApiKey" class="form-input" placeholder="tf-…" autocomplete="off">
           <small class="form-hint">Get your API key at <a href="https://agent.tinyfish.ai/api-keys" target="_blank" style="color:#6ee7f7;">agent.tinyfish.ai/api-keys</a>. TinyFish is the hackathon sponsor — try it first!</small>
         </div>
 
-        <div class="form-group" id="openrouterGroup" style="display:none;">
+        <div class="form-group" data-provider="openrouter" style="display:none;">
+          <label for="openrouterApiKey">OpenRouter API Key</label>
+          <input type="password" id="openrouterApiKey" class="form-input" placeholder="sk-or-…" autocomplete="off">
+          <small class="form-hint">Get your API key at <a href="https://openrouter.ai/keys" target="_blank" style="color:#6ee7f7;">openrouter.ai/keys</a>.</small>
           <label for="openrouterModel">OpenRouter Model</label>
           <select id="openrouterModel" class="form-input">
             <option value="deepseek/deepseek-v4.1-flash" selected>deepseek/deepseek-v4.1-flash (Default)</option>
@@ -223,7 +221,10 @@
           <small class="form-hint">Tip: If your OpenRouter balance is low or zero, choose a free-tier model (:free).</small>
         </div>
 
-        <div class="form-group" id="mistralGroup">
+        <div class="form-group" data-provider="mistral">
+          <label for="mistralApiKey">Mistral API Key</label>
+          <input type="password" id="mistralApiKey" class="form-input" placeholder="Paste your Mistral key" autocomplete="off">
+          <small class="form-hint">Get your API key at <a href="https://console.mistral.ai/api-keys" target="_blank" style="color:#6ee7f7;">console.mistral.ai/api-keys</a>.</small>
           <label for="mistralModel">Mistral Model</label>
           <select id="mistralModel" class="form-input">
             <option value="codestral-latest" selected>codestral-latest (Codestral Reasoning Agent)</option>
@@ -233,10 +234,10 @@
           <small class="form-hint">Codestral provides state-of-the-art tool calling and DOM action accuracy.</small>
         </div>
 
-        <!-- Container retained for safe display toggling in panel.js -->
-        <div class="form-group" id="geminiKeyGroup" style="display:none;"></div>
-
-        <div class="form-group" id="geminiModelGroup" style="display:none;">
+        <div class="form-group" data-provider="gemini" style="display:none;">
+          <label for="geminiApiKey">Gemini API Key</label>
+          <input type="password" id="geminiApiKey" class="form-input" placeholder="Paste your Gemini key" autocomplete="off">
+          <small class="form-hint">Get your API key at <a href="https://aistudio.google.com/apikey" target="_blank" style="color:#6ee7f7;">aistudio.google.com/apikey</a>.</small>
           <label for="geminiModel">Gemini Model</label>
           <select id="geminiModel" class="form-input">
             <option value="gemini-3.5-flash" selected>gemini-3.5-flash</option>
