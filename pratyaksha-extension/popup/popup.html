@@ -4,13 +4,18 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>PRATYAKSHA Quick Launcher</title>
-  <link rel="icon" type="image/svg+xml" href="../assets/light_favicon.svg">
+  <link rel="icon" type="image/svg+xml" href="../assets/dark_favicon.svg">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="popup.css?v=3">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@600;700;800&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="popup.css?v=5">
 </head>
 <body>
+  <!-- Hexagonal Vault WebGL2 Background Canvas -->
+  <div class="popup-vault-ambient" aria-hidden="true">
+    <canvas id="popupVaultCanvas" class="popup-vault-canvas"></canvas>
+  </div>
+
   <div class="popup-container">
     <div class="popup-header">
       <div class="brand-row">
@@ -39,6 +44,6 @@
     </button>
   </div>
 
-  <script src="popup.js"></script>
+  <script type="module" src="popup.js"></script>
 </body>
 </html>

@@ -5,14 +5,14 @@
 import { globalVault } from '../vault/pii-vault.js';
 import { getEffectiveConfig } from '../env.js';
 import { LangGraphAgent } from '../agent/graph-engine.js';
+import { HexagonalVault, HEXAGONAL_VAULT_DEFAULTS } from './hexagonal-vault.js';
 import { TinyFishAgent } from '../agent/tinyfish-agent.js';
-import { Orb3DController } from './orb-3d.js';
 
 let activeTab = null;
 let pageContext = null;
 let isExecuting = false;
 let activeAgent = null;
-let activeOrb3D = null;
+let activeBackground3D = null;
 
 // DOM Elements — Header
 const settingsBtn = document.getElementById('settingsBtn');
@@ -20,6 +20,9 @@ const settingsBtn = document.getElementById('settingsBtn');
 // DOM Elements — Chat Area
 const chatContainer = document.getElementById('chatContainer');
 const chatMessages = document.getElementById('chatMessages');
+const agentPatrolBanner = document.getElementById('agentPatrolBanner');
+const patrolStatusText = document.getElementById('patrolStatusText');
+const patrolRobotMedia = document.getElementById('patrolRobotMedia');
 
 // DOM Elements — Bottom Input Dock
 const promptInput = document.getElementById('promptInput');
@@ -64,31 +67,100 @@ let currentThinkingBadgeEl = null;
 let thinkingStartTime = null;
 let thinkingTimerInterval = null;
 let currentStepNumber = 1;
+let currentAppTheme = 'dark';
+
+function applyTheme(theme) {
+  currentAppTheme = theme;
+  document.documentElement.setAttribute('data-theme', theme);
+  const darkIcon = document.getElementById('themeIconDark');
+  const lightIcon = document.getElementById('themeIconLight');
+  if (darkIcon && lightIcon) {
+    darkIcon.style.display = theme === 'dark' ? 'none' : 'inline-block';
+    lightIcon.style.display = theme === 'dark' ? 'inline-block' : 'none';
+  }
+  if (activeBackground3D && typeof activeBackground3D.setTheme === 'function') {
+    activeBackground3D.setTheme(theme);
+  }
+  const brandLogos = document.querySelectorAll('.brand-header-logo');
+  brandLogos.forEach(logo => {
+    logo.src = theme === 'dark' ? '../assets/light_logo.svg' : '../assets/dark_logo.svg';
+  });
+}
 
 // Initialize
 document.addEventListener('DOMContentLoaded', async () => {
+  try {
+    const stored = await chrome.storage.local.get(['appTheme']);
+    currentAppTheme = stored.appTheme || 'dark';
+    applyTheme(currentAppTheme);
+  } catch (_) {
+    applyTheme('dark');
+  }
   await loadSettings();
   await refreshActiveTab();
   setupEventListeners();
-  initOrb3D();
+  initDynamicBackground();
+  animateWelcomeScreen();
 });
 
-function initOrb3D() {
+function animateWelcomeScreen() {
+  if (typeof window.gsap === 'undefined') return;
   try {
-    const canvas = document.getElementById('orb3dCanvas');
-    if (canvas) {
-      if (activeOrb3D) {
-        try { activeOrb3D.destroy(); } catch (_) { }
-      }
-      activeOrb3D = new Orb3DController(canvas);
+    const welcome = document.getElementById('welcomeScreen');
+    if (!welcome) return;
+    const robotStage = welcome.querySelector('.welcome-robot-stage');
+    const title = welcome.querySelector('#welcomeTitle');
+    const subtitle = welcome.querySelector('.welcome-subtitle');
+    const pills = welcome.querySelectorAll('.pretask-pill');
+
+    const tl = window.gsap.timeline({ defaults: { ease: 'power3.out' } });
+    if (robotStage) {
+      tl.fromTo(robotStage, { scale: 0.75, opacity: 0, y: -16 }, { scale: 1, opacity: 1, y: 0, duration: 0.65 });
+    }
+    if (title) {
+      tl.fromTo(title, { opacity: 0, y: 15 }, { opacity: 1, y: 0, duration: 0.6 }, '-=0.4');
+    }
+    if (subtitle) {
+      tl.fromTo(subtitle, { opacity: 0, y: 10 }, { opacity: 1, y: 0, duration: 0.5 }, '-=0.4');
+    }
+    if (pills && pills.length) {
+      tl.fromTo(pills, { opacity: 0, y: 18, scale: 0.96 }, { opacity: 1, y: 0, scale: 1, duration: 0.45, stagger: 0.07 }, '-=0.3');
     }
   } catch (err) {
-    console.warn('[PRATYAKSHA] Error initializing Orb3DController:', err);
+    console.warn('[PRATYAKSHA] animateWelcomeScreen error:', err);
+  }
+}
+
+function initDynamicBackground() {
+  try {
+    const canvas = document.getElementById('particleWaveCanvas');
+    if (canvas) {
+      if (activeBackground3D) {
+        try { activeBackground3D.destroy(); } catch (_) { }
+      }
+      activeBackground3D = new HexagonalVault(canvas, {
+        theme: currentAppTheme
+      });
+    }
+  } catch (err) {
+    console.warn('[PRATYAKSHA] Error initializing HexagonalVault:', err);
   }
 }
 
 // Setup event handlers
 function setupEventListeners() {
+  // Theme Toggle Button (Dark: Template 1 / Light: Template 2)
+  const themeToggleBtn = document.getElementById('themeToggleBtn');
+  if (themeToggleBtn) {
+    themeToggleBtn.addEventListener('click', () => {
+      const nextTheme = currentAppTheme === 'dark' ? 'light' : 'dark';
+      applyTheme(nextTheme);
+      try {
+        chrome.storage.local.set({ appTheme: nextTheme });
+      } catch (_) { }
+    });
+  }
+
   // Emergency Stop Button (1-Click Immediate Halt & Abort)
   if (stopBtn) {
     stopBtn.addEventListener('click', async () => {
@@ -138,6 +210,9 @@ function setupEventListeners() {
     promptInput.addEventListener('input', () => {
       promptInput.style.height = 'auto';
       promptInput.style.height = Math.min(promptInput.scrollHeight, 100) + 'px';
+      if (activeBackground3D && Math.random() > 0.5) {
+        activeBackground3D.triggerShockwave();
+      }
     });
 
     promptInput.addEventListener('keydown', (e) => {
@@ -388,11 +463,15 @@ async function handleRunPrompt() {
   promptInput.value = '';
   promptInput.style.height = 'auto';
 
-  // The welcome state belongs only to the empty conversation.
-  if (activeOrb3D) {
-    activeOrb3D.stop();
+  // Trigger cosmic dynamic background shockwave on submit
+  if (activeBackground3D) {
+    activeBackground3D.triggerShockwave();
   }
-  document.getElementById('welcomeScreen')?.remove();
+
+  const welcomeEl = document.getElementById('welcomeScreen');
+  if (welcomeEl) {
+    welcomeEl.remove();
+  }
 
   // 1. Render User Message Bubble
   renderUserMessage(rawPrompt);
@@ -531,6 +610,15 @@ function renderUserMessage(text) {
     row.className = 'chat-row user';
     row.innerHTML = `<div class="user-bubble">${escapeHtml(text)}</div>`;
     chatMessages.appendChild(row);
+
+    const bubble = row.querySelector('.user-bubble');
+    if (typeof window.gsap !== 'undefined' && bubble) {
+      window.gsap.fromTo(
+        bubble,
+        { opacity: 0.1, scale: 0.94, y: 8 },
+        { opacity: 1, scale: 1, y: 0, duration: 0.28, ease: 'power2.out', clearProps: 'transform' }
+      );
+    }
     scrollToBottom();
   } catch (err) {
     console.warn('[PRATYAKSHA] renderUserMessage error:', err);
@@ -539,16 +627,12 @@ function renderUserMessage(text) {
 
 function setOrbState(state) {
   try {
-    const orbs = document.querySelectorAll('.pratyaksha-orb-container, .header-mini-orb');
-    orbs.forEach(orb => {
-      if (orb?.dataset) orb.dataset.state = state;
-    });
     const aura = document.getElementById('ambientAura');
     if (aura?.dataset) {
       aura.dataset.state = state;
     }
-    if (activeOrb3D && typeof activeOrb3D.setState === 'function') {
-      activeOrb3D.setState(state);
+    if (activeBackground3D && typeof activeBackground3D.setState === 'function') {
+      activeBackground3D.setState(state);
     }
   } catch (err) {
     console.warn('[PRATYAKSHA] setOrbState warning:', err);
@@ -586,6 +670,7 @@ function handleNewChat() {
     currentAgentMessageEl = null;
     currentAnswerBubbleEl = null;
     setOrbState('idle');
+    setPatrolBotState(false);
   } catch (err) {
     console.warn('[PRATYAKSHA] handleNewChat error:', err);
   }
@@ -600,14 +685,16 @@ function renderWelcomeScreen() {
     welcomeSection.setAttribute('aria-labelledby', 'welcomeTitle');
 
     welcomeSection.innerHTML = `
-      <!-- 3D Multi-Orb System (Volumetric Central Sphere & 3D Orbiting Satellites) -->
-      <div class="pratyaksha-orb-container" id="welcomeOrb" data-state="idle" role="img" aria-label="PRATYAKSHA 3D AI Orb">
-        <div class="orb-halo"></div>
-        <canvas id="orb3dCanvas" class="orb-3d-canvas" width="220" height="220"></canvas>
-        <div class="orb-ground-shadow"></div>
+      <!-- Floating Waving Robot (Greets user and waves hi infinitely until command is given) -->
+      <div class="welcome-robot-stage" id="welcomeRobotStage" aria-hidden="true">
+        <picture>
+          <source srcset="../assets/robot-waving.webp" type="image/webp">
+          <img src="../assets/robot-waving.gif" alt="Autonomous AI Robot Greeting" class="welcome-robot-media" id="welcomeRobotMedia" />
+        </picture>
       </div>
 
-      <h1 id="welcomeTitle">What can I help you with?</h1>
+      <h1 id="welcomeTitle">What would you like me to do on this page?</h1>
+      <p class="welcome-subtitle">Direct, zero-lag browser autonomy powered by sovereign on-device visual shield.</p>
 
       <!-- Pre-Task Suggestion Pills -->
       <div class="welcome-pretasks" id="welcomePretasks" role="group" aria-label="Suggested quick tasks">
@@ -631,7 +718,7 @@ function renderWelcomeScreen() {
     `;
 
     chatMessages.appendChild(welcomeSection);
-    initOrb3D();
+    animateWelcomeScreen();
   } catch (err) {
     console.warn('[PRATYAKSHA] renderWelcomeScreen error:', err);
   }
@@ -679,6 +766,14 @@ function createAgentMessageSlot() {
 
     chatMessages.appendChild(row);
 
+    if (typeof window.gsap !== 'undefined') {
+      window.gsap.fromTo(
+        row,
+        { opacity: 0, y: 15 },
+        { opacity: 1, y: 0, duration: 0.4, ease: 'power2.out' }
+      );
+    }
+
     currentAgentMessageEl = row;
     currentAnswerBubbleEl = row.querySelector(`#answer-${msgId}`);
     currentThinkingAccordionEl = row.querySelector(`#thinking-${msgId}`);
@@ -695,7 +790,7 @@ function createAgentMessageSlot() {
       });
     }
 
-    // Start live elapsed timer
+    // Start live elapsed timer (throttled to 500ms to eliminate DOM churn and lag)
     thinkingStartTime = Date.now();
     currentStepNumber = 1;
     if (thinkingTimerInterval) clearInterval(thinkingTimerInterval);
@@ -704,7 +799,7 @@ function createAgentMessageSlot() {
         const elapsedSec = ((Date.now() - thinkingStartTime) / 1000).toFixed(1);
         currentThinkingTimerEl.textContent = `${elapsedSec}s`;
       }
-    }, 100);
+    }, 500);
 
     scrollToBottom();
   } catch (err) {
@@ -735,7 +830,7 @@ function appendThinkingEntry(icon, text, meta = {}) {
       content.scrollTop = content.scrollHeight;
     }
     scrollToBottom();
-  } catch (_) {}
+  } catch (_) { }
 }
 
 function handleAgentEvent(event) {
@@ -759,6 +854,7 @@ function handleAgentEvent(event) {
         };
         const icon = phaseIcons[event.phase] || '•';
         appendThinkingEntry(icon, event.text, event);
+        if (event.text) updatePatrolBotStatus(event.text);
         break;
       }
 
@@ -766,13 +862,16 @@ function handleAgentEvent(event) {
         if (['REASONING', 'ACTING', 'PERCEIVING', 'BACKTRACKING', 'AWAITING_INPUT'].includes(event.state)) {
           setOrbState(event.state === 'AWAITING_INPUT' ? 'idle' : 'thinking');
           if (event.label) {
-            appendThinkingEntry('•', event.label.replace(/^Step \d+:\s*/, ''), { phase: 'state' });
+            const cleanLabel = event.label.replace(/^Step \d+:\s*/, '');
+            appendThinkingEntry('•', cleanLabel, { phase: 'state' });
+            updatePatrolBotStatus(cleanLabel);
           }
         }
         break;
 
       case 'TOOL_CALL':
         appendThinkingEntry('⚡', `Action: ${event.toolName}`, { step: event.step, phase: 'action' });
+        updatePatrolBotStatus(`Action: ${event.toolName}`);
         break;
 
       case 'OBSERVATION':
@@ -783,6 +882,7 @@ function handleAgentEvent(event) {
         break;
 
       case 'TASK_COMPLETE': {
+        setPatrolBotState(false);
         setOrbState('responding');
         if (thinkingTimerInterval) {
           clearInterval(thinkingTimerInterval);
@@ -892,6 +992,7 @@ function clearTabHighlightsAndCursor() {
 
 function finishAgentMessage(summaryText, isSuccess = true) {
   try {
+    setPatrolBotState(false);
     if (thinkingTimerInterval) {
       clearInterval(thinkingTimerInterval);
       thinkingTimerInterval = null;
@@ -907,11 +1008,42 @@ function finishAgentMessage(summaryText, isSuccess = true) {
     if (currentAnswerBubbleEl && summaryText) {
       currentAnswerBubbleEl.style.display = 'block';
       currentAnswerBubbleEl.innerHTML = formatMarkdown(summaryText);
+      if (typeof window.gsap !== 'undefined') {
+        window.gsap.fromTo(
+          currentAnswerBubbleEl,
+          { opacity: 0, y: 10, scale: 0.98 },
+          { opacity: 1, y: 0, scale: 1, duration: 0.45, ease: 'power2.out' }
+        );
+      }
     }
     scrollToBottom();
   } catch (err) {
     console.warn('[PRATYAKSHA] finishAgentMessage error:', err);
   }
+}
+
+function setPatrolBotState(active, statusText = '') {
+  try {
+    if (!agentPatrolBanner) return;
+    if (active) {
+      agentPatrolBanner.classList.add('active');
+      if (patrolStatusText && statusText) {
+        patrolStatusText.textContent = statusText;
+      }
+    } else {
+      agentPatrolBanner.classList.remove('active');
+    }
+  } catch (err) {
+    console.warn('[PRATYAKSHA] setPatrolBotState error:', err);
+  }
+}
+
+function updatePatrolBotStatus(text) {
+  try {
+    if (patrolStatusText && text) {
+      patrolStatusText.textContent = text;
+    }
+  } catch (_) { }
 }
 
 function setBusyState(busy) {
@@ -920,15 +1052,19 @@ function setBusyState(busy) {
     if (runBtn) runBtn.disabled = busy;
     if (stopBtn) stopBtn.style.display = busy ? 'inline-flex' : 'none';
     setOrbState(busy ? 'thinking' : 'idle');
+    setPatrolBotState(busy, busy ? 'Agent analyzing & reasoning…' : '');
   } catch (err) {
     console.warn('[PRATYAKSHA] setBusyState error:', err);
   }
 }
 
+let isScrollPending = false;
 function scrollToBottom() {
   try {
-    if (!chatContainer) return;
+    if (!chatContainer || isScrollPending) return;
+    isScrollPending = true;
     requestAnimationFrame(() => {
+      isScrollPending = false;
       try {
         chatContainer.scrollTop = chatContainer.scrollHeight;
       } catch (_) { }

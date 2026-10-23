@@ -1,0 +1,531 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PRATYAKSHA — Hexagonal Vault Preview</title>
+  <link rel="icon" type="image/svg+xml" href="../pratyaksha-extension/assets/dark_favicon.svg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../pratyaksha-extension/sidepanel/panel.css?v=12">
+  <style>
+    body {
+      background: #CEC7C0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      margin: 0;
+      padding: 32px 24px;
+      font-family: 'Inter', sans-serif;
+      color: #18181B;
+    }
+
+    .preview-stage {
+      display: flex;
+      gap: 36px;
+      align-items: flex-start;
+      max-width: 1080px;
+      width: 100%;
+    }
+
+    /* Sidepanel Mockup Frame */
+    .extension-mockup {
+      width: 410px;
+      height: 680px;
+      background: #e0dcd8;
+      border-radius: 28px;
+      box-shadow: 0 24px 64px rgba(60, 50, 45, 0.22), 0 4px 20px rgba(82, 39, 255, 0.12);
+      border: 1px solid rgba(70, 60, 55, 0.18);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+    }
+
+    /* Inspector & Control Panel */
+    .controls-panel {
+      flex: 1;
+      background: rgba(255, 255, 255, 0.88);
+      backdrop-filter: blur(24px);
+      -webkit-backdrop-filter: blur(24px);
+      padding: 28px;
+      border-radius: 24px;
+      box-shadow: 0 16px 48px rgba(60, 50, 45, 0.14);
+      border: 1px solid rgba(70, 60, 55, 0.14);
+      max-height: 680px;
+      overflow-y: auto;
+    }
+
+    .controls-panel h2 {
+      font-family: 'Outfit', sans-serif;
+      font-size: 22px;
+      font-weight: 700;
+      color: #18181B;
+      margin-bottom: 4px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .badge-reactbits {
+      font-size: 10.5px;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      padding: 3px 8px;
+      border-radius: 6px;
+      background: rgba(82, 39, 255, 0.10);
+      color: #5227FF;
+      border: 1px solid rgba(82, 39, 255, 0.25);
+    }
+
+    .controls-panel p {
+      color: #52525B;
+      font-size: 13px;
+      line-height: 1.5;
+      margin-bottom: 20px;
+    }
+
+    .section-title {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      font-weight: 700;
+      color: #71717A;
+      margin: 16px 0 10px;
+    }
+
+    .state-btn-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 8px;
+      margin-bottom: 18px;
+    }
+
+    .state-btn {
+      padding: 10px 14px;
+      border-radius: 12px;
+      border: 1px solid rgba(70, 60, 55, 0.15);
+      background: rgba(255, 255, 255, 0.75);
+      color: #27272A;
+      font-weight: 600;
+      font-size: 12px;
+      cursor: pointer;
+      transition: all 0.18s ease;
+      display: flex;
+      align-items: center;
+      gap: 7px;
+    }
+
+    .state-btn:hover {
+      background: #FFFFFF;
+      border-color: #5227FF;
+      color: #5227FF;
+      transform: translateY(-1px);
+    }
+
+    .state-btn.active {
+      background: #5227FF;
+      border-color: #5227FF;
+      color: #FFFFFF;
+      box-shadow: 0 4px 14px rgba(82, 39, 255, 0.3);
+    }
+
+    /* Sliders grid */
+    .slider-grid {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .slider-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      font-size: 12px;
+      font-weight: 550;
+      color: #3F3F46;
+    }
+
+    .slider-row label {
+      flex: 1;
+      display: flex;
+      justify-content: space-between;
+    }
+
+    .slider-val {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      color: #5227FF;
+    }
+
+    .slider-row input[type="range"] {
+      flex: 1.2;
+      accent-color: #5227FF;
+      cursor: pointer;
+    }
+
+    /* Actions */
+    .actions-row {
+      display: flex;
+      gap: 10px;
+      margin-top: 20px;
+    }
+
+    .btn-action {
+      flex: 1;
+      padding: 10px 14px;
+      border-radius: 10px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.18s ease;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+
+    .btn-reset {
+      background: rgba(255, 255, 255, 0.8);
+      border: 1px solid rgba(70, 60, 55, 0.18);
+      color: #27272A;
+    }
+
+    .btn-reset:hover {
+      background: #FFFFFF;
+      border-color: #5227FF;
+      color: #5227FF;
+    }
+
+    .btn-shock {
+      background: linear-gradient(135deg, #5227FF 0%, #ff2a7d 100%);
+      border: none;
+      color: white;
+      box-shadow: 0 4px 14px rgba(82, 39, 255, 0.32);
+    }
+
+    .btn-shock:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 6px 18px rgba(255, 42, 125, 0.45);
+    }
+  </style>
+</head>
+<body>
+
+  <div class="preview-stage">
+
+    <!-- PRATYAKSHA Extension Mockup -->
+    <div class="extension-mockup" data-theme="dark">
+      <header class="app-header">
+        <div class="header-left">
+          <div class="brand-badge" title="PRATYAKSHA">
+            <img src="../pratyaksha-extension/assets/light_logo.svg" alt="PRATYAKSHA" class="brand-header-logo">
+          </div>
+        </div>
+
+        <div class="header-right">
+          <button class="btn-new-chat" id="demoNewChat">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <line x1="12" y1="5" x2="12" y2="19" />
+              <line x1="5" y1="12" x2="19" y2="12" />
+            </svg>
+            <span>New Chat</span>
+          </button>
+        </div>
+      </header>
+
+      <!-- Hexagonal Vault WebGL2 Background -->
+      <div class="ambient-chat-aura" id="ambientAura">
+        <canvas id="particleWaveCanvas" class="particle-wave-canvas"></canvas>
+      </div>
+
+      <main class="chat-thread-container" style="justify-content: center;">
+        <section class="welcome-state" style="margin: auto 0;">
+          <!-- Floating Waving Robot (Greets user and waves hi infinitely until command is given) -->
+          <div class="welcome-robot-stage" id="welcomeRobotStage" aria-hidden="true">
+            <picture>
+              <source srcset="../pratyaksha-extension/assets/robot-waving.webp" type="image/webp">
+              <img src="../pratyaksha-extension/assets/robot-waving.gif" alt="Autonomous AI Robot Greeting" class="welcome-robot-media" id="welcomeRobotMedia" />
+            </picture>
+          </div>
+
+          <h1 id="welcomeTitle">What would you like me to do on this page?</h1>
+          <p class="welcome-subtitle">Direct, zero-lag browser autonomy powered by sovereign on-device visual shield.</p>
+
+          <!-- Pre-Task Suggestion Pills -->
+          <div class="welcome-pretasks">
+            <button type="button" class="pretask-pill" data-task="Summarize this page in 3 key takeaways">
+              <span class="pretask-icon">⚡</span>
+              <span class="pretask-text">Summarize page</span>
+            </button>
+            <button type="button" class="pretask-pill" data-task="Extract all data, tables, and statistics">
+              <span class="pretask-icon">📊</span>
+              <span class="pretask-text">Extract data</span>
+            </button>
+            <button type="button" class="pretask-pill" data-task="Find inputs on this page and help fill form">
+              <span class="pretask-icon">✍️</span>
+              <span class="pretask-text">Fill form</span>
+            </button>
+            <button type="button" class="pretask-pill" data-task="Locate the primary action buttons">
+              <span class="pretask-icon">🎯</span>
+              <span class="pretask-text">Key actions</span>
+            </button>
+          </div>
+        </section>
+      </main>
+
+      <footer class="chat-input-dock">
+        <!-- Agent Thinking & Working Flying Robot Patrol — Directly on top of "Ask me to do something" bar -->
+        <div class="agent-patrol-banner active" id="demoPatrolBanner" aria-live="polite">
+          <div class="patrol-robot-stage">
+            <picture>
+              <source srcset="../pratyaksha-extension/assets/robot-patrol.webp" type="image/webp">
+              <img src="../pratyaksha-extension/assets/robot-patrol.gif" alt="Autonomous Agent Patrolling" class="patrol-robot-media" />
+            </picture>
+          </div>
+          <div class="patrol-status-pill">
+            <span class="patrol-pulse-beacon"></span>
+            <span class="patrol-status-text" id="demoPatrolStatus">Agent thinking & patrolling input bar…</span>
+          </div>
+        </div>
+
+        <div class="dock-input-row">
+          <textarea id="demoInput" placeholder="Ask me to do something on this page…" rows="1"></textarea>
+          <div class="dock-actions">
+            <button class="btn-send-dock" id="demoSendBtn" title="Send message (Enter)">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+                stroke-linecap="round" stroke-linejoin="round">
+                <line x1="12" y1="19" x2="12" y2="5" />
+                <polyline points="5 12 12 5 19 12" />
+              </svg>
+            </button>
+          </div>
+        </div>
+        <div class="dock-shortcut-hint">
+          <span>Press <strong>Enter ↵</strong> to send · <strong>Shift+Enter</strong> for newline</span>
+        </div>
+      </footer>
+    </div>
+
+    <!-- Live Controls & Inspector -->
+    <div class="controls-panel">
+      <h2>
+        <span>Hexagonal Vault</span>
+        <span class="badge-reactbits">React Bits Pro</span>
+      </h2>
+      <p>A hexagon grid lit by a soft light that follows the cursor. Integrated natively into PRATYAKSHA with GPU WebGL2 acceleration, zero battery waste, and exact aesthetic tokens.</p>
+
+      <div class="section-title">Theme Template (React Bits Pro)</div>
+      <div class="state-btn-grid" id="themeBtnGrid">
+        <button class="state-btn active" id="btnThemeDark" data-theme-choice="dark">
+          <span>🌙</span> Dark (Template 1)
+        </button>
+        <button class="state-btn" id="btnThemeLight" data-theme-choice="light">
+          <span>☀️</span> Light (Template 2)
+        </button>
+      </div>
+
+      <div class="section-title">Cognitive Agent State</div>
+      <div class="state-btn-grid" id="agentStateGrid">
+        <button class="state-btn active" data-state="idle">
+          <span>🔵</span> Idle
+        </button>
+        <button class="state-btn" data-state="thinking">
+          <span>⚡</span> Thinking
+        </button>
+        <button class="state-btn" data-state="responding">
+          <span>✨</span> Responding
+        </button>
+        <button class="state-btn" data-state="error">
+          <span>🔴</span> Alert / Error
+        </button>
+      </div>
+
+      <div class="section-title">Live Vault Parameters</div>
+      <div class="slider-grid">
+        <div class="slider-row">
+          <label><span>Lattice Scale</span> <span class="slider-val" id="valLattice">1.4</span></label>
+          <input type="range" id="inputLattice" min="0.8" max="2.5" step="0.1" value="1.4">
+        </div>
+        <div class="slider-row">
+          <label><span>Lit Line Width</span> <span class="slider-val" id="valLitWidth">2.7</span></label>
+          <input type="range" id="inputLitWidth" min="1.0" max="6.0" step="0.1" value="2.7">
+        </div>
+        <div class="slider-row">
+          <label><span>Unlit Line Width</span> <span class="slider-val" id="valLineWidth">0.6</span></label>
+          <input type="range" id="inputLineWidth" min="0.2" max="2.0" step="0.1" value="0.6">
+        </div>
+        <div class="slider-row">
+          <label><span>Glow Radius</span> <span class="slider-val" id="valGlow">0.9</span></label>
+          <input type="range" id="inputGlow" min="0.4" max="2.0" step="0.05" value="0.9">
+        </div>
+        <div class="slider-row">
+          <label><span>Core Intensity</span> <span class="slider-val" id="valCore">0.75</span></label>
+          <input type="range" id="inputCore" min="0.2" max="1.5" step="0.05" value="0.75">
+        </div>
+        <div class="slider-row">
+          <label><span>Trail Length</span> <span class="slider-val" id="valTrail">2.0</span></label>
+          <input type="range" id="inputTrail" min="0.5" max="5.0" step="0.2" value="2.0">
+        </div>
+        <div class="slider-row">
+          <label><span>Cursor Follow Lerp</span> <span class="slider-val" id="valFollow">0.65</span></label>
+          <input type="range" id="inputFollow" min="0.1" max="1.0" step="0.05" value="0.65">
+        </div>
+        <div class="slider-row">
+          <label><span>Wave Flow</span> <span class="slider-val" id="valFlow">0.68</span></label>
+          <input type="range" id="inputFlow" min="0.0" max="1.5" step="0.05" value="0.68">
+        </div>
+        <div class="slider-row">
+          <label><span>Pulse Speed</span> <span class="slider-val" id="valPulse">1.15</span></label>
+          <input type="range" id="inputPulse" min="0.2" max="3.0" step="0.05" value="1.15">
+        </div>
+      </div>
+
+      <div class="actions-row" style="flex-wrap: wrap;">
+        <button class="btn-action btn-reset" id="resetPropsBtn">↺ Reset Props</button>
+        <button class="btn-action btn-shock" id="triggerShockBtn">💥 Pulse Shockwave</button>
+        <button class="btn-action" id="togglePatrolBtn" style="background: rgba(82, 39, 255, 0.12); border: 1px solid rgba(82, 39, 255, 0.35); color: #5227FF; width: 100%; margin-top: 6px;">🤖 Toggle Robot Patrol (Thinking State)</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module">
+    import { HexagonalVault, HEXAGONAL_VAULT_DEFAULTS } from '../pratyaksha-extension/sidepanel/hexagonal-vault.js';
+
+    let vault = null;
+    const canvas = document.getElementById('particleWaveCanvas');
+    if (canvas) {
+      vault = new HexagonalVault(canvas, {
+        theme: 'dark'
+      });
+    }
+
+    // Theme Switcher Buttons (Template 1: Dark / Template 2: Light)
+    const mockup = document.querySelector('.extension-mockup');
+    const brandLogo = document.querySelector('.brand-header-logo');
+    const themeButtons = document.querySelectorAll('[data-theme-choice]');
+    themeButtons.forEach(btn => {
+      btn.addEventListener('click', () => {
+        themeButtons.forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        const chosen = btn.dataset.themeChoice;
+        if (mockup) mockup.setAttribute('data-theme', chosen);
+        if (brandLogo) brandLogo.src = chosen === 'dark' ? '../pratyaksha-extension/assets/light_logo.svg' : '../pratyaksha-extension/assets/dark_logo.svg';
+        if (vault) vault.setTheme(chosen);
+      });
+    });
+
+    // State Buttons
+    const stateButtons = document.querySelectorAll('#agentStateGrid .state-btn');
+    stateButtons.forEach(btn => {
+      btn.addEventListener('click', () => {
+        stateButtons.forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        if (vault) vault.setState(btn.dataset.state);
+      });
+    });
+
+    // Sliders
+    const bindings = [
+      { id: 'inputLattice', valId: 'valLattice', prop: 'lattice' },
+      { id: 'inputLitWidth', valId: 'valLitWidth', prop: 'litWidth' },
+      { id: 'inputLineWidth', valId: 'valLineWidth', prop: 'lineWidth' },
+      { id: 'inputGlow', valId: 'valGlow', prop: 'glowRadius' },
+      { id: 'inputCore', valId: 'valCore', prop: 'core' },
+      { id: 'inputTrail', valId: 'valTrail', prop: 'trailLength' },
+      { id: 'inputFollow', valId: 'valFollow', prop: 'follow' },
+      { id: 'inputFlow', valId: 'valFlow', prop: 'flow' },
+      { id: 'inputPulse', valId: 'valPulse', prop: 'pulseSpeed' }
+    ];
+
+    bindings.forEach(({ id, valId, prop }) => {
+      const input = document.getElementById(id);
+      const val = document.getElementById(valId);
+      if (input && val) {
+        input.addEventListener('input', () => {
+          val.textContent = parseFloat(input.value).toFixed(2);
+          if (vault) vault.options[prop] = parseFloat(input.value);
+        });
+      }
+    });
+
+    // Reset button
+    document.getElementById('resetPropsBtn').addEventListener('click', () => {
+      Object.assign(vault.options, HEXAGONAL_VAULT_DEFAULTS);
+      document.getElementById('inputLattice').value = 1.4;
+      document.getElementById('valLattice').textContent = '1.40';
+      document.getElementById('inputLitWidth').value = 2.7;
+      document.getElementById('valLitWidth').textContent = '2.70';
+      document.getElementById('inputLineWidth').value = 0.6;
+      document.getElementById('valLineWidth').textContent = '0.60';
+      document.getElementById('inputGlow').value = 0.9;
+      document.getElementById('valGlow').textContent = '0.90';
+      document.getElementById('inputCore').value = 0.75;
+      document.getElementById('valCore').textContent = '0.75';
+      document.getElementById('inputTrail').value = 2.0;
+      document.getElementById('valTrail').textContent = '2.00';
+      document.getElementById('inputFollow').value = 0.65;
+      document.getElementById('valFollow').textContent = '0.65';
+      document.getElementById('inputFlow').value = 0.68;
+      document.getElementById('valFlow').textContent = '0.68';
+      document.getElementById('inputPulse').value = 1.15;
+      document.getElementById('valPulse').textContent = '1.15';
+    });
+
+    // Shockwave Button
+    document.getElementById('triggerShockBtn').addEventListener('click', () => {
+      if (vault) vault.triggerShockwave();
+    });
+
+    // Interactive Demo typing and pills
+    const demoInput = document.getElementById('demoInput');
+    if (demoInput) {
+      demoInput.addEventListener('input', () => {
+        if (vault && Math.random() > 0.4) {
+          vault.triggerShockwave();
+        }
+      });
+    }
+
+    document.querySelectorAll('.pretask-pill').forEach(pill => {
+      pill.addEventListener('click', () => {
+        if (demoInput) {
+          demoInput.value = pill.dataset.task;
+          demoInput.focus();
+        }
+        if (vault) vault.triggerShockwave();
+      });
+    });
+
+    document.getElementById('demoSendBtn')?.addEventListener('click', () => {
+      if (vault) vault.triggerShockwave();
+    });
+
+    document.getElementById('demoNewChat')?.addEventListener('click', () => {
+      if (vault) {
+        vault.setState('idle');
+        vault.triggerShockwave();
+      }
+      if (demoInput) demoInput.value = '';
+    });
+
+    // Patrol Robot Toggle
+    const togglePatrolBtn = document.getElementById('togglePatrolBtn');
+    const demoPatrolBanner = document.getElementById('demoPatrolBanner');
+    if (togglePatrolBtn && demoPatrolBanner) {
+      togglePatrolBtn.addEventListener('click', () => {
+        const isActive = demoPatrolBanner.classList.toggle('active');
+        togglePatrolBtn.textContent = isActive 
+          ? '🤖 Robot Patrol: Active (Click to Hide)' 
+          : '🤖 Robot Patrol: Hidden (Click to Show)';
+        if (isActive && vault) {
+          vault.setState('thinking');
+        }
+      });
+    }
+  </script>
+</body>
+</html>

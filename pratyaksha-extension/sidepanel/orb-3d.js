@@ -188,7 +188,7 @@ export class Orb3DController {
         this.mouseOffsetY = Math.max(-1, Math.min(1, y / (rect.height / 2)));
         this.targetRotY = this.mouseOffsetX * 0.45;
         this.targetRotX = 0.18 + this.mouseOffsetY * 0.38;
-      } catch (_) {}
+      } catch (_) { }
     };
 
     this._onPointerLeave = () => {
@@ -240,7 +240,7 @@ export class Orb3DController {
       if (newState && this.colorThemes[newState]) {
         this.state = newState;
       }
-    } catch (_) {}
+    } catch (_) { }
   }
 
   start() {
@@ -269,7 +269,7 @@ export class Orb3DController {
         cancelAnimationFrame(this.animId);
         this.animId = null;
       }
-    } catch (_) {}
+    } catch (_) { }
   }
 
   destroy() {
@@ -283,7 +283,7 @@ export class Orb3DController {
         if (this._onClick) container.removeEventListener('click', this._onClick);
       }
       if (this._onResize) window.removeEventListener('resize', this._onResize);
-    } catch (_) {}
+    } catch (_) { }
   }
 
   // ─────────────────────────────────────────────────────────────

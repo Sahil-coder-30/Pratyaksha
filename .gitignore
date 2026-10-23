@@ -25,6 +25,7 @@ desktop.ini
 .agents
 
 # AI & Agent Customizations
+.agent/
 .agents/
 
 # Logs & Runtime
