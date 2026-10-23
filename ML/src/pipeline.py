@@ -123,7 +123,7 @@ class DetectionPipeline:
         Normalize detector output.
 
         Canonical fields:
-            type, source, confidence, bbox, text, text_span
+            type, source, confidence, bbox, text, text_span, context_id
 
         Additional detector-specific fields are preserved.
         """
@@ -168,7 +168,10 @@ class DetectionPipeline:
                 )
 
             if "text" not in record:
-                record["text"] = record.get("word")
+                record["text"] = record.get("word") 
+
+            if "context_id" not in record: 
+                record["context_id"] = record.get("context_id", None) 
 
             # The pipeline's stage identifies the source of this record.
             record["source"] = source
@@ -253,22 +256,32 @@ class DetectionPipeline:
             image,
         )
 
+        
         # Stage 3: NER
-        # Run NER on each text source separately so character offsets
-        # remain relative to the corresponding source string.
+        # Each OCR text fragment gets one stable context ID.
+        # NER detections inherit the ID of the text they came from.
         ner_detections: list[dict[str, Any]] = []
         ner_errors: list[str] = []
 
-        text_sources: list[tuple[str, str]] = [
-            (f"ocr_text_{i}", text)
-            for i, text in enumerate(self._extract_ocr_text(ocr_detections))
-        ]
+        text_sources: list[tuple[str, str]] = []
+
+        for index, ocr_record in enumerate(ocr_detections):
+            text = ocr_record.get("text")
+
+            if text is None or not str(text).strip():
+                continue
+
+            context_id = f"ocr_text_{index}"
+
+            # Store the same context on the parent OCR record.
+            ocr_record["context_id"] = context_id
+
+            text_sources.append((context_id, str(text)))
 
         if dom_text and dom_text.strip():
             text_sources.append(("dom_text", dom_text))
 
         for context_id, text in text_sources:
-            # NER should receive text, not the screenshot.
             results, error = self._run_stage(
                 "ner",
                 self.ner_detector,
@@ -281,6 +294,7 @@ class DetectionPipeline:
 
             if error:
                 ner_errors.append(f"{context_id}: {error}")
+
 
         # Stage 4: Attach optional DOM detections.
         normalized_dom = self._normalize(dom_detections or [], "dom")
@@ -306,7 +320,7 @@ class DetectionPipeline:
 
         # A failure means the output is not cleared for downstream use.
         ready_for_privacy_processing = not stage_errors
-
+        
         return {
             "detections": all_detections,
             "by_source": {
@@ -340,7 +354,22 @@ def main():
 
     result = pipeline.run(image_path)
 
-    print("\n--- Detection summary ---")
+    print("\n--- Detection summary ---") 
+
+    for record in result["by_source"]["ocr"]:
+        print({
+            "source": record.get("source"),
+            "context_id": record.get("context_id"),
+            "has_bbox": record.get("bbox") is not None,
+            })
+    
+    for record in result["by_source"]["ner"]:
+        print({
+            "source": record.get("source"),
+            "type": record.get("type"),
+            "context_id": record.get("context_id"),
+            "text_span": record.get("text_span"),
+            })
 
     for source, detections in result["by_source"].items():
         print(f"\n{source.upper()}: {len(detections)} detections")
