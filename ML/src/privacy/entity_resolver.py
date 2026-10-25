@@ -19,7 +19,7 @@ Important:
     - Keeps ambiguous detections separate.
 """
 
-#             cd Pratyaksha 
+#             cd BigFish 
 #             $env:USE_TF = "0"
 #             python -m ML.src.privacy.entity_resolver
 
@@ -66,12 +66,23 @@ TYPE_ALIASES = {
     "PASSWORD": "PASSWORD",
     "USERNAME": "USERNAME",
 
-    "TEXT": "UNKNOWN",
-    "OCR_TEXT": "UNKNOWN",
+    "URL": "URL",
+    "LINK": "URL",
+    "PUBLIC_LINK": "URL",
+
+    "SSN": "SSN",
+
+    # A plain OCR line is not sensitive by itself. NER and regex hits inside it are.
+    "TEXT": "TEXT",
+    "OCR_TEXT": "TEXT",
     "UNKNOWN": "UNKNOWN",
 }
 
 GENERIC_TYPES = {"UNKNOWN"}
+
+# Text-only sources: their detections have a character span inside an OCR
+# line, not a box, and are located through that line.
+SPAN_SOURCES = {"ner", "regex"}
 
 
 class EntityResolver:
@@ -143,12 +154,15 @@ class EntityResolver:
         if not isinstance(span, dict):
             return None
 
-        start = span.get("start", span.get("start_char"))
-        end = span.get("end", span.get("end_char"))
+        start_val = span.get("start", span.get("start_char"))
+        end_val = span.get("end", span.get("end_char"))
+
+        if start_val is None or end_val is None:
+            return None
 
         try:
-            start = int(start)
-            end = int(end)
+            start = int(start_val)
+            end = int(end_val)
         except (TypeError, ValueError):
             return None
 
@@ -175,6 +189,40 @@ class EntityResolver:
         union = area_a + area_b - intersection
 
         return intersection / union if union > 0 else 0.0
+
+    @staticmethod
+    def _project_span(
+        bbox: list[float],
+        text: Optional[str],
+        span: Optional[dict[str, int]],
+    ) -> list[float]:
+        """
+        Estimate the part of an OCR line box that holds a character span.
+
+        OCR gives one box per line, so the span is placed by its share of
+        the characters, plus slack because glyph widths differ: half a
+        character before it (so the label before it stays readable) and one
+        after it. Without usable text or span, the whole line is used.
+        """
+        if not text or span is None:
+            return list(bbox)
+
+        length = len(text)
+        start = max(0, min(span["start"], length))
+        end = max(start, min(span["end"], length))
+
+        if length == 0 or end <= start:
+            return list(bbox)
+
+        x1, y1, x2, y2 = bbox
+        char_width = (x2 - x1) / length
+
+        return [
+            max(x1, x1 + char_width * (start - 0.5)),
+            y1,
+            min(x2, x1 + char_width * (end + 1)),
+            y2,
+        ]
 
     def _spans_overlap(
         self,
@@ -286,9 +334,10 @@ class EntityResolver:
                 record.get("conf"),
             )
 
-        if record.get("confidence") is not None:
+        conf_raw = record.get("confidence")
+        if conf_raw is not None:
             try:
-                confidence = float(record["confidence"])
+                confidence = float(conf_raw)
                 record["confidence"] = (
                     confidence
                     if 0.0 <= confidence <= 1.0
@@ -485,33 +534,30 @@ class EntityResolver:
 
             
                         # Find OCR regions associated with this entity's context.
-            # Only NER entities should inherit parent OCR regions.
-            has_ner_source = any(
-                str(item.get("source", "")).lower() == "ner"
-                for item in members
-            )
-
-            context_ids = {
-                item["context_id"]
-                for item in members
-                if item.get("context_id") is not None
-            }
-
+            # Only NER and regex entities inherit parent OCR regions, and
+            # only the part of the line their span covers.
             parent_regions = []
 
-            if has_ner_source:
-                for context_id in sorted(context_ids):
-                    for ocr_record in ocr_by_context.get(
-                        context_id, []
-                    ):
-                        parent_regions.append({
-                            "detection_id": ocr_record["detection_id"],
-                            "context_id": context_id,
-                            "bbox": ocr_record["bbox"],
-                            "coordinate_space": ocr_record.get(
-                                "coordinate_space"
-                            ),
-                        })
+            for item in members:
+                if item.get("source") not in SPAN_SOURCES:
+                    continue
+
+                context_id = item.get("context_id")
+
+                for ocr_record in ocr_by_context.get(context_id, []):
+                    parent_regions.append({
+                        "detection_id": ocr_record["detection_id"],
+                        "context_id": context_id,
+                        "bbox": self._project_span(
+                            ocr_record["bbox"],
+                            ocr_record.get("text"),
+                            item.get("text_span"),
+                        ),
+                        "line_bbox": ocr_record["bbox"],
+                        "coordinate_space": ocr_record.get(
+                            "coordinate_space"
+                        ),
+                    })
 
             effective_bounding_boxes = (
                 boxes
@@ -522,11 +568,33 @@ class EntityResolver:
             )
 
             
+            rep_text = representative.get("text")
+            is_url_text = bool(
+                rep_text
+                and isinstance(rep_text, str)
+                and re.search(
+                    r'(?:https?://|www\.)\S+|docs\.google\.com/\S+|'
+                    r'^[a-zA-Z0-9-]+\.(?:com|org|net|edu|gov|io|ai|co|dev|app|in)(?:/\S*)?$',
+                    rep_text.strip(),
+                    re.IGNORECASE,
+                )
+            )
+            resolved_type = "URL" if is_url_text else representative["type"]
+            is_requires_review = (
+                False if is_url_text else (
+                    resolved_type == "UNKNOWN"
+                    or any(
+                        item.get("confidence") is None
+                        for item in members
+                    )
+                )
+            )
+
             entities.append(
                 {
                     "entity_id": f"entity_{entity_index:05d}",
-                    "type": representative["type"],
-                    "text": representative.get("text"),
+                    "type": resolved_type,
+                    "text": rep_text,
                     "sources": sources,
                     "bounding_boxes": boxes,
                     "text_spans": spans,
@@ -549,13 +617,7 @@ class EntityResolver:
                         }
                         for item in members
                     ],
-                    "requires_review": (
-                        representative["type"] == "UNKNOWN"
-                        or any(
-                            item.get("confidence") is None
-                            for item in members
-                        )
-                    ), 
+                    "requires_review": is_requires_review,
                     "parent_regions": parent_regions,
                     "effective_bounding_boxes": effective_bounding_boxes,
                 }
@@ -607,7 +669,7 @@ class EntityResolver:
             has_location = (
                 item.get("bbox") is not None
                 or (
-                    item.get("source") == "ner"
+                    item.get("source") in SPAN_SOURCES
                     and item.get("text_span") is not None
                     and has_parent_region
                 )

@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>BigFish Form Fixture</title>
+  </head>
+  <body>
+    <h1>Compose a message</h1>
+    <p>Contact on file: priya@example.com, +91 98765 43210</p>
+    <form id="compose" onsubmit="event.preventDefault(); document.getElementById('status').textContent = 'Message sent';">
+      <label>To <input name="to" type="email" /></label>
+      <label>Subject <input name="subject" /></label>
+      <label>Plan
+        <select name="plan">
+          <option value="free">Free</option>
+          <option value="pro">Pro</option>
+        </select>
+      </label>
+      <button type="button" id="save" onclick="document.getElementById('status').textContent = 'Draft saved';">Save draft</button>
+      <button type="submit">Send</button>
+    </form>
+    <p id="status"></p>
+    <form role="search" action="/search" onsubmit="event.preventDefault(); document.getElementById('status').textContent = 'Searched';">
+      <input type="search" name="q" placeholder="Search messages" />
+    </form>
+  </body>
+</html>

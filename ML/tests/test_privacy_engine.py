@@ -87,5 +87,43 @@ def test_privacy_engine():
     print("Ready for release:", plan["ready_for_release"])
 
 
+def test_url_preservation_for_testing():
+    """Verify that Google Forms and testing URLs are preserved without masking."""
+    session = SessionManager(session_id="test_url_session")
+    engine = PrivacyEngine(session_manager=session)
+
+    resolution = {
+        "entities": [
+            {
+                "entity_id": "entity_00001",
+                "type": "URL",
+                "sources": ["ocr"],
+                "requires_review": False,
+                "effective_bounding_boxes": [[10, 10, 400, 30]],
+                "coordinate_space": "screenshot_px",
+                "text": "https://docs.google.com/forms/d/e/1FAIpQLSeZeKBlwODUCXwg2dg5NM5WuzOM8gtqP5YmZsOmuJ3DriCDIQ/viewform",
+            },
+            {
+                "entity_id": "entity_00002",
+                "type": "UNKNOWN",
+                "sources": ["ocr"],
+                "requires_review": False,
+                "effective_bounding_boxes": [[10, 50, 300, 70]],
+                "coordinate_space": "screenshot_px",
+                "text": "https://example.com/api/test",
+            },
+        ],
+        "unresolved_detections": [],
+    }
+
+    plan = engine.build_plan(resolution)
+    # Neither URL should be masked
+    assert len(plan["mask_regions"]) == 0
+    assert plan["metadata"]["mask_region_count"] == 0
+    assert all(decision["action"] == "no_mask" for decision in plan["decisions"])
+    print("test_url_preservation_for_testing passed: URLs were successfully preserved.")
+
+
 if __name__ == "__main__":
     test_privacy_engine()
+    test_url_preservation_for_testing()

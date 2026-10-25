@@ -1,6 +1,9 @@
+#             cd BigFish
 #             $env:USE_TF = "0"
 #             python -m ML.tests.test_privacy_integration
 
+from pathlib import Path
+from PIL import Image, ImageDraw
 
 from ML.src.pipeline import DetectionPipeline
 from ML.src.privacy.entity_resolver import EntityResolver
@@ -20,8 +23,15 @@ def main():
         strict=True,
     )
 
-    # Use your existing local test image.
-    image_path = r"D:\Honey\Fun\Pratyaksh\Pratyaksha\APAAR ID Kushagra.png"
+    image_path = Path("sample_id.png")
+    if not image_path.exists():
+        img = Image.new("RGB", (600, 300), color=(255, 255, 255))
+        d = ImageDraw.Draw(img)
+        d.text((30, 30), "BigFish Identity Card", fill=(0, 0, 0))
+        d.text((30, 80), "Name: John Doe", fill=(0, 0, 0))
+        d.text((30, 130), "Organization: Acme Corporation", fill=(0, 0, 0))
+        d.text((30, 180), "City: New Delhi", fill=(0, 0, 0))
+        img.save(image_path)
 
     pipeline_result = pipeline.run(image_path)
 
@@ -87,6 +97,10 @@ def main():
         assert plan["ready_for_release"] is False
 
     print("\nPrivacy integration test completed.")
+
+
+def test_privacy_integration():
+    main()
 
 
 if __name__ == "__main__":

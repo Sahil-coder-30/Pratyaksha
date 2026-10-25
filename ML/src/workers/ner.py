@@ -1,5 +1,5 @@
 #How to run : Open new terminal
-#             cd Pratyaksha 
+#             cd BigFish 
 #             $env:USE_TF = "0"
 #             python -m ML.src.workers.ner
 

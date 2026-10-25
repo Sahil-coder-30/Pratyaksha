@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Inbox - FishMail</title>
+    <style>
+      #compose { position: fixed; right: 16px; bottom: 0; width: 420px; background: #fff; border: 1px solid #999; padding: 8px; }
+      [contenteditable] { min-height: 120px; border: 1px solid #ccc; }
+    </style>
+  </head>
+  <body>
+    <!-- Gmail style: Compose opens a dialog with recipient, subject and a rich text body. -->
+    <div role="button" tabindex="0" id="new">Compose</div>
+    <div role="main">
+      <h1>Inbox</h1>
+      <ul>
+        <li>Ravi: Standup moved to 11</li>
+        <li>Meera: Slides for Friday</li>
+      </ul>
+      <p id="status"></p>
+    </div>
+    <div id="compose" role="dialog" aria-label="New Message" hidden>
+      <input aria-label="To recipients" id="to" />
+      <input aria-label="Subject" id="subject" />
+      <div contenteditable="true" role="textbox" aria-label="Message Body" id="body"></div>
+      <div role="alert" id="error"></div>
+      <div role="button" tabindex="0" id="send" aria-label="Send">Send</div>
+    </div>
+    <script>
+      const dialog = document.getElementById("compose");
+      document.getElementById("new").onclick = () => (dialog.hidden = false);
+      document.getElementById("send").onclick = () => {
+        const to = document.getElementById("to").value.trim();
+        if (!to) {
+          document.getElementById("error").textContent = "Please specify at least one recipient.";
+          return;
+        }
+        window.__sent = { to, subject: document.getElementById("subject").value, body: document.getElementById("body").innerText };
+        dialog.hidden = true;
+        document.getElementById("status").textContent = "Message sent";
+      };
+    </script>
+  </body>
+</html>

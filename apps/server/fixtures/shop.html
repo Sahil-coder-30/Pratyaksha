@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>GadgetHub</title>
+  </head>
+  <body>
+    <!-- A list page and a detail view (?item=), like a small shop. -->
+    <header><a href="shop.html">GadgetHub home</a> <input type="search" aria-label="Search products" id="q" /> <button id="go">Search</button></header>
+    <main id="main"></main>
+    <script>
+      const ITEMS = [
+        { id: "aero14", name: "Aero 14 Laptop", kind: "laptop", price: 61999, rating: 4.1, stock: "In stock" },
+        { id: "zen13", name: "Zen 13 Laptop", kind: "laptop", price: 48999, rating: 4.4, stock: "Only 2 left" },
+        { id: "titan16", name: "Titan 16 Laptop", kind: "laptop", price: 112000, rating: 4.7, stock: "In stock" },
+        { id: "pulse", name: "Pulse Earbuds", kind: "audio", price: 2499, rating: 3.9, stock: "In stock" },
+        { id: "boom", name: "Boom Speaker", kind: "audio", price: 5999, rating: 4.2, stock: "Out of stock" },
+      ];
+      const params = new URLSearchParams(location.search);
+      const main = document.getElementById("main");
+      const rupees = (n) => "₹" + n.toLocaleString("en-IN");
+      function list(items, title) {
+        main.innerHTML = `<h1>${title}</h1><ul>` + items.map((i) => `<li><a href="shop.html?item=${i.id}">${i.name}</a></li>`).join("") + "</ul>";
+      }
+      const item = ITEMS.find((i) => i.id === params.get("item"));
+      if (item) {
+        document.title = `${item.name} - GadgetHub`;
+        main.innerHTML = `<h1>${item.name}</h1><p>Price: ${rupees(item.price)}</p><p>Rating: ${item.rating} out of 5</p><p>${item.stock}</p><button id="cart">Add to cart</button><p id="status"></p>`;
+        document.getElementById("cart").onclick = () => (document.getElementById("status").textContent = "Added to cart");
+      } else if (params.get("q")) {
+        const q = params.get("q").toLowerCase();
+        list(ITEMS.filter((i) => i.name.toLowerCase().includes(q) || i.kind.includes(q)), `Results for "${params.get("q")}"`);
+      } else {
+        // Prices only show on the item pages, so the agent has to open them.
+        list(ITEMS, "All products");
+      }
+      document.getElementById("go").onclick = () => (location.href = "shop.html?q=" + encodeURIComponent(document.getElementById("q").value));
+    </script>
+  </body>
+</html>

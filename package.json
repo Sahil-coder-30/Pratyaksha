@@ -1,38 +1,18 @@
 {
-  "name": "pratyaksha",
-  "version": "1.0.0",
-  "description": "PRATYAKSHA (प्रत्यक्ष) — On-Device Visual Perception & Privacy Shield for Light-Weight Browser Agents",
+  "name": "bigfish",
+  "private": true,
   "type": "module",
-  "engines": {
-    "node": ">=22"
-  },
+  "packageManager": "pnpm@12.15.0",
+  "engines": { "node": ">=22" },
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
   "scripts": {
-    "test": "node --test \"tests/**/*.test.js\"",
-    "eval": "node scripts/eval-agent.mjs",
-    "build": "node build.js",
-    "docs:serve": "python3 -m http.server 8080 --directory Docs",
-    "demo": "python3 -m http.server 8080",
-    "ext:pack": "node build.js && mkdir -p dist && rm -f dist/pratyaksha-extension.zip && cd build && zip -r ../dist/pratyaksha-extension.zip . -x '*.DS_Store'",
-    "telemetry:collector": "node observability/collector.js",
-    "telemetry:seed": "node observability/collector.js --seed",
-    "telemetry:simulate": "curl -s -X POST http://localhost:9464/v1/simulate",
-    "telemetry:up": "docker compose -f observability/docker-compose.yml up -d",
-    "telemetry:down": "docker compose -f observability/docker-compose.yml down"
-  },
-  "dependencies": {
-    "@langchain/core": "^1.2.17",
-    "@langchain/google-genai": "^2.3.2",
-    "@langchain/langgraph": "^1.4.21",
-    "@langchain/langgraph-checkpoint": "^1.1.6",
-    "@langchain/mistralai": "^1.2.0",
-    "@langchain/openai": "^1.6.2",
-    "@typesafe-ai/sdk": "^0.6.0",
-    "faultkit": "^1.1.0",
-    "gsap": "^3.15.0",
-    "puppeteer-core": "^25.12.0",
-    "zod": "^4.6.6"
-  },
-  "devDependencies": {
-    "esbuild": "^0.28.2"
+    "dev:server": "pnpm --filter @bigfish/server dev",
+    "dev:ext": "pnpm --filter @bigfish/extension dev",
+    "dev:ml": "uv --project ML run python -m ML.src.server",
+    "build": "pnpm -r build",
+    "typecheck": "pnpm -r typecheck"
   }
 }

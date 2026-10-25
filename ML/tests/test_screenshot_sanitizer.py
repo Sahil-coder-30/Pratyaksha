@@ -1,3 +1,4 @@
+#             cd BigFish
 #             $env:USE_TF = "0"
 #             python -m ML.tests.test_screenshot_sanitizer 
 
@@ -59,6 +60,10 @@ def main():
         print(f"Mask count: {result['mask_count']}")
         print(f"Output dimensions: {result['image_width']}x{result['image_height']}")
         print("Original image unchanged: True")
+
+
+def test_screenshot_sanitizer():
+    main()
 
 
 if __name__ == "__main__":

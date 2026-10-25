@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>BigFish Edge Cases</title>
+    <style>
+      #cover-wrap { position: relative; width: 240px; height: 40px; }
+      #covered { width: 240px; height: 40px; }
+      #overlay { position: absolute; inset: 0; background: rgba(0, 0, 0, 0.4); }
+      #scroller { height: 80px; overflow: auto; border: 1px solid #999; }
+      .hidden { display: none; }
+    </style>
+  </head>
+  <body>
+    <h1>Edge cases</h1>
+    <p>Support: help@fishmail.example, +91 99887 76655</p>
+    <a href="mailto:owner@fishmail.example">Mail the owner</a>
+    <a href="heading.html" target="_blank">Open heading in a new tab</a>
+
+    <div id="cover-wrap">
+      <button id="covered" onclick="say('covered clicked')">Covered button</button>
+      <div id="overlay" role="presentation"></div>
+    </div>
+    <button id="close-overlay" onclick="document.getElementById('overlay').remove()">Close overlay</button>
+    <button disabled onclick="say('disabled clicked')">Disabled button</button>
+    <button class="hidden" onclick="say('hidden clicked')">Hidden button</button>
+    <label>Readonly code <input readonly value="ABC-123" /></label>
+    <label>Disabled field <input disabled value="locked" /></label>
+    <label>Notes <textarea id="notes"></textarea></label>
+    <div contenteditable="true" role="textbox" aria-label="Rich editor"></div>
+
+    <label>Country
+      <select id="country">
+        <option value="in">India</option>
+        <option value="us">United States</option>
+        <option value="uk">United Kingdom</option>
+      </select>
+    </label>
+    <div role="listbox" aria-label="Size" tabindex="0">
+      <div role="option" aria-selected="false" onclick="pick(this)">Small</div>
+      <div role="option" aria-selected="false" onclick="pick(this)">Medium</div>
+      <div role="option" aria-selected="false" onclick="pick(this)">Large</div>
+    </div>
+    <fieldset>
+      <legend>Newsletter</legend>
+      <label><input type="checkbox" id="weekly" checked /> Weekly</label>
+      <label><input type="checkbox" id="monthly" /> Monthly</label>
+    </fieldset>
+    <fieldset>
+      <legend>Plan</legend>
+      <label><input type="radio" name="plan" value="free" checked /> Free</label>
+      <label><input type="radio" name="plan" value="pro" /> Pro</label>
+    </fieldset>
+
+    <button id="later" onclick="setTimeout(() => say('Loaded later'), 1500)">Load later</button>
+    <button id="stream" onclick="stream()">Stream text</button>
+    <button id="alert" onclick="alert('Native alert!'); say('after alert')">Show alert</button>
+    <button id="confirm" onclick="say(confirm('Sure?') ? 'confirmed' : 'cancelled')">Ask confirm</button>
+    <form onsubmit="event.preventDefault(); say('searched ' + this.q.value)">
+      <input type="search" name="q" aria-label="Search site" />
+    </form>
+    <div role="dialog" aria-label="Cookie banner" id="banner">
+      <p>We use cookies.</p>
+      <button onclick="document.getElementById('banner').remove(); say('banner closed')">Accept cookies</button>
+    </div>
+
+    <div id="scroller" aria-label="Log">
+      <p>Line 1</p><p>Line 2</p><p>Line 3</p><p>Line 4</p><p>Line 5</p><p>Line 6</p><p>Line 7</p><p>Line 8</p>
+      <button onclick="say('deep clicked')">Deep button</button>
+    </div>
+
+    <shadow-card></shadow-card>
+    <iframe title="Frame" srcdoc="<button onclick=&quot;parent.say('frame clicked')&quot;>Frame button</button>"></iframe>
+
+    <p id="status" aria-live="polite"></p>
+    <div id="many"></div>
+
+    <script>
+      window.say = (t) => (document.getElementById("status").textContent = t);
+      function pick(el) {
+        el.parentElement.querySelectorAll('[role="option"]').forEach((o) => o.setAttribute("aria-selected", "false"));
+        el.setAttribute("aria-selected", "true");
+        say("size " + el.textContent);
+      }
+      function stream() {
+        const words = "one two three four five six seven eight".split(" ");
+        let i = 0;
+        say("");
+        const t = setInterval(() => {
+          document.getElementById("status").textContent += (i ? " " : "") + words[i++];
+          if (i >= words.length) clearInterval(t);
+        }, 250);
+      }
+      customElements.define(
+        "shadow-card",
+        class extends HTMLElement {
+          connectedCallback() {
+            const root = this.attachShadow({ mode: "open" });
+            root.innerHTML = `<label>Shadow input <input id="si" /></label><button>Shadow button</button>`;
+            root.querySelector("button").onclick = () => say("shadow clicked " + root.querySelector("input").value);
+          }
+        },
+      );
+      // Far more elements than one scan reads.
+      const many = document.getElementById("many");
+      for (let i = 1; i <= 900; i++) many.insertAdjacentHTML("beforeend", `<button onclick="say('item ${i}')">Item ${i}</button>`);
+    </script>
+  </body>
+</html>

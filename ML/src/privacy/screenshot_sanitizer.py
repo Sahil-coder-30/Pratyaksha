@@ -82,18 +82,16 @@ class ScreenshotSanitizer:
 
         return x1, y1, x2, y2
 
-    def sanitize(
+    def apply(
         self,
-        image_path: str | Path,
+        image: Image.Image,
         privacy_plan: Mapping[str, Any],
-        output_path: str | Path,
-    ) -> dict[str, Any]:
+    ) -> tuple[Image.Image, dict[str, Any]]:
         """
-        Apply every valid mask region from a privacy plan.
+        Apply every valid mask region to an in-memory copy of the image.
 
-        This method does not modify the original image.
-
-        Returns metadata only; it does not return raw detected text.
+        Nothing is written to disk. Returns the masked image and metadata,
+        never raw detected text.
         """
         if not isinstance(privacy_plan, Mapping):
             raise TypeError("privacy_plan must be a mapping")
@@ -107,15 +105,8 @@ class ScreenshotSanitizer:
         if not isinstance(regions, list):
             raise TypeError("privacy_plan['mask_regions'] must be a list")
 
-        image_path = Path(image_path)
-        output_path = Path(output_path)
-
-        if not image_path.is_file():
-            raise FileNotFoundError(f"Input screenshot not found: {image_path}")
-
         # Convert to RGB so the output is a predictable, non-transparent image.
-        with Image.open(image_path) as source:
-            image = source.convert("RGB")
+        image = image.convert("RGB")
 
         width, height = image.size
         draw = ImageDraw.Draw(image)
@@ -191,6 +182,39 @@ class ScreenshotSanitizer:
                 "were invalid. No output was saved."
             )
 
+        return image, {
+            "image_width": width,
+            "image_height": height,
+            "mask_count": len(applied),
+            "masked_entity_ids": list(
+                dict.fromkeys(item["entity_id"] for item in applied)
+            ),
+            "rejected_region_count": len(rejected),
+            "sanitization_completed": True,
+        }
+
+    def sanitize(
+        self,
+        image_path: str | Path,
+        privacy_plan: Mapping[str, Any],
+        output_path: str | Path,
+    ) -> dict[str, Any]:
+        """
+        Apply every valid mask region from a privacy plan and save the result.
+
+        This method does not modify the original image.
+
+        Returns metadata only; it does not return raw detected text.
+        """
+        image_path = Path(image_path)
+        output_path = Path(output_path)
+
+        if not image_path.is_file():
+            raise FileNotFoundError(f"Input screenshot not found: {image_path}")
+
+        with Image.open(image_path) as source:
+            image, result = self.apply(source, privacy_plan)
+
         output_path.parent.mkdir(parents=True, exist_ok=True)
 
         # Save to a temporary file first, then replace the destination.
@@ -204,14 +228,4 @@ class ScreenshotSanitizer:
             if temporary_path.exists():
                 temporary_path.unlink()
 
-        return {
-            "output_path": str(output_path),
-            "image_width": width,
-            "image_height": height,
-            "mask_count": len(applied),
-            "masked_entity_ids": list(
-                dict.fromkeys(item["entity_id"] for item in applied)
-            ),
-            "rejected_region_count": len(rejected),
-            "sanitization_completed": True,
-        }
+        return {"output_path": str(output_path), **result}

@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>HelpBot</title>
+  </head>
+  <body>
+    <!-- Chat app style: the reply streams in word by word after a short delay. -->
+    <h1>HelpBot</h1>
+    <div id="log" role="log"></div>
+    <textarea aria-label="Message HelpBot" id="msg"></textarea>
+    <button id="send" aria-label="Send message">Send</button>
+    <script>
+      const log = document.getElementById("log");
+      const answers = [
+        [/refund/i, "Refunds take 5 to 7 working days. Your ticket number is RF-4821."],
+        [/hours|open/i, "We are open from 9 AM to 6 PM, Monday to Saturday."],
+      ];
+      document.getElementById("send").onclick = () => {
+        const text = document.getElementById("msg").value.trim();
+        if (!text) return;
+        log.insertAdjacentHTML("beforeend", `<p><b>You:</b> ${text.replace(/</g, "&lt;")}</p>`);
+        document.getElementById("msg").value = "";
+        const reply = (answers.find(([re]) => re.test(text)) ?? [null, "Sorry, I can only help with refunds and opening hours."])[1];
+        const p = document.createElement("p");
+        p.innerHTML = "<b>HelpBot:</b> ";
+        setTimeout(() => {
+          log.appendChild(p);
+          const words = reply.split(" ");
+          let i = 0;
+          const tick = setInterval(() => {
+            p.append((i ? " " : "") + words[i++]);
+            if (i >= words.length) clearInterval(tick);
+          }, 120);
+        }, 800);
+      };
+    </script>
+  </body>
+</html>

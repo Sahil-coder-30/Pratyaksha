@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>BigFish Survey Fixture</title>
+    <style>
+      [role="radio"] { display: inline-block; padding: 4px 10px; border: 1px solid #999; margin: 2px; cursor: pointer; }
+      [role="radio"][aria-checked="true"] { background: #2563eb; color: #fff; }
+    </style>
+  </head>
+  <body>
+    <h1>Event survey</h1>
+    <div id="form">
+      <label>What's your name ? * <input name="name" /></label>
+      <p>Graduation year *</p>
+      <!-- Google Forms style: div radios with aria-checked -->
+      <div role="radiogroup" aria-label="Graduation year">
+        <div role="radio" aria-checked="false" tabindex="0" aria-label="2022">2022</div>
+        <div role="radio" aria-checked="false" tabindex="0" aria-label="2023">2023</div>
+      </div>
+      <label><input type="checkbox" name="updates" /> Send me updates</label>
+      <div id="error" role="alert"></div>
+      <button type="button" id="submit">Submit</button>
+    </div>
+    <p id="done" hidden>Your response has been recorded.</p>
+    <script>
+      document.querySelectorAll('[role="radio"]').forEach((radio) =>
+        radio.addEventListener("click", () => {
+          document.querySelectorAll('[role="radio"]').forEach((r) => r.setAttribute("aria-checked", "false"));
+          radio.setAttribute("aria-checked", "true");
+        }),
+      );
+      document.getElementById("submit").addEventListener("click", () => {
+        const name = document.querySelector("input[name=name]").value.trim();
+        const year = document.querySelector('[role="radio"][aria-checked="true"]');
+        if (!name || !year) {
+          document.getElementById("error").textContent = "This is a required question";
+          return;
+        }
+        document.getElementById("form").hidden = true;
+        document.getElementById("done").hidden = false;
+      });
+    </script>
+  </body>
+</html>

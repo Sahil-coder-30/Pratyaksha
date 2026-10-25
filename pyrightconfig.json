@@ -1,0 +1,12 @@
+{
+  "include": [
+    "ML"
+  ],
+  "extraPaths": [
+    ".",
+    "ML",
+    "ML/src"
+  ],
+  "venvPath": "ML",
+  "venv": ".venv"
+}

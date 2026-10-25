@@ -1,0 +1,84 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>BigFish Code Fixture</title>
+  <style>
+    body { font-family: sans-serif; margin: 16px; }
+    #panel { width: 800px; }
+    #toolbar { display: flex; gap: 8px; padding: 4px 0; }
+    #editor { width: 800px; height: 400px; border: 1px solid #ccc; }
+    #input { width: 800px; height: 0; }
+  </style>
+</head>
+<body>
+  <h1>Two Sum</h1>
+  <p>Given an array of integers nums and an integer target, return indices of the two numbers that add up to target.</p>
+  <!-- Like LeetCode: one main editor in a panel with icon buttons, and a hidden second editor. -->
+  <div id="panel">
+    <div id="toolbar">
+      <button id="lang" type="button">JavaScript</button>
+      <!-- No label, like LeetCode's "Retrieve last submitted code": it wipes the code. -->
+      <button id="retrieve" type="button"><svg width="12" height="12"><rect width="12" height="12"></rect></svg></button>
+      <button id="format" type="button" aria-label="Format">{ }</button>
+    </div>
+    <div id="editor"></div>
+  </div>
+  <div id="input"></div>
+  <p id="status">Loading editor</p>
+  <script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.52.2/min/vs/loader.js"></script>
+  <script>
+    // ?mode=action: no Format button, only a "Format code" editor action (LeetCode when signed out of the button).
+    // ?mode=none: neither.
+    const mode = new URLSearchParams(location.search).get("mode") || "button";
+    if (mode !== "button") document.getElementById("format").remove();
+    window.wiped = false;
+    document.getElementById("retrieve").onclick = () => {
+      window.wiped = true;
+      editor.setValue("// last submission");
+    };
+
+    // A toy formatter: re-indent by braces, 4 spaces.
+    function toyFormat(code) {
+      let depth = 0;
+      return code
+        .split("\n")
+        .map((raw) => raw.trim())
+        .filter((line, i, all) => line || (i > 0 && all[i - 1]))
+        .map((line) => {
+          if (/^[}\]]/.test(line)) depth = Math.max(0, depth - 1);
+          const out = "    ".repeat(depth) + line;
+          depth += (line.match(/[{[]/g) || []).length - (line.match(/[}\]]/g) || []).length + (/^[}\]]/.test(line) ? 1 : 0);
+          depth = Math.max(0, depth);
+          return out;
+        })
+        .join("\n");
+    }
+
+    let editor;
+    // Like LeetCode: the site keeps its own copy of the code, a moment after each change,
+    // and Format reads that copy.
+    window.savedCode = "";
+    function formatSaved() {
+      editor.setValue(toyFormat(window.savedCode));
+    }
+
+    require.config({ paths: { vs: "https://cdn.jsdelivr.net/npm/monaco-editor@0.52.2/min/vs" } });
+    require(["vs/editor/editor.main"], () => {
+      const starter = "/**\n * @param {number[]} nums\n * @param {number} target\n * @return {number[]}\n */\nvar twoSum = function(nums, target) {\n    \n};";
+      editor = monaco.editor.create(document.getElementById("editor"), { value: starter, language: "javascript", autoClosingBrackets: "always", autoIndent: "full" });
+      monaco.editor.create(document.getElementById("input"), { value: "", language: "plaintext" });
+      window.savedCode = starter;
+      let timer;
+      editor.onDidChangeModelContent(() => {
+        clearTimeout(timer);
+        timer = setTimeout(() => (window.savedCode = editor.getValue()), 300);
+      });
+      const format = document.getElementById("format");
+      if (format) format.onclick = formatSaved;
+      if (mode === "action") editor.addAction({ id: "format-code", label: "Format code", run: formatSaved });
+      document.getElementById("status").textContent = "Editor ready";
+    });
+  </script>
+</body>
+</html>

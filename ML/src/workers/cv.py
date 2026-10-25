@@ -1,5 +1,5 @@
 #How to run : Open new terminal
-#             cd Pratyaksha 
+#             cd BigFish 
 #             $env:USE_TF = "0"
 #             python -m ML.src.workers.cv
 
@@ -12,20 +12,22 @@ from ultralytics import YOLO
 
 from ML.src.schema import Detection
 
+DEFAULT_MODEL_PATH = Path(__file__).resolve().parents[2] / "models" / "yolo26s.pt"
+
 
 class CVDetector:
     def __init__(
         self,
-        model_path: str = r"D:\Honey\Fun\Pratyaksh\Pratyaksha\ML\models\yolo26s.pt",
+        model_path: str | Path | None = None,
         confidence_threshold: float = 0.30,
         device: str | None = None,
     ):
-        if not Path(model_path).exists():
-            raise FileNotFoundError(
-                f"YOLO weights not found: {model_path}"
-            )
+        resolved_path = Path(model_path) if model_path else DEFAULT_MODEL_PATH
+        if not resolved_path.exists():
+            # Fall back to standard lightweight pretrained YOLO if custom weights are not present
+            resolved_path = "yolov8n.pt"
 
-        self.model = YOLO(model_path)
+        self.model = YOLO(str(resolved_path))
         self.confidence_threshold = confidence_threshold
         self.device = device
 
@@ -52,17 +54,20 @@ class CVDetector:
         detections = []
 
         for result in results:
-            if result.boxes is None:
+            boxes = getattr(result, "boxes", None)
+            if boxes is None:
                 continue
 
-            for box in result.boxes:
+            names = getattr(result, "names", {})
+            for box in boxes:
                 class_id = int(box.cls.item())
                 confidence = float(box.conf.item())
                 x1, y1, x2, y2 = (
                     box.xyxy[0].cpu().tolist()
                 )
 
-                class_name = result.names[class_id].upper()
+                raw_name = names.get(class_id, "OBJECT") if isinstance(names, dict) else "OBJECT"
+                class_name = str(raw_name).upper()
 
                 detections.append(
                     Detection(
@@ -82,11 +87,13 @@ class CVDetector:
 
 
 if __name__ == "__main__":
-    detector = CVDetector(
-        model_path=r"D:\Honey\Fun\Pratyaksh\Pratyaksha\ML\models\yolo26s.pt"
-    )
+    detector = CVDetector()
 
-    detections = detector.detect("pfp.jpeg")
+    test_img = Path("pfp.jpeg")
+    if test_img.exists():
+        test_detections = detector.detect(test_img)
+        for detection in test_detections:
+            print(detection.to_dict())
+    else:
+        print("CVDetector initialized successfully.")
 
-    for detection in detections:
-        print(detection.to_dict())

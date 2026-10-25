@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Hackathon Feedback</title>
+    <style>
+      body { font-family: sans-serif; max-width: 640px; margin: 0 auto; background: #f0ebf8; }
+      .q { background: #fff; margin: 12px 0; padding: 24px; border-radius: 8px; min-height: 260px; }
+      [role="radio"] { display: block; padding: 6px; cursor: pointer; }
+      [role="radio"][aria-checked="true"]::before { content: "(o) "; }
+      [role="radio"][aria-checked="false"]::before { content: "( ) "; }
+      .err { color: #d93025; }
+      [role="button"] { display: inline-block; background: #673ab7; color: #fff; padding: 8px 24px; cursor: pointer; }
+    </style>
+  </head>
+  <body>
+    <!-- Google Forms style: div radios, div buttons, questions far below the fold. -->
+    <div id="form">
+      <div class="q">
+        <div role="heading" aria-level="1">Hackathon Feedback</div>
+        <p>Tell us about your weekend. * Indicates required question</p>
+      </div>
+      <div class="q" role="listitem" data-q="name">
+        <div role="heading" aria-level="3" id="q1">Full name <span aria-label="Required question">*</span></div>
+        <input type="text" aria-labelledby="q1" />
+        <div class="err" role="alert"></div>
+      </div>
+      <div class="q" role="listitem" data-q="track">
+        <div role="heading" aria-level="3" id="q2">Which track did you join? <span aria-label="Required question">*</span></div>
+        <div role="radiogroup" aria-labelledby="q2">
+          <div role="radio" aria-checked="false" tabindex="0" data-value="AI Agents" aria-label="AI Agents">AI Agents</div>
+          <div role="radio" aria-checked="false" tabindex="0" data-value="Fintech" aria-label="Fintech">Fintech</div>
+          <div role="radio" aria-checked="false" tabindex="0" data-value="Health" aria-label="Health">Health</div>
+          <div role="radio" aria-checked="false" tabindex="0" data-value="__other" aria-label="Other:">Other:</div>
+          <input type="text" aria-label="Other response" />
+        </div>
+        <div class="err" role="alert"></div>
+      </div>
+      <div class="q" role="listitem" data-q="rating">
+        <div role="heading" aria-level="3" id="q3">Rate the event from 1 to 5 <span aria-label="Required question">*</span></div>
+        <select aria-labelledby="q3">
+          <option value="">Choose</option>
+          <option>1</option><option>2</option><option>3</option><option>4</option><option>5</option>
+        </select>
+        <div class="err" role="alert"></div>
+      </div>
+      <div class="q" role="listitem" data-q="capital">
+        <div role="heading" aria-level="3" id="q4">What is the capital of France? <span aria-label="Required question">*</span></div>
+        <input type="text" aria-labelledby="q4" />
+        <div class="err" role="alert"></div>
+      </div>
+      <div class="q" role="listitem" data-q="feedback">
+        <div role="heading" aria-level="3" id="q5">In 2 or 3 sentences, what should we improve? <span aria-label="Required question">*</span></div>
+        <textarea aria-labelledby="q5" rows="4"></textarea>
+        <div class="err" role="alert"></div>
+      </div>
+      <div class="q" role="listitem" data-q="phone">
+        <div role="heading" aria-level="3" id="q6">Phone number (optional)</div>
+        <input type="text" aria-labelledby="q6" />
+      </div>
+      <div role="button" tabindex="0" id="submit"><span>Submit</span></div>
+      <div role="button" tabindex="0" id="clear"><span>Clear form</span></div>
+    </div>
+    <div id="done" hidden>
+      <div role="heading" aria-level="1">Hackathon Feedback</div>
+      <p>Your response has been recorded.</p>
+      <a href="gform.html">Submit another response</a>
+    </div>
+    <script>
+      document.querySelectorAll('[role="radio"]').forEach((radio) =>
+        radio.addEventListener("click", () => {
+          radio.parentElement.querySelectorAll('[role="radio"]').forEach((r) => r.setAttribute("aria-checked", "false"));
+          radio.setAttribute("aria-checked", "true");
+        }),
+      );
+      const value = (q) => {
+        const item = document.querySelector(`[data-q="${q}"]`);
+        const radio = item.querySelector('[role="radio"][aria-checked="true"]');
+        if (radio) return radio.dataset.value === "__other" ? item.querySelector('input[aria-label="Other response"]').value.trim() : radio.dataset.value;
+        return (item.querySelector("input, textarea, select")?.value ?? "").trim();
+      };
+      document.getElementById("clear").addEventListener("click", () => location.reload());
+      document.getElementById("submit").addEventListener("click", () => {
+        let ok = true;
+        for (const q of ["name", "track", "rating", "capital", "feedback"]) {
+          const err = document.querySelector(`[data-q="${q}"] .err`);
+          const missing = !value(q);
+          err.textContent = missing ? "This is a required question" : "";
+          if (missing) ok = false;
+        }
+        if (!ok) return;
+        window.__submitted = Object.fromEntries(["name", "track", "rating", "capital", "feedback", "phone"].map((q) => [q, value(q)]));
+        document.getElementById("form").hidden = true;
+        document.getElementById("done").hidden = false;
+        document.title = "Hackathon Feedback - Thanks";
+      });
+    </script>
+  </body>
+</html>

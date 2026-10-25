@@ -1,9 +1,13 @@
 #How to run : Open new terminal
-#             cd Pratyaksha 
+#             cd BigFish 
 #             $env:USE_TF = "0"
 #             python -m ML.src.workers.ocr
 
+import os
 from pathlib import Path
+
+# Disable slow model source connectivity checks
+os.environ["PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK"] = "True"
 
 import numpy as np
 from PIL import Image
@@ -148,7 +152,10 @@ class OCRDetector:
 
 if __name__ == "__main__":
     detector = OCRDetector()
-    detections = detector.detect("My Laptop Bill.jpg")
-
-    for detection in detections:
-        print(detection.to_dict())
+    sample_img = Path("My Laptop Bill.jpg")
+    if sample_img.exists():
+        detections = detector.detect(sample_img)
+        for detection in detections:
+            print(detection.to_dict())
+    else:
+        print("OCRDetector initialized successfully.")

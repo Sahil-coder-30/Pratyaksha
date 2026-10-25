@@ -2,11 +2,11 @@
 #             python -m ML.src.privacy.privacy_engine
 
 
+import re
 from collections.abc import Mapping
 from typing import Any
 
 from ML.src.privacy.session_manager import SessionManager
-
 
 class PrivacyEngine:
     """
@@ -16,11 +16,12 @@ class PrivacyEngine:
     require masking and assigns session-local entity IDs.
     """
 
-    # Canonical entity types that should be masked by default.
+    # Canonical entity types that should be masked by default: personal data only.
+    # ORGANIZATION and LOCATION stay visible, since they are mostly UI text
+    # ("Google Forms", "India") the agent needs to read. PERSON also covers
+    # people that YOLO finds in photos.
     SENSITIVE_TYPES = {
         "PERSON",
-        "ORGANIZATION",
-        "LOCATION",
         "EMAIL",
         "PHONE",
         "ADDRESS",
@@ -28,7 +29,20 @@ class PrivacyEngine:
         "DATE_OF_BIRTH",
         "FINANCIAL",
         "CREDENTIAL",
+        "AADHAAR",
+        "PAN",
+        "CREDIT_CARD",
+        "SSN",
+        "PASSWORD",
         "UNKNOWN",
+    }
+
+    # Explicit entity types that must NEVER be masked (URLs, navigation targets, testing endpoints)
+    EXEMPT_TYPES = {
+        "URL",
+        "LINK",
+        "PUBLIC_LINK",
+        "DOMAIN",
     }
 
     TYPE_ALIASES = {
@@ -40,6 +54,9 @@ class PrivacyEngine:
         "PHONE_NUMBER": "PHONE",
         "ID": "IDENTIFIER",
         "ID_NUMBER": "IDENTIFIER",
+        "URL": "URL",
+        "LINK": "URL",
+        "PUBLIC_LINK": "URL",
     }
 
     def __init__(
@@ -119,20 +136,38 @@ class PrivacyEngine:
 
             resolver_id = entity.get("entity_id")
             entity_type = self._canonical_type(entity.get("type"))
+            text = str(entity.get("text") or "")
+
+            # Autonomous testing and browser tasks require reading and navigating URLs
+            is_url = (
+                entity_type in self.EXEMPT_TYPES
+                or bool(
+                    re.search(
+                        r'(?:https?://|www\.)\S+|docs\.google\.com/\S+|'
+                        r'^[a-zA-Z0-9-]+\.(?:com|org|net|edu|gov|io|ai|co|dev|app|in)(?:/\S*)?$',
+                        text.strip(),
+                        re.IGNORECASE,
+                    )
+                )
+            )
+
             requires_review = bool(entity.get("requires_review", False))
 
-            should_mask = (
-                entity_type in self.SENSITIVE_TYPES
-                or requires_review
-            )
+            if is_url:
+                should_mask = False
+            else:
+                should_mask = (
+                    entity_type in self.SENSITIVE_TYPES
+                    or requires_review
+                )
 
             # Never include raw text or evidence in the plan.
             if not should_mask:
                 decisions.append({
                     "entity_id": None,
-                    "type": entity_type,
+                    "type": "URL" if is_url else entity_type,
                     "action": "no_mask",
-                    "reason": "Not classified as sensitive by current policy",
+                    "reason": "URL/testing link preserved for browser access and testing" if is_url else "Not classified as sensitive by current policy",
                     "requires_review": False,
                 })
                 continue
@@ -174,6 +209,10 @@ class PrivacyEngine:
             for box in boxes:
                 mask_regions.append({
                     "entity_id": privacy_id,
+                    # The resolver's ID, so a local caller can look up the
+                    # entity's text and sources. The plan itself holds no text.
+                    "resolver_entity_id": resolver_id,
+                    "category": entity_type,
                     "bbox": box,
                     "coordinate_space": entity.get("coordinate_space"),
                     "action": "mask",
