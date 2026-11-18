@@ -1,11 +1,11 @@
-# 🐟 BigFish: Autonomous Web Perception & Zero-Trust Browser Execution
+# 👁️ Pratyaksha: Autonomous Web Perception & Zero-Trust Browser Execution
 
-> **The first enterprise-grade browser automation platform that transforms real Chrome sessions into high-speed Model Context Protocol (MCP) servers with 100% on-device PII masking and autonomous LangGraph cognitive loops.**
+> **The enterprise-grade browser automation platform that transforms real Chrome sessions into high-speed Model Context Protocol (MCP) servers with 100% on-device PII masking and autonomous LangGraph cognitive loops.**
 
 [![Architecture: Distributed Browser MCP](https://img.shields.io/badge/Architecture-Distributed%20Browser%20MCP-blueviolet?style=for-the-badge&logo=googlechrome)](file:///packages/contracts/README.md)
 [![Privacy: Zero-Trust On-Device](https://img.shields.io/badge/Privacy-Zero--Trust%20On--Device%20PII-00c853?style=for-the-badge&logo=shield)](file:///apps/extension/README.md)
 [![Runtime: Node 22 + Python 3.12](https://img.shields.io/badge/Runtime-Node.js%2022%20%7C%20Python%203.12-3776ab?style=for-the-badge&logo=python)](file:///ML/README.md)
-[![Orchestration: LangGraph + Mistral](https://img.shields.io/badge/Orchestrator-LangGraph%20%2B%20Mistral%20AI-ff6f00?style=for-the-badge&logo=langchain)](file:///apps/server/README.md)
+[![Orchestration: LangGraph + Multi-Model](https://img.shields.io/badge/Orchestrator-LangGraph%20%2B%20NVIDIA%20%7C%20Mistral-ff6f00?style=for-the-badge&logo=langchain)](file:///apps/server/README.md)
 [![Perception: PaddleOCR + BERT + YOLO](https://img.shields.io/badge/Perception-PaddleOCR%20%2B%20BERT--NER%20%2B%20YOLO-ff1744?style=for-the-badge&logo=pytorch)](file:///ML/README.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue?style=for-the-badge)](file:///LICENSE)
 
@@ -33,9 +33,9 @@ Traditional cloud browser agents (e.g., cloud headless Chrome instances or naive
 2. **Bandwidth & Token Bloat:** Transmitting megabyte-scale raw PNG screenshots and 100,000-token DOM dumps per agent step costs up to **$0.25 per turn**, draining credits and hitting rate limits.
 3. **Session Fragility:** Cloud headless browsers cannot navigate authenticated intranets, bypass Cloudflare bot detections, or maintain user biometric states.
 
-### The BigFish Solution
-BigFish flips the paradigm: **Your real browser is the server; the cloud is only the cognitive brain.**
-By coupling an on-device Chrome MV3 extension with a local Python ML Perception Daemon, BigFish strips all sensitive PII locally, tokenizes credentials with origin-bound HMAC salts, and projects UI actions across a low-latency framed WebSocket connection.
+### The Pratyaksha Solution
+Pratyaksha flips the paradigm: **Your real browser is the server; the cloud is only the cognitive brain.**
+By coupling an on-device Chrome MV3 extension with a local Python ML Perception Daemon, Pratyaksha strips all sensitive PII locally, tokenizes credentials with origin-bound HMAC salts, and projects UI actions across a low-latency framed WebSocket connection.
 
 ```
 TRADITIONAL CLOUD BROWSER AGENT (~4,850 ms per turn | Severe Security Exposure)
@@ -45,7 +45,7 @@ TRADITIONAL CLOUD BROWSER AGENT (~4,850 ms per turn | Severe Security Exposure)
 ▲ Unencrypted raw PII transmitted to third-party model APIs
 ▲ 100,000+ token context ingestion per browser turn ($0.25+ per step)
 
-BIGFISH DISTRIBUTED ARCHITECTURE (< 480 ms per turn | Zero-Trust Local Masking)
+PRATYAKSHA DISTRIBUTED ARCHITECTURE (< 480 ms per turn | Zero-Trust Local Masking)
 ┌───────────┬──────────────┬────────────┬──────────────────────────────────────────────────┐
 │ DOM Delta │ Local PII    │ WS Frame   │ LangGraph Fast Tool Loop                         │
 │ (25ms)    │ Redact (15ms)│ RPC (8ms)  │ (430ms)                                          │
@@ -59,8 +59,8 @@ BIGFISH DISTRIBUTED ARCHITECTURE (< 480 ms per turn | Zero-Trust Local Masking)
 ## 💎 2. The Main Selling Proposition (MSP) & Technical Moat
 
 > [!IMPORTANT]
-> **The BigFish Moat: The Reverse MCP Architecture + Air-Gapped PII Vault.**
-> Instead of building a fragile cloud browser that asks users for their Google or banking passwords, BigFish turns the user's running Chrome into an authenticated Model Context Protocol (MCP) Server. The LLM operates exclusively on pseudonymized reference tokens (`[PERSON_4F1A]`, `[CARD_98B2]`), while the local browser rehydrates credentials *only* on the authentic origin domain upon explicit human approval.
+> **The Pratyaksha Moat: The Reverse MCP Architecture + Air-Gapped PII Vault.**
+> Instead of building a fragile cloud browser that asks users for their Google or banking passwords, Pratyaksha turns the user's running Chrome into an authenticated Model Context Protocol (MCP) Server. The LLM operates exclusively on pseudonymized reference tokens (`[PERSON_4F1A]`, `[CARD_98B2]`), while the local browser rehydrates credentials *only* on the authentic origin domain upon explicit human approval.
 
 ### Tiered Architecture Matrix
 
@@ -139,11 +139,11 @@ flowchart TD
         DOM["Live Chrome Tab DOM"] <--> ContentScript["Content Script (apps/extension)<br/>DOM Actions & Visual Agent Cursor"]
         ContentScript <--> SafetyEngine["Safety & PII Vault<br/>Luhn / Verhoeff / Salt Hash"]
         
-        BackgroundWorker["Background Service Worker<br/>MCP Server Host (14 Tools)"] <--> SafetyEngine
+        BackgroundWorker["Background Service Worker<br/>MCP Server Host (15 Tools)"] <--> SafetyEngine
         BackgroundWorker <--> ClientWS
     end
 
-    subgraph ML_Daemon["Local Host: BigFish ML Privacy Daemon (127.0.0.1:8788)"]
+    subgraph ML_Daemon["Local Host: Pratyaksha ML Privacy Daemon (127.0.0.1:8788)"]
         BackgroundWorker -. "POST /v1/privacy/mask<br/>(Raw Viewport Capture)" .-> MLServer["FastAPI Daemon (ML/src/server.py)"]
         MLServer --> OCR["PaddleOCR (PP-OCRv5)<br/>Neural Text BBoxes"]
         MLServer --> NER["BERT-NER (dslim/bert)<br/>Entity Token Classifier"]
@@ -160,7 +160,7 @@ flowchart TD
         UI -. "POST /api/agent/invoke (SSE Stream)" .-> AgentController["Agent Controller (apps/server)"]
         AgentController --> LangGraph["LangGraph Workflow<br/>Plan ➔ Act ➔ Verify ➔ Finalize"]
         
-        LangGraph <--> Mistral["Mistral AI LLM<br/>(Codestral / Medium)"]
+        LangGraph <--> MultiModel["Multi-Provider LLM Engine<br/>(NVIDIA Nemotron / Mistral / OpenRouter)"]
         LangGraph <--> ToolPolicy["Loop Guard & Tool Policy<br/>(Max 6 Calls, 3x Cycle Breaker)"]
         ToolPolicy <--> Registry
     end
@@ -176,7 +176,7 @@ flowchart TD
 ### End-to-End Execution Trace
 1. **Instruction Ingestion:** User enters a natural-language goal (via text or voice dictation in the Chrome Sidepanel).
 2. **Ticket Authentication:** Extension acquires a single-use 60-second cryptographic ticket from `/api/ws-ticket` and connects to `/mcp-ws`.
-3. **Plan Generation:** LangGraph compiles a multi-step execution plan via Mistral AI and streams subtask goals to the user UI.
+3. **Plan Generation:** LangGraph compiles a multi-step execution plan via LLM (NVIDIA, Mistral, or OpenRouter) and streams subtask goals to the user UI.
 4. **Tool Dispatch:** The agent requests a browser action (e.g., `browser_snapshot`).
 5. **PII Redaction:** For `browser_screenshot`, the extension sends the captured pixels to the ML Privacy Daemon on port 8788, which returns the boxes and values of personal entities. The extension stores each value in the PII vault and paints its token (like `[NAME_1A2B]`) over the box, so the model sees the token and can type it back.
 6. **Execution & Cursor Tracking:** The extension dispatches the tool to the active tab, rendering the animated visual cursor at the target coordinates.
@@ -211,17 +211,17 @@ flowchart TD
 ## 🛡️ 6. Service Inventory & Zero-Trust Security Matrix
 
 ```
-                                  BIGFISH MONOREPO SERVICE MATRIX
+                                  PRATYAKSHA MONOREPO SERVICE MATRIX
 ┌──────────────────────┬─────────────┬───────────┬──────────────────────┬──────────────────────┬─────────────────────┐
 │ Subsystem / Package  │ Runtime     │ Port/Host │ Ingress Protocol     │ Authentication       │ Health Endpoints    │
 ├──────────────────────┼─────────────┼───────────┼──────────────────────┼──────────────────────┼─────────────────────┤
 │ @bigfish/server      │ Node.js 22  │ 8787      │ HTTP / REST / SSE    │ Google OAuth ID      │ GET /healthz        │
-│ (apps/server)        │ TypeScript  │ 127.0.0.1 │ WebSocket (/mcp-ws)  │ BigFish HS256 JWT    │ GET /ready          │
+│ (apps/server)        │ TypeScript  │ 127.0.0.1 │ WebSocket (/mcp-ws)  │ Pratyaksha HS256 JWT │ GET /ready          │
 ├──────────────────────┼─────────────┼───────────┼──────────────────────┼──────────────────────┼─────────────────────┤
 │ @bigfish/extension   │ Chrome MV3  │ Chrome    │ Reverse WebSocket    │ Single-Use Ticket    │ Internal Status     │
 │ (apps/extension)     │ WXT + Vite  │ Sandbox   │ Service Worker IPC   │ Origin Header Match  │ Machine             │
 ├──────────────────────┼─────────────┼───────────┼──────────────────────┼──────────────────────┼─────────────────────┤
-│ BigFish ML Daemon    │ Python 3.12 │ 8788      │ HTTP REST / JSON     │ Localhost Loopback   │ GET /healthz        │
+│ Pratyaksha ML Daemon │ Python 3.12 │ 8788      │ HTTP REST / JSON     │ Localhost Loopback   │ GET /healthz        │
 │ (ML/)                │ PyTorch/uv  │ 127.0.0.1 │ In-Memory Buffers    │ Socket Isolation     │ GET /ready          │
 ├──────────────────────┼─────────────┼───────────┼──────────────────────┼──────────────────────┼─────────────────────┤
 │ @bigfish/contracts   │ TypeScript  │ Library   │ Static In-Process    │ Compile-Time Zod     │ N/A (Static Types)  │
@@ -237,7 +237,7 @@ flowchart TD
 ## 📂 7. Annotated Directory Layout
 
 ```
-BigFish/
+Pratyaksha/
 ├── apps/
 │   ├── extension/                   # Chrome Extension MV3 Workspace
 │   │   ├── entrypoints/
@@ -292,8 +292,8 @@ BigFish/
 
 ```bash
 # 1. Clone repository
-git clone https://github.com/Coder-Aryan09/BigFish.git
-cd BigFish
+git clone https://github.com/Sahil-coder-30/Pratyaksha.git
+cd Pratyaksha
 
 # 2. Enable package manager and install monorepo dependencies
 corepack enable
@@ -341,7 +341,7 @@ curl http://127.0.0.1:8788/ready
 
 ```
 ┌────────────────────────────────────────────────────────────────────────────────────────┐
-│                        BIGFISH ENTERPRISE UNIT ECONOMICS (B2B SaaS)                    │
+│                      PRATYAKSHA ENTERPRISE UNIT ECONOMICS (B2B SaaS)                   │
 ├───────────────────────────────┬───────────────────────────────┬────────────────────────┤
 │ Total Addressable Market (TAM)│ Gross Margin Profile          │ Target Payback Period  │
 │ $14.2B (RPA + Browser AI)     │ 88.4% (Direct API & Compute)  │ 2.4 Months (B2B Seat)  │
@@ -354,17 +354,17 @@ curl http://127.0.0.1:8788/ready
 ### Cost Moat Comparison per 1,000 Operations
 
 ```
-Traditional Cloud Vision Agent vs. BigFish Delta MCP Architecture:
-┌─────────────────────────────────┬──────────────────────┬──────────────────────┬────────┐
-│ Cost Component                  │ Cloud Vision Agent   │ BigFish Architecture │ Margin │
-├─────────────────────────────────┼──────────────────────┼──────────────────────┼────────┤
-│ Viewport Image Ingestion (LLM)  │ $180.00 (4,000 PNGs) │ $0.00 (Local ML)     │ +100%  │
-│ Accessibility Tree Text Tokens  │ $64.00 (80M tokens)  │ $7.20 (Delta-only)   │ +88.7% │
-│ Cloud Headless Browser Compute  │ $32.00 (AWS Fargate) │ $0.00 (Client-side)  │ +100%  │
-│ Mistral Planning & Judge Calls  │ $12.00               │ $6.40 (Codestral)    │ +46.6% │
-├─────────────────────────────────┼──────────────────────┼──────────────────────┼────────┤
-│ TOTAL COST PER 1,000 RUNS       │ $288.00              │ $13.60               │ +95.2% │
-└─────────────────────────────────┴──────────────────────┴──────────────────────┴────────┘
+Traditional Cloud Vision Agent vs. Pratyaksha Delta MCP Architecture:
+┌─────────────────────────────────┬──────────────────────┬────────────────────────┬────────┐
+│ Cost Component                  │ Cloud Vision Agent   │ Pratyaksha Architecture│ Margin │
+├─────────────────────────────────┼──────────────────────┼────────────────────────┼────────┤
+│ Viewport Image Ingestion (LLM)  │ $180.00 (4,000 PNGs) │ $0.00 (Local ML)       │ +100%  │
+│ Accessibility Tree Text Tokens  │ $64.00 (80M tokens)  │ $7.20 (Delta-only)     │ +88.7% │
+│ Cloud Headless Browser Compute  │ $32.00 (AWS Fargate) │ $0.00 (Client-side)    │ +100%  │
+│ Planning & Judge Calls          │ $12.00               │ $6.40 (Codestral/Nemo) │ +46.6% │
+├─────────────────────────────────┼──────────────────────┼────────────────────────┼────────┤
+│ TOTAL COST PER 1,000 RUNS       │ $288.00              │ $13.60                 │ +95.2% │
+└─────────────────────────────────┴──────────────────────┴────────────────────────┴────────┘
 ```
 
 ### Mathematical Cost Accounting Formulation
@@ -377,24 +377,24 @@ Where:
 - $N_{\text{steps}} \le 6$ (strictly bounded by `LoopGuard`).
 - $C_{\text{compute}} \approx \$0.0000$ because DOM perception and ML sanitization execute client-side.
 - $T_{\text{in}}^{(k)} \approx 650 \text{ tokens}$ (delta accessibility representation) vs. $25,000 \text{ tokens}$ for raw DOM scrapers.
-- With Mistral Codestral priced at $\$0.30 / 1\text{M tokens (input)}$ and $\$0.90 / 1\text{M tokens (output)}$, average cost per complete workflow is **$\$0.0136$**, yielding **$88.4\%$ gross margin** on standard $\$49/\text{month}$ subscriptions.
+- With multi-provider models (NVIDIA free tier, or Mistral Codestral priced at $\$0.30 / 1\text{M tokens (input)}$ and $\$0.90 / 1\text{M tokens (output)}$), average cost per complete workflow is **$\$0.0136$**, yielding **$88.4\%$ gross margin** on standard $\$49/\text{month}$ subscriptions.
 
 ---
 
 ## 🥊 10. Investor & Judge Defense Strategy
 
 ### Objection 1: "Why not use Playwright or Puppeteer on a cloud server?"
-> **Response:** Cloud headless browsers cannot access existing enterprise login sessions, intranet portals, hardware security keys (WebAuthn), or localized IP reputations without triggering bot detection Captchas. BigFish runs where the work already happens—inside the user's authentic browser—with zero credential handover.
+> **Response:** Cloud headless browsers cannot access existing enterprise login sessions, intranet portals, hardware security keys (WebAuthn), or localized IP reputations without triggering bot detection Captchas. Pratyaksha runs where the work already happens, inside the user's authentic browser, with zero credential handover.
 
 ### Objection 2: "Won't running local ML slow down the user's machine?"
-> **Response:** BigFish utilizes quantized, lightweight on-device models (PaddleOCR mobile recognition, BERT-NER, YOLOv8n) that consume less than 850 MB of RAM and execute in under 120 ms. Furthermore, visual masking is requested on demand, keeping idle CPU usage at 0%.
+> **Response:** Pratyaksha utilizes quantized, lightweight on-device models (PaddleOCR mobile recognition, BERT-NER, YOLOv8n) that consume less than 850 MB of RAM and execute in under 120 ms. Furthermore, visual masking is requested on demand, keeping idle CPU usage at 0%.
 
 ### Objection 3: "How do you prevent malicious prompt injection from rogue web pages?"
-> **Response:** BigFish enforces a strict separation between untrusted page content and system prompts. Page text is wrapped in `<page untrusted>` delimiters, high-risk actions (financial payments, deletion, form submission) trigger mandatory human-in-the-loop approval modals, and the `LoopGuard` terminates any execution loop after 6 browser tool calls.
+> **Response:** Pratyaksha enforces a strict separation between untrusted page content and system prompts. Page text is wrapped in `<page untrusted>` delimiters, high-risk actions (financial payments, deletion, form submission) trigger mandatory human-in-the-loop approval modals, and the `LoopGuard` terminates any execution loop after 6 browser tool calls.
 
 ---
 
 <p align="center">
-  <b>BigFish</b> — Autonomous, Private, Unstoppable Browser Intelligence.<br/>
-  Built with pride by the BigFish Engineering Team.
+  <b>Pratyaksha</b>: Autonomous, Private, Unstoppable Browser Intelligence.<br/>
+  Built with pride by the Pratyaksha Engineering Team.
 </p>
