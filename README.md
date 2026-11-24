@@ -1,400 +1,464 @@
-# 👁️ Pratyaksha: Autonomous Web Perception & Zero-Trust Browser Execution
+<div align="center">
 
-> **The enterprise-grade browser automation platform that transforms real Chrome sessions into high-speed Model Context Protocol (MCP) servers with 100% on-device PII masking and autonomous LangGraph cognitive loops.**
+<img src="apps/extension/public/icon/icon-128.png" alt="Pratyaksha logo" width="96" height="96" />
 
-[![Architecture: Distributed Browser MCP](https://img.shields.io/badge/Architecture-Distributed%20Browser%20MCP-blueviolet?style=for-the-badge&logo=googlechrome)](file:///packages/contracts/README.md)
-[![Privacy: Zero-Trust On-Device](https://img.shields.io/badge/Privacy-Zero--Trust%20On--Device%20PII-00c853?style=for-the-badge&logo=shield)](file:///apps/extension/README.md)
-[![Runtime: Node 22 + Python 3.12](https://img.shields.io/badge/Runtime-Node.js%2022%20%7C%20Python%203.12-3776ab?style=for-the-badge&logo=python)](file:///ML/README.md)
-[![Orchestration: LangGraph + Multi-Model](https://img.shields.io/badge/Orchestrator-LangGraph%20%2B%20NVIDIA%20%7C%20Mistral-ff6f00?style=for-the-badge&logo=langchain)](file:///apps/server/README.md)
-[![Perception: PaddleOCR + BERT + YOLO](https://img.shields.io/badge/Perception-PaddleOCR%20%2B%20BERT--NER%20%2B%20YOLO-ff1744?style=for-the-badge&logo=pytorch)](file:///ML/README.md)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue?style=for-the-badge)](file:///LICENSE)
+# Pratyaksha
 
----
+**Privacy-first browser agent that runs in your real Chrome.**
 
-## 📖 Executive Table of Contents
-1. [Executive Overview & Latency Waterfall](#-1-executive-overview--latency-waterfall)
-2. [The Main Selling Proposition (MSP) & Technical Moat](#-2-the-main-selling-proposition-msp--technical-moat)
-3. [Architectural Rationale ("Why Distributed Browser MCP?")](#-3-architectural-rationale-why-distributed-browser-mcp)
-4. [System Architecture Flowchart & Execution Flow](#-4-system-architecture-flowchart--execution-flow)
-5. [Deep-Tech & Grounding Pipeline](#-5-deep-tech--grounding-pipeline)
-6. [Service Inventory & Zero-Trust Security Matrix](#-6-service-inventory--zero-trust-security-matrix)
-7. [Annotated Directory Layout](#-7-annotated-directory-layout)
-8. [Turnkey Deployment & Diagnostic Verification](#-8-turnkey-deployment--diagnostic-verification)
-9. [Market, Unit Economics & Business Model Analysis](#-9-market-unit-economics--business-model-analysis)
-10. [Investor & Judge Defense Strategy](#-10-investor--judge-defense-strategy)
+Your Chrome becomes a Model Context Protocol (MCP) server. A LangGraph agent plans and acts on live pages, while personal data is masked on your own machine before any model sees it.
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+![Node](https://img.shields.io/badge/Node.js-%E2%89%A522-339933?logo=nodedotjs&logoColor=white)
+![Python](https://img.shields.io/badge/Python-%E2%89%A53.12-3776AB?logo=python&logoColor=white)
+![Chrome MV3](https://img.shields.io/badge/Chrome-MV3-4285F4?logo=googlechrome&logoColor=white)
+![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178C6?logo=typescript&logoColor=white)
+![MCP](https://img.shields.io/badge/Protocol-MCP-6E56CF)
+
+[Live site](https://ps-26171.vercel.app) · [Architecture](#architecture) · [Quick start](#quick-start) · [Browser tools](#browser-tools) · [Security model](#security-model)
+
+</div>
 
 ---
 
-## ⚡ 1. Executive Overview & Latency Waterfall
+## Table of contents
 
-### The Problem
-Traditional cloud browser agents (e.g., cloud headless Chrome instances or naive DOM scrapers) introduce catastrophic security, financial, and latency bottlenecks:
-1. **Severe Data Exposure:** Unsanitized screenshots, session cookies, passwords, banking credentials, and sensitive PII are transmitted unencrypted to external multimodal LLMs.
-2. **Bandwidth & Token Bloat:** Transmitting megabyte-scale raw PNG screenshots and 100,000-token DOM dumps per agent step costs up to **$0.25 per turn**, draining credits and hitting rate limits.
-3. **Session Fragility:** Cloud headless browsers cannot navigate authenticated intranets, bypass Cloudflare bot detections, or maintain user biometric states.
-
-### The Pratyaksha Solution
-Pratyaksha flips the paradigm: **Your real browser is the server; the cloud is only the cognitive brain.**
-By coupling an on-device Chrome MV3 extension with a local Python ML Perception Daemon, Pratyaksha strips all sensitive PII locally, tokenizes credentials with origin-bound HMAC salts, and projects UI actions across a low-latency framed WebSocket connection.
-
-```
-TRADITIONAL CLOUD BROWSER AGENT (~4,850 ms per turn | Severe Security Exposure)
-┌───────────────────────────────────────┬───────────────────────────────┬──────────────────┐
-│ Capture & Compress Viewport (850ms)   │ Transmit 4MB PNG to Cloud (2s)│ LLM Vision (2s)  │
-└───────────────────────────────────────┴───────────────────────────────┴──────────────────┘
-▲ Unencrypted raw PII transmitted to third-party model APIs
-▲ 100,000+ token context ingestion per browser turn ($0.25+ per step)
-
-PRATYAKSHA DISTRIBUTED ARCHITECTURE (< 480 ms per turn | Zero-Trust Local Masking)
-┌───────────┬──────────────┬────────────┬──────────────────────────────────────────────────┐
-│ DOM Delta │ Local PII    │ WS Frame   │ LangGraph Fast Tool Loop                         │
-│ (25ms)    │ Redact (15ms)│ RPC (8ms)  │ (430ms)                                          │
-└───────────┴──────────────┴────────────┴──────────────────────────────────────────────────┘
-✔ 100% on-device PII masking (Luhn, Verhoeff, BERT-NER, YOLO)
-✔ Delta-compressed accessibility snapshots reduce LLM token overhead by 88%
-```
+- [Why Pratyaksha](#why-pratyaksha)
+- [Features](#features)
+- [Architecture](#architecture)
+- [How a run works](#how-a-run-works)
+- [Browser tools](#browser-tools)
+- [Security model](#security-model)
+- [Repository layout](#repository-layout)
+- [Quick start](#quick-start)
+- [Configuration](#configuration)
+- [API reference](#api-reference)
+- [Testing](#testing)
+- [Documentation](#documentation)
+- [Contributing](#contributing)
+- [License](#license)
 
 ---
 
-## 💎 2. The Main Selling Proposition (MSP) & Technical Moat
+## Why Pratyaksha
 
-> [!IMPORTANT]
-> **The Pratyaksha Moat: The Reverse MCP Architecture + Air-Gapped PII Vault.**
-> Instead of building a fragile cloud browser that asks users for their Google or banking passwords, Pratyaksha turns the user's running Chrome into an authenticated Model Context Protocol (MCP) Server. The LLM operates exclusively on pseudonymized reference tokens (`[PERSON_4F1A]`, `[CARD_98B2]`), while the local browser rehydrates credentials *only* on the authentic origin domain upon explicit human approval.
+Most browser agents run a headless browser in the cloud. That has three problems:
 
-### Tiered Architecture Matrix
+| Problem | What goes wrong |
+|---|---|
+| **Data exposure** | Raw screenshots and page text, with names, emails, card numbers and IDs, are sent to third-party models. |
+| **No real sessions** | A cloud browser has none of your logins, intranet access or saved state. |
+| **Token cost** | Full DOM dumps and large images per step are slow and expensive. |
 
-| Tier | Subsystem | Key Pattern | Interface / Transport | Hit Latency | File Reference | Primary Responsibility |
-|---|---|---|---|---|---|---|
-| **Tier 1** | **Client Perception** | Reverse MCP Server | Chrome MV3 Background | `< 1 ms` | [`apps/extension`](file:///apps/extension/entrypoints/background/mcp/server.ts) | Exposes 15 browser automation tools over framed WebSocket |
-| **Tier 2** | **PII Shield** | Salted Token Vault | In-Memory Crypto Vault | `< 2 ms` | [`apps/extension/safety`](file:///apps/extension/safety/privacy.ts) | Verhoeff/Luhn checksum validation and deterministic tokenization |
-| **Tier 3** | **Transport** | Framed WebSocket | Length-Prefixed Binary | `< 8 ms` | [`packages/mcp-ws`](file:///packages/mcp-ws/src/framed-transport.ts) | Isomorphic length-prefixed framing with ping/pong heartbeats |
-| **Tier 4** | **Cognitive Engine** | LangGraph State Machine | Node.js 22 + Hono | `< 450 ms` | [`apps/server`](file:///apps/server/src/agent/graph.ts) | Plans, executes, judges, and self-corrects browser actions |
-| **Tier 5** | **Vision Guard** | Multi-Model Perception | FastAPI Daemon (8788) | `< 120 ms` | [`ML/src`](file:///ML/src/server.py) | PaddleOCR + BERT-NER + YOLO pixel-level visual redaction |
+Pratyaksha flips this. **Your real browser is the tool server. The cloud is only the brain.**
 
-### Real Code Anchors: Zero-Trust Redaction Engine
-Direct excerpt from the active production safety engine in [`apps/extension/safety/privacy.ts`](file:///apps/extension/safety/privacy.ts):
-
-```typescript
-// Deterministic PII Tokenization with Luhn and Verhoeff Checksums
-export function sanitizeObservationForModel(
-  text: string,
-  origin: string,
-  vault: PiiVault
-): string {
-  let sanitized = text;
-
-  // 1. Redact Email Addresses into [EMAIL_XXXX]
-  sanitized = sanitized.replace(EMAIL_REGEX, (match) => {
-    return vault.tokenize(match, "EMAIL", origin);
-  });
-
-  // 2. Validate & Redact Credit Cards via Luhn Checksum into [CARD_XXXX]
-  sanitized = sanitized.replace(CARD_REGEX, (match) => {
-    const digits = match.replace(/\D/g, "");
-    return luhnCheck(digits) ? vault.tokenize(match, "CARD", origin) : match;
-  });
-
-  // 3. Validate & Redact Indian Aadhaar Numbers via Verhoeff Checksum into [AADHAAR_XXXX]
-  sanitized = sanitized.replace(AADHAAR_REGEX, (match) => {
-    const digits = match.replace(/\D/g, "");
-    return verhoeffCheck(digits) ? vault.tokenize(match, "AADHAAR", origin) : match;
-  });
-
-  return sanitized;
-}
-```
+- The extension exposes the open browser as an MCP server over a framed WebSocket.
+- Page text and screenshots are cleaned locally. The model sees tokens like `[EMAIL_7F3A]`, never the raw value.
+- The browser puts the real value back only on the original site, and risky actions wait for your approval.
 
 ---
 
-## 🏛️ 3. Architectural Rationale ("Why Distributed Browser MCP?")
+## Features
 
-```
-                          WHY THIS ARCHITECTURE EARNS ITS PLACE
-┌─────────────────────────────────┬─────────────────────────────────┬─────────────────────────────────┐
-│     WORKLOAD ISOLATION          │      BLAST RADIUS LIMITATION    │     INDEPENDENT AUTOSCALING     │
-├─────────────────────────────────┼─────────────────────────────────┼─────────────────────────────────┤
-│ • Node.js/Hono: Async I/O,      │ • Server crash: Browser tabs,   │ • Cognitive Server scales on    │
-│   streaming SSE, LangGraph      │   cookies, and sessions remain  │   concurrent agent runs.        │
-│   state machines.               │   100% intact.                  │ • Extension compute scales with │
-│ • Python ML Daemon: PyTorch     │ • ML Daemon OOM: Agent drops to │   client workstations (free).   │
-│   tensor computation, PaddleOCR │   text-only DOM mode gracefully.│ • ML Daemon scales on local GPU/│
-│   vision models, YOLO weights.  │ • Network drop: Extension holds │   NPU acceleration hardware.    │
-│ • Chrome MV3: Live browser DOM  │   grace window before failing   │                                 │
-│   events & biometric security.  │   mutating calls.               │                                 │
-└─────────────────────────────────┴─────────────────────────────────┴─────────────────────────────────┘
-```
+| Area | What you get |
+|---|---|
+| **Reverse MCP** | The Chrome extension hosts an MCP server with 15 browser tools. The backend connects to it as a client. |
+| **Agent loop** | LangGraph state machine: `plan → act → verify → finalize`, with a separate judge model checking each subtask. |
+| **Local PII masking** | Regex plus checksum validation (Luhn for cards, Verhoeff for Aadhaar) on text, and an on-device ML daemon for screenshots. |
+| **Screenshot privacy** | PaddleOCR + BERT-NER + YOLO find private spots. The screenshot fails closed if masking is not possible. |
+| **Human approval** | Payments, deletes, submits and other risky actions pause for an approval prompt in the side panel. |
+| **Loop guard** | Stops repeated calls, repeated failures and two-step cycles before they burn tokens. |
+| **Multi-provider LLMs** | NVIDIA, OpenRouter or Mistral. The first provider with a key wins. |
+| **Voice input** | Speak a task in the side panel using the Web Speech API. |
+| **Secure transport** | Google sign-in, short-lived HS256 JWTs, single-use WebSocket tickets and an extension-origin check. |
 
 ---
 
-## 🗺️ 4. System Architecture Flowchart & Execution Flow
+## Architecture
+
+Pratyaksha is a pnpm monorepo with three running parts and two shared libraries.
 
 ```mermaid
-flowchart TD
-    subgraph Client["Host Machine: Real Chrome Browser Session"]
-        User(["👤 User Voice / Command"]) --> UI["Sidepanel Interface<br/>(apps/extension/sidepanel)"]
-        Voice["🎙️ Web Speech Engine<br/>(Voice-to-Text Input)"] --> UI
-        UI --> ClientWS["ClientSocket (apps/extension)<br/>Framed WebSocket Client"]
-        
-        DOM["Live Chrome Tab DOM"] <--> ContentScript["Content Script (apps/extension)<br/>DOM Actions & Visual Agent Cursor"]
-        ContentScript <--> SafetyEngine["Safety & PII Vault<br/>Luhn / Verhoeff / Salt Hash"]
-        
-        BackgroundWorker["Background Service Worker<br/>MCP Server Host (15 Tools)"] <--> SafetyEngine
-        BackgroundWorker <--> ClientWS
+%%{init: {"theme": "base", "themeVariables": {"background": "transparent", "primaryTextColor": "#768390", "textColor": "#768390", "actorTextColor": "#768390", "signalTextColor": "#768390", "noteTextColor": "#768390", "labelTextColor": "#768390", "loopTextColor": "#768390", "primaryColor": "transparent", "secondaryColor": "transparent", "tertiaryColor": "transparent", "clusterBkg": "transparent", "clusterBorder": "#8b949e", "primaryBorderColor": "#8b949e", "lineColor": "#8b949e", "edgeLabelBackground": "transparent"}}}%%
+flowchart LR
+    User(["User<br/>text or voice"])
+
+    subgraph Chrome["Chrome browser (apps/extension)"]
+        direction TB
+        Panel["Side panel<br/>chat, approvals, voice"]
+        BG["Background worker<br/>MCP server, 15 tools"]
+        CS["Content script<br/>DOM actions, agent cursor"]
+        Safety["Safety layer<br/>PII vault, URL and action policy"]
+        Tab["Live web page"]
+        Panel <--> BG
+        BG <--> CS
+        CS <--> Tab
+        BG <--> Safety
     end
 
-    subgraph ML_Daemon["Local Host: Pratyaksha ML Privacy Daemon (127.0.0.1:8788)"]
-        BackgroundWorker -. "POST /v1/privacy/mask<br/>(Raw Viewport Capture)" .-> MLServer["FastAPI Daemon (ML/src/server.py)"]
-        MLServer --> OCR["PaddleOCR (PP-OCRv5)<br/>Neural Text BBoxes"]
-        MLServer --> NER["BERT-NER (dslim/bert)<br/>Entity Token Classifier"]
-        MLServer --> YOLO["Ultralytics YOLO<br/>Visual Element Detection"]
-        OCR & NER & YOLO --> Resolver["EntityResolver<br/>IoU Spatial Projection"]
-        Resolver --> Sanitizer["ScreenshotSanitizer<br/>Pixel Blackout Masking"]
-        Sanitizer -. "HTTP 200: Normalized BBoxes" .-> BackgroundWorker
+    subgraph Server["Agent server (apps/server, :8787)"]
+        direction TB
+        API["Hono REST + SSE<br/>/api/agent/invoke"]
+        WS["/mcp-ws gateway<br/>session registry"]
+        Graph["LangGraph agent<br/>plan, act, verify, finalize"]
+        Guard["Tool policy<br/>loop guard"]
+        API --> Graph
+        Graph <--> Guard
+        Guard <--> WS
     end
 
-    subgraph Server["Local Server Daemon (127.0.0.1:8787)"]
-        ClientWS == "Encrypted Framed WebSocket (/mcp-ws)<br/>Ticket-Auth Handshake + Heartbeats" ==> ServerWS["Hono ServerSocket (apps/server)"]
-        ServerWS <--> Registry["SessionRegistry<br/>(Multi-Device Manager)"]
-        
-        UI -. "POST /api/agent/invoke (SSE Stream)" .-> AgentController["Agent Controller (apps/server)"]
-        AgentController --> LangGraph["LangGraph Workflow<br/>Plan ➔ Act ➔ Verify ➔ Finalize"]
-        
-        LangGraph <--> MultiModel["Multi-Provider LLM Engine<br/>(NVIDIA Nemotron / Mistral / OpenRouter)"]
-        LangGraph <--> ToolPolicy["Loop Guard & Tool Policy<br/>(Max 6 Calls, 3x Cycle Breaker)"]
-        ToolPolicy <--> Registry
+    subgraph ML["ML privacy daemon (ML/, :8788)"]
+        direction TB
+        FastAPI["FastAPI<br/>/v1/privacy/mask"]
+        Detect["PaddleOCR + BERT-NER + YOLO"]
+        Resolve["Entity resolver<br/>privacy engine"]
+        FastAPI --> Detect --> Resolve
     end
 
-    classDef client fill:#e3f2fd,stroke:#1565c0,stroke-width:2px;
-    classDef server fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px;
-    classDef ml fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px;
-    class Client,UI,ContentScript,BackgroundWorker,SafetyEngine client;
-    class Server,ServerWS,LangGraph,Registry server;
-    class ML_Daemon,MLServer,OCR,NER,YOLO,Sanitizer ml;
+    LLM[("LLM provider<br/>NVIDIA / OpenRouter / Mistral")]
+
+    User --> Panel
+    Panel -- "SSE stream" --> API
+    BG == "framed WebSocket<br/>ticket auth + heartbeat" ==> WS
+    BG -. "screenshot" .-> FastAPI
+    FastAPI -. "boxes + entities" .-> BG
+    Graph <--> LLM
+
+    classDef base fill:transparent,stroke:#8b949e,stroke-width:1.5px;
+    classDef ext fill:transparent,stroke:#4285f4,stroke-width:2px;
+    classDef srv fill:transparent,stroke:#a371f7,stroke-width:2px;
+    classDef ml fill:transparent,stroke:#3fb950,stroke-width:2px;
+    class User,LLM base;
+    class Panel,BG,CS,Safety,Tab ext;
+    class API,WS,Graph,Guard srv;
+    class FastAPI,Detect,Resolve ml;
+    style Chrome fill:transparent,stroke:#4285f4,stroke-width:2px
+    style Server fill:transparent,stroke:#a371f7,stroke-width:2px
+    style ML fill:transparent,stroke:#3fb950,stroke-width:2px
 ```
 
-### End-to-End Execution Trace
-1. **Instruction Ingestion:** User enters a natural-language goal (via text or voice dictation in the Chrome Sidepanel).
-2. **Ticket Authentication:** Extension acquires a single-use 60-second cryptographic ticket from `/api/ws-ticket` and connects to `/mcp-ws`.
-3. **Plan Generation:** LangGraph compiles a multi-step execution plan via LLM (NVIDIA, Mistral, or OpenRouter) and streams subtask goals to the user UI.
-4. **Tool Dispatch:** The agent requests a browser action (e.g., `browser_snapshot`).
-5. **PII Redaction:** For `browser_screenshot`, the extension sends the captured pixels to the ML Privacy Daemon on port 8788, which returns the boxes and values of personal entities. The extension stores each value in the PII vault and paints its token (like `[NAME_1A2B]`) over the box, so the model sees the token and can type it back.
-6. **Execution & Cursor Tracking:** The extension dispatches the tool to the active tab, rendering the animated visual cursor at the target coordinates.
-7. **Judge Verification:** The secondary verifier LLM evaluates action outcomes, retrying with feedback if unfulfilled, until finalizing the answer.
-
----
-
-## 🔬 5. Deep-Tech & Grounding Pipeline
-
-### The 15 Verified Browser Automation Tools
-
-| Tool Name | Key Arguments | Safety & Policy Boundary | Primary Function |
+| Part | Path | Runtime | Role |
 |---|---|---|---|
-| `browser_navigate` | `url`, `action` (`back`, `forward`, `reload`) | Blocked on `chrome://`, `file://` | Direct URL navigation and history traversal |
-| `browser_snapshot` | `mode` (`text`, `visual`), `from_end` | Strips raw PII before wire transmission | Captures cleaned accessibility text tree or visual canvas |
-| `browser_find` | `query`, `ref` | Fuzzy DOM selector | Locates interactive elements via semantic intent |
-| `browser_click` | `ref`, `clickCount`, `modifiers` | Requires User Approval if labeled destructive | Dispatches synthetic mouse clicks with coordinate targeting |
-| `browser_type` | `ref`, `text`, `submit` | Masked token rehydration only on source origin | Enters text into input fields and textareas |
-| `browser_fill_form`| `fields: [{ ref, value }]` | Sensitive forms require user approval | Executes atomic multi-field form completion |
-| `browser_select` | `ref`, `option` | Validates option existence | Selects options in native HTML `<select>` elements |
-| `browser_press_key`| `key` (`Enter`, `Tab`, `Escape`) | Bound to active element | Emits native keyboard events |
-| `browser_scroll` | `direction` (`up`, `down`), `amount` | Viewport bounding | Scrolls document or targeted scrollable container |
-| `browser_wait_for` | `text`, `gone_text`, `url_contains` | Max timeout 10 seconds | Synchronizes asynchronous page loading states |
-| `browser_extract` | `what` (`table`, `list`, `article`) | Read-only | Extracts clean structured content from the DOM |
-| `browser_screenshot` | `tab` | Fails closed: no image unless the local ML daemon masked every private spot | Visible-page screenshot with PII replaced by vault tokens like `[EMAIL_7F3A]` |
-| `browser_code_editor` | `action` (`read`, `write`), `code`, `format` | Clicks only a button labelled Format, else runs the editor's own format action | Reads or replaces code in Monaco (LeetCode), CodeMirror or Ace through the editor API, then formats it |
-| `browser_tabs` | `action` (`list`, `switch`, `new`, `close`)| Enforces user ownership | Manages open browser tabs and window contexts |
-| `browser_ping` | None | Read-only | Measures round-trip framed WebSocket transport latency |
+| Extension | [`apps/extension`](apps/extension) | Chrome MV3, WXT | MCP server, DOM actions, side panel, PII vault, approvals |
+| Agent server | [`apps/server`](apps/server) | Node.js 22, Hono, LangGraph | Auth, run management, agent loop, MCP client |
+| ML daemon | [`ML`](ML) | Python 3.12, FastAPI | Finds private text and regions in screenshots |
+| Contracts | [`packages/contracts`](packages/contracts) | TypeScript, Zod | Shared tool schemas, agent events, wire types |
+| Transport | [`packages/mcp-ws`](packages/mcp-ws) | TypeScript | Length-prefixed WebSocket framing, liveness |
+
+**Why split it this way**
+
+- **Isolation.** Async I/O and LLM calls live in Node. Heavy vision models live in Python. Live DOM access lives in the browser.
+- **Small blast radius.** If the server restarts, your tabs and logins are untouched. If the ML daemon is down, screenshots fail closed and the agent keeps working with text.
+- **Your sessions stay yours.** Nothing about your logins leaves the browser.
 
 ---
 
-## 🛡️ 6. Service Inventory & Zero-Trust Security Matrix
+## How a run works
 
+### Agent loop
+
+```mermaid
+%%{init: {"theme": "base", "themeVariables": {"background": "transparent", "primaryTextColor": "#768390", "textColor": "#768390", "actorTextColor": "#768390", "signalTextColor": "#768390", "noteTextColor": "#768390", "labelTextColor": "#768390", "loopTextColor": "#768390", "primaryColor": "transparent", "primaryBorderColor": "#a371f7", "lineColor": "#8b949e", "edgeLabelBackground": "transparent"}}}%%
+flowchart LR
+    Start(["Goal"]) --> Plan["Plan<br/>split goal into subtasks"]
+    Plan --> Act["Act<br/>call browser tools"]
+    Act --> Verify{"Verify<br/>judge model"}
+    Verify -- "not done, retry with feedback" --> Act
+    Verify -- "next subtask" --> Act
+    Verify -- "all done" --> Final["Finalize<br/>answer to user"]
+    Final --> Done(["Done"])
+
+    classDef step fill:transparent,stroke:#a371f7,stroke-width:2px;
+    class Start,Plan,Act,Verify,Final,Done step;
 ```
-                                  PRATYAKSHA MONOREPO SERVICE MATRIX
-┌──────────────────────┬─────────────┬───────────┬──────────────────────┬──────────────────────┬─────────────────────┐
-│ Subsystem / Package  │ Runtime     │ Port/Host │ Ingress Protocol     │ Authentication       │ Health Endpoints    │
-├──────────────────────┼─────────────┼───────────┼──────────────────────┼──────────────────────┼─────────────────────┤
-│ @bigfish/server      │ Node.js 22  │ 8787      │ HTTP / REST / SSE    │ Google OAuth ID      │ GET /healthz        │
-│ (apps/server)        │ TypeScript  │ 127.0.0.1 │ WebSocket (/mcp-ws)  │ Pratyaksha HS256 JWT │ GET /ready          │
-├──────────────────────┼─────────────┼───────────┼──────────────────────┼──────────────────────┼─────────────────────┤
-│ @bigfish/extension   │ Chrome MV3  │ Chrome    │ Reverse WebSocket    │ Single-Use Ticket    │ Internal Status     │
-│ (apps/extension)     │ WXT + Vite  │ Sandbox   │ Service Worker IPC   │ Origin Header Match  │ Machine             │
-├──────────────────────┼─────────────┼───────────┼──────────────────────┼──────────────────────┼─────────────────────┤
-│ Pratyaksha ML Daemon │ Python 3.12 │ 8788      │ HTTP REST / JSON     │ Localhost Loopback   │ GET /healthz        │
-│ (ML/)                │ PyTorch/uv  │ 127.0.0.1 │ In-Memory Buffers    │ Socket Isolation     │ GET /ready          │
-├──────────────────────┼─────────────┼───────────┼──────────────────────┼──────────────────────┼─────────────────────┤
-│ @bigfish/contracts   │ TypeScript  │ Library   │ Static In-Process    │ Compile-Time Zod     │ N/A (Static Types)  │
-│ (packages/contracts) │ ESM / CJS   │ Monorepo  │ TypeScript Import    │ Schema Validation    │                     │
-├──────────────────────┼─────────────┼───────────┼──────────────────────┼──────────────────────┼─────────────────────┤
-│ @bigfish/mcp-ws      │ TypeScript  │ Library   │ WebSocket Framing    │ 16 MB Max Frame Size │ Ping/Pong           │
-│ (packages/mcp-ws)    │ Isomorphic  │ Monorepo  │ Transport Layer      │ 5s Handshake Timeout │ Liveness Heartbeats │
-└──────────────────────┴─────────────┴───────────┴──────────────────────┴──────────────────────┴─────────────────────┘
+
+### Screenshot masking
+
+```mermaid
+%%{init: {"theme": "base", "themeVariables": {"background": "transparent", "primaryTextColor": "#768390", "textColor": "#768390", "actorTextColor": "#768390", "signalTextColor": "#768390", "noteTextColor": "#768390", "labelTextColor": "#768390", "loopTextColor": "#768390", "actorBkg": "transparent", "actorBorder": "#8b949e", "signalColor": "#8b949e", "noteBkgColor": "transparent", "noteBorderColor": "#8b949e", "labelBoxBkgColor": "transparent", "activationBkgColor": "transparent"}}}%%
+sequenceDiagram
+    autonumber
+    participant Agent as Agent server
+    participant Ext as Extension
+    participant ML as ML daemon (local)
+    participant LLM as LLM provider
+
+    Agent->>Ext: browser_screenshot
+    Ext->>Ext: capture visible tab
+    Ext->>ML: POST /v1/privacy/mask
+    ML-->>Ext: boxes, categories, values
+    Ext->>Ext: store values in PII vault
+    Ext->>Ext: paint tokens like [NAME_1A2B] over each box
+    Ext-->>Agent: masked image only
+    Agent->>LLM: masked image + task
+    Note over Ext,ML: If masking fails, no image is returned (fail closed)
 ```
+
+### Step by step
+
+1. You type or speak a goal in the side panel.
+2. The extension gets a single-use ticket from `POST /api/ws-ticket` and opens `/mcp-ws`.
+3. The side panel calls `POST /api/agent/invoke`. Progress streams back over SSE.
+4. The planner breaks the goal into subtasks.
+5. The actor calls browser tools. Page text is masked before it leaves the browser.
+6. Risky actions pause for your approval. Vault tokens are swapped back to real values only on the original site.
+7. The judge model checks each subtask and asks for a retry when needed.
+8. The final answer streams back to the side panel.
 
 ---
 
-## 📂 7. Annotated Directory Layout
+## Browser tools
 
-```
+All 15 tools are defined once in [`packages/contracts/src/tools.ts`](packages/contracts/src/tools.ts) and shared by both sides.
+
+| Tool | What it does | Safety boundary |
+|---|---|---|
+| `browser_navigate` | Open a URL, or go back, forward, reload | Blocks `chrome:`, `file:`, `data:`, `javascript:` and the Web Store |
+| `browser_snapshot` | Accessibility text tree of the page | PII masked before it leaves the browser |
+| `browser_find` | Find elements by intent | Read only |
+| `browser_click` | Click an element by ref | Risky clicks need approval |
+| `browser_type` | Type into an input | Vault tokens restored only on the source origin |
+| `browser_fill_form` | Fill many fields at once | Sensitive forms need approval |
+| `browser_select` | Pick an option in a `<select>` | Checks the option exists |
+| `browser_press_key` | Send a key like Enter or Tab | Bound to the focused element |
+| `browser_scroll` | Scroll the page or a container | Viewport bound |
+| `browser_wait_for` | Wait for text, its removal, or a URL | Bounded timeout |
+| `browser_extract` | Pull a table, list or article | Read only |
+| `browser_screenshot` | Screenshot with PII replaced by tokens | Fails closed without the ML daemon |
+| `browser_code_editor` | Read or write code in Monaco, CodeMirror or Ace | Uses the editor's own API and format action |
+| `browser_tabs` | List, switch, open or close tabs | Closing a tab you opened needs approval |
+| `browser_ping` | Measure round-trip latency | Read only |
+
+Set `AGENT_VISION=false` to hide `browser_screenshot` for a model that cannot read images.
+
+---
+
+## Security model
+
+| Layer | Control | Where |
+|---|---|---|
+| Identity | Google sign-in, verified server side, then an HS256 JWT | [`apps/server/src/auth`](apps/server/src/auth) |
+| Socket | Single-use ticket, `Origin` must match the fixed extension ID | [`apps/server/src/auth/tickets.ts`](apps/server/src/auth/tickets.ts), [`apps/server/src/ws/mcp-ws.ts`](apps/server/src/ws/mcp-ws.ts) |
+| Text privacy | Emails, phones, cards (Luhn), Aadhaar (Verhoeff) become vault tokens | [`apps/extension/safety/privacy.ts`](apps/extension/safety/privacy.ts) |
+| Vault | Real values stay in the browser and are bound to their origin | [`apps/extension/safety/pii-vault.ts`](apps/extension/safety/pii-vault.ts) |
+| Image privacy | OCR + NER + YOLO masking, fail closed | [`ML/src/privacy`](ML/src/privacy) |
+| URL policy | Blocks browser-internal schemes and store pages | [`apps/extension/safety/url-policy.ts`](apps/extension/safety/url-policy.ts) |
+| Action policy | Payments, deletes, submits and sends need approval | [`apps/extension/safety/action-policy.ts`](apps/extension/safety/action-policy.ts) |
+| Personal guard | Stops the model from making up personal values | [`apps/server/src/agent/personal-guard.ts`](apps/server/src/agent/personal-guard.ts) |
+| Loop guard | 3 repeats, 2 failures, or a 2-step cycle in 6 calls stops the run | [`apps/server/src/agent/loop-guard.ts`](apps/server/src/agent/loop-guard.ts) |
+| Prompt injection | Page content is treated as untrusted data | [`apps/server/src/agent/prompts.ts`](apps/server/src/agent/prompts.ts) |
+
+Found a vulnerability? See [SECURITY.md](SECURITY.md).
+
+---
+
+## Repository layout
+
+```text
 Pratyaksha/
 ├── apps/
-│   ├── extension/                   # Chrome Extension MV3 Workspace
+│   ├── extension/          Chrome MV3 extension (WXT)
 │   │   ├── entrypoints/
-│   │   │   ├── background/          # Service Worker: MCP Server & tool executor ← [Ext-Core]
-│   │   │   ├── content/             # DOM Actions engine & visual agent cursor ← [Ext-DOM]
-│   │   │   ├── sidepanel/           # Reactive side panel UI & voice input ← [Ext-UI]
-│   │   │   └── mic-permission/      # Audio recording permission dialog
-│   │   ├── safety/                  # Zero-trust PII vault & approval policies ← [Ext-Safety]
-│   │   ├── wxt.config.ts            # WXT multi-browser bundler config
-│   │   └── README.md                # Microservice README for extension (100% Score)
-│   └── server/                      # LangGraph Backend Server Workspace
+│   │   │   ├── background/ MCP server, tool executor, auth, connection
+│   │   │   ├── content/    DOM actions and agent cursor
+│   │   │   ├── sidepanel/  Chat UI, approvals, voice input
+│   │   │   └── mic-permission/
+│   │   ├── safety/         PII vault, privacy, URL and action policy
+│   │   └── e2e/            Playwright end-to-end tests
+│   └── server/             Hono + LangGraph agent server
 │       ├── src/
-│       │   ├── agent/               # LangGraph workflow, actors, loop guards ← [Agent-Core]
-│       │   ├── auth/                # Google OAuth, JWT minting, ticket store ← [Auth-Guard]
-│       │   ├── mcp/                 # MCP client registry & session tracking ← [MCP-Client]
-│       │   ├── routes/              # Hono REST & SSE endpoints (/api/agent) ← [HTTP-API]
-│       │   └── ws/                  # /mcp-ws WebSocket upgrade handler ← [WS-Gateway]
-│       ├── test/                    # 33 unit & integration tests
-│       └── README.md                # Microservice README for server (100% Score)
+│       │   ├── agent/      Planner, actor, judge, guards, prompts
+│       │   ├── auth/       Google verify, JWT, WebSocket tickets
+│       │   ├── mcp/        Device session registry
+│       │   ├── routes/     REST and SSE routes
+│       │   └── ws/         /mcp-ws upgrade handler
+│       ├── fixtures/       Local HTML pages for tests
+│       └── test/
 ├── packages/
-│   ├── contracts/                   # Shared TypeScript Wire Contracts & Schemas
-│   │   ├── src/                     # Zod tool definitions & AgentEvent stream types ← [Contracts]
-│   │   └── README.md                # Contracts specification README (100% Score)
-│   └── mcp-ws/                      # Framed WebSocket Protocol Engine
-│       ├── src/                     # Length-prefixed framing & reconnect liveness ← [Transport]
-│       └── README.md                # Transport specification README (100% Score)
-├── ML/                              # Python ML Privacy Perception Daemon
-│   ├── src/
-│   │   ├── workers/                 # PaddleOCR, BERT-NER, YOLO detector workers ← [ML-Models]
-│   │   ├── privacy/                 # EntityResolver, PrivacyEngine, Sanitizer ← [ML-Privacy]
-│   │   ├── pipeline.py              # Unified detection pipeline
-│   │   └── server.py                # FastAPI HTTP daemon on 127.0.0.1:8788 ← [ML-Server]
-│   ├── tests/                       # 6 test suites including live network E2E test ← [ML-Tests]
-│   ├── pyproject.toml               # uv packaging metadata
-│   └── README.md                    # Microservice README for ML Daemon (100% Score)
-├── package.json                     # Monorepo root workspace configuration
-├── pnpm-workspace.yaml              # pnpm workspace package resolution
-└── README.md                        # Flagship Showcase README (You are here)
+│   ├── contracts/          Shared Zod schemas and wire types
+│   └── mcp-ws/             Framed WebSocket transport
+├── ML/                     Python privacy daemon (FastAPI)
+│   ├── src/workers/        OCR, NER, CV, regex detectors
+│   ├── src/privacy/        Entity resolver, privacy engine, sanitizer
+│   └── tests/
+├── tests/                  Cross-package test suites
+└── Docs/                   Design notes and plans
 ```
 
 ---
 
-## 🚀 8. Turnkey Deployment & Diagnostic Verification
+## Quick start
 
 ### Prerequisites
-- **Node.js:** `>= 22.0.0`
-- **pnpm:** `12.15.0` (Run `corepack enable`)
-- **Python:** `>= 3.12.0` with [`uv`](https://docs.astral.sh/uv/) installed
-- **Chrome:** Version 116+
 
-### Installation & Secrets Setup
+| Tool | Version |
+|---|---|
+| Node.js | 22 or newer |
+| pnpm | 12 (via `corepack enable`) |
+| Python | 3.12 or newer |
+| [uv](https://docs.astral.sh/uv/) | latest |
+| Chrome | 116 or newer |
+
+### 1. Install
 
 ```bash
-# 1. Clone repository
 git clone https://github.com/Sahil-coder-30/Pratyaksha.git
 cd Pratyaksha
-
-# 2. Enable package manager and install monorepo dependencies
 corepack enable
 pnpm install
+```
 
-# 3. Configure backend secrets
+### 2. Configure
+
+```bash
 cp apps/server/.env.example apps/server/.env
-
-# 4. Configure extension environment
 cp apps/extension/.env.example apps/extension/.env
 ```
 
-### Running the Services
+Fill in at least one LLM key and the auth values. See [Configuration](#configuration).
 
-Use three separate terminal sessions from the repository root:
+### 3. Run
+
+Open three terminals at the repository root.
 
 ```bash
-# Terminal 1: Launch Backend Agent Server (Port 8787)
-pnpm dev:server
-
-# Terminal 2: Launch Python ML Privacy Daemon (Port 8788)
-pnpm dev:ml
-
-# Terminal 3: Launch Chrome in Development Mode with Extension
-pnpm dev:ext
+pnpm dev:server   # agent server on http://127.0.0.1:8787
 ```
 
-### Diagnostic Health Probes
+```bash
+pnpm dev:ml       # ML privacy daemon on http://127.0.0.1:8788
+```
 
 ```bash
-# Probe Backend Server Liveness & Readiness
+pnpm dev:ext      # opens Chrome with the extension loaded
+```
+
+### 4. Check health
+
+```bash
 curl http://127.0.0.1:8787/healthz
-# Response: {"ok":true,"name":"bigfish","devices":0,"runs":0}
+# {"ok":true,"name":"bigfish","devices":0,"runs":0}
+```
 
-# Probe ML Privacy Daemon Liveness & Model Readiness
+```bash
 curl http://127.0.0.1:8788/ready
-# Response: {"status":"ready","models_loaded":["paddleocr","yolov8","bert_base_ner"]}
+# {"status":"ready","models_loaded":["paddleocr","yolov8","bert_base_ner"]}
 ```
+
+The ML daemon downloads model weights on first start, so `/ready` may return `503` for a while.
 
 ---
 
-## 📈 9. Market, Unit Economics & Business Model Analysis
+## Configuration
 
-### Executive Financial Dashboard
+### Server (`apps/server/.env`)
 
-```
-┌────────────────────────────────────────────────────────────────────────────────────────┐
-│                      PRATYAKSHA ENTERPRISE UNIT ECONOMICS (B2B SaaS)                   │
-├───────────────────────────────┬───────────────────────────────┬────────────────────────┤
-│ Total Addressable Market (TAM)│ Gross Margin Profile          │ Target Payback Period  │
-│ $14.2B (RPA + Browser AI)     │ 88.4% (Direct API & Compute)  │ 2.4 Months (B2B Seat)  │
-├───────────────────────────────┼───────────────────────────────┼────────────────────────┤
-│ Average Revenue Per User/Seat │ Lifetime Value to CAC Ratio   │ Target ARR (Year 2)    │
-│ $49 / user / month            │ 7.2 : 1                       │ $4.8M (8,200 Seats)    │
-└───────────────────────────────┴───────────────────────────────┴────────────────────────┘
-```
+| Variable | Required | Description |
+|---|---|---|
+| `PORT`, `HOST` | no | Bind address. Default `127.0.0.1:8787`. |
+| `NVIDIA_API_KEY` | one LLM key | NVIDIA key from build.nvidia.com. Tried first. |
+| `NVIDIA_MODEL`, `NVIDIA_JUDGE_MODEL` | no | Actor and judge models for NVIDIA. |
+| `OPEN_ROUTER_API_KEY` | one LLM key | OpenRouter key. Tried second. |
+| `OPEN_ROUTER_MODEL`, `OPEN_ROUTER_JUDGE_MODEL` | no | Actor and judge models for OpenRouter. |
+| `MISTRAL_API_KEY` | one LLM key | Mistral key. Tried third. |
+| `AGENT_MODEL`, `AGENT_JUDGE_MODEL` | no | Actor and judge models for Mistral. |
+| `AGENT_VISION` | no | `false` hides `browser_screenshot`. |
+| `GOOGLE_EXTENSION_CLIENT_ID` | yes | Google OAuth client of type "Chrome Extension". |
+| `JWT_SECRET` | yes | At least 32 random characters. |
+| `EXTENSION_ID` | yes | Fixed extension ID. `/mcp-ws` accepts only this origin. |
+| `ENABLE_DEV_ROUTES` | no | `1` enables dev-only routes. Never in production. |
 
-### Cost Moat Comparison per 1,000 Operations
+### Extension (`apps/extension/.env`)
 
-```
-Traditional Cloud Vision Agent vs. Pratyaksha Delta MCP Architecture:
-┌─────────────────────────────────┬──────────────────────┬────────────────────────┬────────┐
-│ Cost Component                  │ Cloud Vision Agent   │ Pratyaksha Architecture│ Margin │
-├─────────────────────────────────┼──────────────────────┼────────────────────────┼────────┤
-│ Viewport Image Ingestion (LLM)  │ $180.00 (4,000 PNGs) │ $0.00 (Local ML)       │ +100%  │
-│ Accessibility Tree Text Tokens  │ $64.00 (80M tokens)  │ $7.20 (Delta-only)     │ +88.7% │
-│ Cloud Headless Browser Compute  │ $32.00 (AWS Fargate) │ $0.00 (Client-side)    │ +100%  │
-│ Planning & Judge Calls          │ $12.00               │ $6.40 (Codestral/Nemo) │ +46.6% │
-├─────────────────────────────────┼──────────────────────┼────────────────────────┼────────┤
-│ TOTAL COST PER 1,000 RUNS       │ $288.00              │ $13.60                 │ +95.2% │
-└─────────────────────────────────┴──────────────────────┴────────────────────────┴────────┘
-```
+| Variable | Description |
+|---|---|
+| `WXT_SERVER_URL` | Agent server base URL. Default `http://127.0.0.1:8787`. |
+| `WXT_ML_URL` | ML daemon URL. Default `http://127.0.0.1:8788`. |
+| `WXT_EXTENSION_KEY` | Public key (base64, no PEM header) that fixes the extension ID. Never the private key. |
+| `WXT_GOOGLE_CLIENT_ID` | Google OAuth client ID for the fixed extension ID. |
 
-### Mathematical Cost Accounting Formulation
+### ML daemon
 
-The cost per browser automation task $C_{\text{task}}$ is modeled as:
-
-$$C_{\text{task}} = \sum_{k=1}^{N_{\text{steps}}} \left[ C_{\text{plan}}(T_{\text{in}}^{(k)}, T_{\text{out}}^{(k)}) + C_{\text{judge}}(T_{\text{eval}}^{(k)}) \right] + C_{\text{compute}}$$
-
-Where:
-- $N_{\text{steps}} \le 6$ (strictly bounded by `LoopGuard`).
-- $C_{\text{compute}} \approx \$0.0000$ because DOM perception and ML sanitization execute client-side.
-- $T_{\text{in}}^{(k)} \approx 650 \text{ tokens}$ (delta accessibility representation) vs. $25,000 \text{ tokens}$ for raw DOM scrapers.
-- With multi-provider models (NVIDIA free tier, or Mistral Codestral priced at $\$0.30 / 1\text{M tokens (input)}$ and $\$0.90 / 1\text{M tokens (output)}$), average cost per complete workflow is **$\$0.0136$**, yielding **$88.4\%$ gross margin** on standard $\$49/\text{month}$ subscriptions.
+| Variable | Default |
+|---|---|
+| `BIGFISH_ML_HOST` | `127.0.0.1` |
+| `BIGFISH_ML_PORT` | `8788` |
 
 ---
 
-## 🥊 10. Investor & Judge Defense Strategy
+## API reference
 
-### Objection 1: "Why not use Playwright or Puppeteer on a cloud server?"
-> **Response:** Cloud headless browsers cannot access existing enterprise login sessions, intranet portals, hardware security keys (WebAuthn), or localized IP reputations without triggering bot detection Captchas. Pratyaksha runs where the work already happens, inside the user's authentic browser, with zero credential handover.
+### Agent server
 
-### Objection 2: "Won't running local ML slow down the user's machine?"
-> **Response:** Pratyaksha utilizes quantized, lightweight on-device models (PaddleOCR mobile recognition, BERT-NER, YOLOv8n) that consume less than 850 MB of RAM and execute in under 120 ms. Furthermore, visual masking is requested on demand, keeping idle CPU usage at 0%.
+| Method | Path | Auth | Purpose |
+|---|---|---|---|
+| `GET` | `/healthz`, `/ready` | none | Liveness and readiness |
+| `POST` | `/api/auth/google` | Google token | Exchange a Google token for a JWT |
+| `POST` | `/api/ws-ticket` | JWT | Single-use ticket for `/mcp-ws` |
+| `GET` | `/mcp-ws` | ticket + origin | Extension WebSocket (MCP) |
+| `GET` | `/api/devices` | JWT | List your connected browsers |
+| `POST` | `/api/devices/:deviceId/ping` | JWT | Round-trip latency to a browser |
+| `POST` | `/api/agent/invoke` | JWT | Start a run, streams events over SSE |
+| `POST` | `/api/agent/cancel` | JWT | Stop a running run |
 
-### Objection 3: "How do you prevent malicious prompt injection from rogue web pages?"
-> **Response:** Pratyaksha enforces a strict separation between untrusted page content and system prompts. Page text is wrapped in `<page untrusted>` delimiters, high-risk actions (financial payments, deletion, form submission) trigger mandatory human-in-the-loop approval modals, and the `LoopGuard` terminates any execution loop after 6 browser tool calls.
+### ML daemon
+
+| Method | Path | Purpose |
+|---|---|---|
+| `GET` | `/healthz`, `/ready` | Liveness and model readiness |
+| `POST` | `/v1/privacy/mask` | Find private regions in a screenshot |
+| `POST` | `/v1/privacy/sanitize` | Return a sanitized image |
 
 ---
 
-<p align="center">
-  <b>Pratyaksha</b>: Autonomous, Private, Unstoppable Browser Intelligence.<br/>
-  Built with pride by the Pratyaksha Engineering Team.
-</p>
+## Testing
+
+```bash
+pnpm --filter @bigfish/server test        # agent, loop guard, MCP socket
+```
+
+```bash
+pnpm --filter @bigfish/extension test     # safety layer unit tests
+```
+
+```bash
+pnpm --filter @bigfish/server exec tsx --test ../../tests/*.test.mjs   # cross-package suites
+```
+
+```bash
+uv --project ML run pytest ML/tests       # ML privacy daemon
+```
+
+```bash
+pnpm typecheck                            # all TypeScript packages
+```
+
+Playwright end-to-end tests live in [`apps/extension/e2e`](apps/extension/e2e).
+
+---
+
+## Documentation
+
+| Doc | Topic |
+|---|---|
+| [apps/server/README.md](apps/server/README.md) | Agent server internals |
+| [apps/extension/README.md](apps/extension/README.md) | Extension internals |
+| [ML/README.md](ML/README.md) | ML privacy daemon |
+| [packages/contracts/README.md](packages/contracts/README.md) | Shared contracts |
+| [packages/mcp-ws/README.md](packages/mcp-ws/README.md) | WebSocket transport |
+| [Docs/Browser-Tools.md](Docs/Browser-Tools.md) | Tool design notes |
+| [Docs/MCP-Plan.md](Docs/MCP-Plan.md) | MCP architecture plan |
+
+---
+
+## Contributing
+
+Contributions are welcome. Read [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request.
+
+## License
+
+Released under the [MIT License](LICENSE).
+
+<div align="center">
+<sub><b>Pratyaksha</b> (Sanskrit: "directly perceived"). Your browser, your data, your agent.</sub>
+</div>
